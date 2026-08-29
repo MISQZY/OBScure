@@ -1,26 +1,18 @@
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
-import { BaseIntegration } from './types'
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { BaseIntegration } from "./types";
 
-const execFileAsync = promisify(execFile)
-const POLL_INTERVAL_MS = 3000
+const execFileAsync = promisify(execFile);
+const POLL_INTERVAL_MS = 3000;
 
 interface SmtcResult {
-  isPlaying: boolean
-  title?: string
-  artist?: string
-  thumbnailBase64?: string
-  thumbnailContentType?: string
+  isPlaying: boolean;
+  title?: string;
+  artist?: string;
+  thumbnailBase64?: string;
+  thumbnailContentType?: string;
 }
 
-/**
- * Reads the system-wide "now playing" session via Windows' own
- * Windows.Media.Control API (SMTC — the same one behind the volume flyout's
- * media controls and the lock screen), projected straight from PowerShell.
- * Works with whatever app currently holds the session — Spotify, a browser
- * tab, VLC, Windows Media Player, ... — no per-app integration or auth
- * needed, and no native Node addon to build/ship.
- */
 const SMTC_SCRIPT = `
 $ErrorActionPreference = 'Stop'
 # Windows PowerShell's default console output encoding is the system's OEM
@@ -78,83 +70,76 @@ if ($props.Thumbnail) {
   thumbnailBase64 = $thumbnailBase64
   thumbnailContentType = $thumbnailContentType
 } | ConvertTo-Json -Compress
-`.trim()
+`.trim();
 
-/**
- * "Now playing" sourced from Windows' own system-wide media session (SMTC)
- * rather than any one player's API — see SMTC_SCRIPT above. Polls a small
- * PowerShell one-liner every few seconds and emits 'now-playing' only when
- * the track or play state actually changes.
- *
- * Windows-only by nature: start() no-ops (stays 'disconnected') on any other
- * platform. No auth involved, so connect()/disconnect() aren't overridden —
- * this is a plain enable toggle.
- *
- * Album art comes from SMTC's Thumbnail stream, read and base64-encoded
- * inline in SMTC_SCRIPT (PowerShell has no notion of a CDN URL to hand back,
- * unlike Spotify) — poll() turns that into a data: URI, which
- * nowPlayingCache.ts recognizes as already-resolved and uses directly instead
- * of trying to download it.
- */
 export class WindowsMediaIntegration extends BaseIntegration {
-  private pollTimer: ReturnType<typeof setInterval> | null = null
-  private lastKey = ''
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private lastKey = "";
 
   start(): void {
-    const enabled = this.config.getSetting<boolean>('windowsMedia.enabled', false)
-    if (!enabled || process.platform !== 'win32') {
-      this.setStatus('disconnected')
-      return
+    const enabled = this.config.getSetting<boolean>(
+      "windowsMedia.enabled",
+      false,
+    );
+    if (!enabled || process.platform !== "win32") {
+      this.setStatus("disconnected");
+      return;
     }
 
-    this.setStatus('connected')
-    void this.poll()
-    this.pollTimer = setInterval(() => void this.poll(), POLL_INTERVAL_MS)
+    this.setStatus("connected");
+    void this.poll();
+    this.pollTimer = setInterval(() => void this.poll(), POLL_INTERVAL_MS);
   }
 
   stop(): void {
-    if (this.pollTimer) clearInterval(this.pollTimer)
-    this.pollTimer = null
-    this.setStatus('disconnected')
+    if (this.pollTimer) clearInterval(this.pollTimer);
+    this.pollTimer = null;
+    this.setStatus("disconnected");
   }
 
   private async poll(): Promise<void> {
-    let result: SmtcResult
+    let result: SmtcResult;
     try {
       const { stdout } = await execFileAsync(
-        'powershell.exe',
-        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', SMTC_SCRIPT],
-        // Default Node maxBuffer (1MB) is comfortably enough for title/artist but
-        // not always for a base64-encoded thumbnail, so it's raised here.
-        { timeout: 5000, windowsHide: true, maxBuffer: 10 * 1024 * 1024 }
-      )
-      result = stdout.trim() ? (JSON.parse(stdout) as SmtcResult) : { isPlaying: false }
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          SMTC_SCRIPT,
+        ],
+
+        { timeout: 5000, windowsHide: true, maxBuffer: 10 * 1024 * 1024 },
+      );
+      result = stdout.trim()
+        ? (JSON.parse(stdout) as SmtcResult)
+        : { isPlaying: false };
     } catch {
-      // No active session, PowerShell unavailable, or a transient WinRT
-      // hiccup — treat it as "nothing playing" rather than surfacing an
-      // error status for something that isn't actually a connection problem.
-      result = { isPlaying: false }
+      result = { isPlaying: false };
     }
 
-    const title = result.title ?? ''
-    const artist = result.artist ?? ''
+    const title = result.title ?? "";
+    const artist = result.artist ?? "";
 
-    // No session (SMTC session is null) reads identically to "paused with
-    // nothing loaded" — Windows doesn't distinguish them. Rather than clear
-    // the dashboard's card on every such blip, keep showing the last known
-    // track (Tuna does the same): only a genuinely new title/artist/play
-    // state updates it.
-    if (!title && !artist) return
+    if (!title && !artist) return;
 
     const albumArt =
       result.thumbnailBase64 && result.thumbnailContentType
         ? `data:${result.thumbnailContentType};base64,${result.thumbnailBase64}`
-        : undefined
+        : undefined;
 
-    const key = `${result.isPlaying}|${title}|${artist}|${albumArt ? 'art' : 'noart'}`
-    if (key === this.lastKey) return
-    this.lastKey = key
+    const key = `${result.isPlaying}|${title}|${artist}|${albumArt ? "art" : "noart"}`;
+    if (key === this.lastKey) return;
+    this.lastKey = key;
 
-    this.eventBus.emit('now-playing', { source: 'windows', title, artist, isPlaying: result.isPlaying, albumArt })
+    this.eventBus.emit("now-playing", {
+      source: "windows",
+      title,
+      artist,
+      isPlaying: result.isPlaying,
+      albumArt,
+    });
   }
 }
