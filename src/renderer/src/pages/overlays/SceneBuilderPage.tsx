@@ -169,6 +169,24 @@ function migrateLegacyModifierEdges(edges: Edge[]): Edge[] {
  * live; this only matters for editing it further. These 5 ids are unique to
  * Audio Player's old outputs (no other node type's NODE_OUTPUTS uses them),
  * so remapping by sourceHandle alone, with no source-type check, is safe.
+ *
+ * A scene that had BOTH Author and Title wired into the same Text's Content
+ * socket (the documented way to fill both placeholders at once, back when
+ * they were separate outputs) ends up with two edges that are now, post-
+ * remap, identical in every field that matters (same source, sourceHandle,
+ * target, targetHandle) — genuinely the same connection twice, not two
+ * competing producers. Left alone, usePriorityInfo would count that Audio
+ * Player as its own "sibling" and show a false "1 of 2" priority badge with
+ * no real competitor, so the second copy is dropped here.
+ *
+ * Also remaps the target side: Scene used to have its OWN dedicated
+ * `audioPlayer` input socket (separate from the `event` socket a real Event
+ * node uses) for the whole-scene-visibility-by-isPlaying use — that's gone
+ * now, folded into Scene's own `event` socket instead (which accepts
+ * 'audioPlayer' alongside 'event', same convention Start's `event` socket
+ * already used) — see SCENE_SOCKETS/AUDIO_PLAYER_OUTPUTS in components/
+ * nodes/index.tsx. `audioPlayer` was never used as a targetHandle anywhere
+ * else, so remapping it unconditionally is safe.
  */
 const LEGACY_AUDIO_PLAYER_SOURCE_HANDLE_REMAP: Record<string, string> = {
   author: 'content',
@@ -178,9 +196,19 @@ const LEGACY_AUDIO_PLAYER_SOURCE_HANDLE_REMAP: Record<string, string> = {
   feed: 'event'
 }
 function migrateLegacyAudioPlayerEdges(edges: Edge[]): Edge[] {
-  return edges.map((e) => {
-    const remapped = e.sourceHandle ? LEGACY_AUDIO_PLAYER_SOURCE_HANDLE_REMAP[e.sourceHandle] : undefined
-    return remapped ? { ...e, sourceHandle: remapped } : e
+  const remapped = edges.map((e) => {
+    const newSourceHandle = e.sourceHandle ? LEGACY_AUDIO_PLAYER_SOURCE_HANDLE_REMAP[e.sourceHandle] : undefined
+    const newTargetHandle = e.targetHandle === 'audioPlayer' ? 'event' : undefined
+    return newSourceHandle || newTargetHandle
+      ? { ...e, ...(newSourceHandle ? { sourceHandle: newSourceHandle } : {}), ...(newTargetHandle ? { targetHandle: newTargetHandle } : {}) }
+      : e
+  })
+  const seen = new Set<string>()
+  return remapped.filter((e) => {
+    const key = `${e.source}|${e.sourceHandle}|${e.target}|${e.targetHandle}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
   })
 }
 

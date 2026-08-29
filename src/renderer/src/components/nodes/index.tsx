@@ -188,18 +188,20 @@ const SCENE_SOCKETS: InputSocket[] = [
   { id: 'backgroundFx', label: 'Background FX', accepts: ['backgroundAnimation'], kind: 'data' },
   { id: 'sound', label: 'Sound', accepts: ['sound'], kind: 'data' },
   { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' },
-  { id: 'event', label: 'Event', accepts: ['event'], kind: 'data' },
-  { id: 'timer', label: 'Timer', accepts: ['timer'], kind: 'data' },
-  // OPTIONAL — see AudioPlayerNode's own doc comment for the two independent
-  // ways to use Audio Player. Wiring it in here is purely a visibility
-  // switch: marks the scene as continuously data-driven (see isAudioTrigger
-  // in overlays/custom.html) rather than one-shot event-triggered, visible
-  // for as long as isPlaying is true with no durationMs/auto-hide, and (as a
-  // bonus) arms {title}/{artist}/{albumArt} placeholders scene-wide. A
-  // Text/Image's own Content socket gets live values with no Scene wiring
-  // at all — this input only matters if you also want the whole scene to
-  // show/hide by playback state.
-  { id: 'audioPlayer', label: 'Audio Player', accepts: ['audioPlayer'], kind: 'data' }
+  // Accepts 'audioPlayer' too, via its own Event output (see
+  // AUDIO_PLAYER_OUTPUTS below) — same convention as Start's own Event
+  // socket. Wiring Audio Player in here marks the scene as continuously
+  // data-driven (see isAudioTrigger in overlays/custom.html) rather than
+  // one-shot event-triggered, visible for as long as isPlaying is true with
+  // no durationMs/auto-hide, and (as a bonus) arms {title}/{artist}/
+  // {albumArt} placeholders scene-wide. A Text/Image's own Content socket
+  // gets live values with no Scene wiring at all — this only matters if you
+  // also want the whole scene to show/hide by playback state. Single-value
+  // like Start's, so an Event node and Audio Player can't both drive Scene
+  // at once — wiring the second replaces the first, same as everywhere else
+  // a socket isn't `multi`.
+  { id: 'event', label: 'Event', accepts: ['event', 'audioPlayer'], kind: 'data' },
+  { id: 'timer', label: 'Timer', accepts: ['timer'], kind: 'data' }
 ]
 
 const BACKGROUND_FX_SOCKETS: InputSocket[] = [{ id: 'caption', label: 'Caption', accepts: ['text'], kind: 'content' }]
@@ -311,14 +313,16 @@ const BOX_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
  * track-change/now-playing signal itself: wired into a Start node's own
  * Event socket (see START_SOCKETS above) it arms a process on a TRACK
  * CHANGE rather than matching a real alert's type (see processTrigger's
- * audioArmed in overlays/custom.html); wired into Scene's own `audioPlayer`
- * socket (see SCENE_SOCKETS above) it's the whole-scene visibility switch
- * (show/hide by isPlaying) instead — same "one wire, meaning depends on
- * where it lands" idea. Both can be wired into their two respective targets
- * at once (fan-out from one output handle needs no `multi` flag — see
- * InputSocket's own doc comment for why that flag only matters on the INPUT
- * side). Skipping either entirely still works exactly as before — see
- * AudioPlayerNode's own doc comment.
+ * audioArmed in overlays/custom.html); wired into Scene's own Event socket
+ * (see SCENE_SOCKETS above — same id, same socket a real Event node uses)
+ * it's the whole-scene visibility switch (show/hide by isPlaying) instead —
+ * same "one wire, meaning depends on where it lands" idea. Both Start's and
+ * Scene's Event sockets can be wired into at once (fan-out from one output
+ * handle needs no `multi` flag — see InputSocket's own doc comment for why
+ * that flag only matters on the INPUT side); Scene's Event socket itself is
+ * still single-value, so it can't ALSO have a real Event node wired in at
+ * the same time. Skipping either entirely still works exactly as before —
+ * see AudioPlayerNode's own doc comment.
  */
 const AUDIO_PLAYER_OUTPUTS: OutputSocket[] = [
   // kind 'content' (not 'data') to match the Content sockets it feeds — see
@@ -337,8 +341,8 @@ const AUDIO_PLAYER_OUTPUTS: OutputSocket[] = [
     id: 'event',
     label: 'Event',
     kind: 'data',
-    feeds: ['event', 'audioPlayer'],
-    help: "The track-change/now-playing signal. Wire into a Start node's own Event socket to arm a process on track change, and/or into Scene's own Audio Player socket to show/hide the whole scene by isPlaying — both at once is fine, they're independent."
+    feeds: ['event'],
+    help: "The track-change/now-playing signal. Wire into a Start node's own Event socket to arm a process on track change, and/or into Scene's own Event socket to show/hide the whole scene by isPlaying — both at once is fine, they're independent sockets on independent nodes."
   }
 ]
 
@@ -459,6 +463,13 @@ export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
  * auto-replaces) so the restriction was never load-bearing for those.
  * Only meaningful when outputs === true (the node can connect somewhere).
  * Returns `null` when the node has no outgoing edge or is the only sibling.
+ * Deduplicates by NODE id, not by edge count — a single producer can
+ * legitimately have more than one edge into the same socket (e.g. an old
+ * scene migrated from Audio Player's former separate Author/Title outputs,
+ * both now remapped onto its one Content output — see
+ * migrateLegacyAudioPlayerEdges in SceneBuilderPage.tsx), and counting each
+ * of ITS OWN edges as a separate "sibling" would show a false "1 of 2" on a
+ * node with no real competitor at all.
  */
 function usePriorityInfo(nodeId: string) {
   const result = useStore(
@@ -468,9 +479,11 @@ function usePriorityInfo(nodeId: string) {
 
       const siblingEdges = s.edges.filter((e) => e.target === outEdge.target && e.targetHandle === outEdge.targetHandle)
 
+      const seenNodeIds = new Set<string>()
       const siblingNodes = siblingEdges
         .map((e) => s.nodes.find((n) => n.id === e.source))
         .filter((n): n is (typeof s.nodes)[number] => n != null)
+        .filter((n) => (seenNodeIds.has(n.id) ? false : (seenNodeIds.add(n.id), true)))
         .sort((a, b) => ((a.data.priority as number) ?? 0) - ((b.data.priority as number) ?? 0))
 
       if (siblingNodes.length < 2) return { position: null, total: null }
@@ -506,22 +519,30 @@ function useHasIncomingEdge(nodeId: string, targetHandle: string): boolean {
  * amount/message/source) need an Event node wired into Scene or Start —
  * either one arms all four together, same as sceneTrigger/processTrigger
  * elsewhere. 'artist'/'title' both need either Audio Player's Event output
- * wired into Scene (arms both, scene-wide — see the audioPlayer entry on
- * SCENE_SOCKETS) or its Content output wired directly into THIS node's own
- * Content socket (Content is one bundled wire — see AUDIO_PLAYER_OUTPUTS/
- * audioContentValues in overlays/custom.html — so wiring it in arms both
- * placeholders together, never just one). Doesn't verify precise
- * reachability from this specific node's own Scene for the Event/scene-wide-
- * Audio checks (just whether one exists ANYWHERE in the graph) — a false
- * positive only offers a token that happens not to resolve, same
- * harmless-if-imprecise reasoning as hasAudioContentDeps in overlays/
- * custom.html.
+ * wired into Scene's own Event socket (arms both, scene-wide — same shared
+ * `event` id a real Event node uses, see SCENE_SOCKETS) or its Content
+ * output wired directly into THIS node's own Content socket (Content is one
+ * bundled wire — see AUDIO_PLAYER_OUTPUTS/audioContentValues in overlays/
+ * custom.html — so wiring it in arms both placeholders together, never just
+ * one). Doesn't verify precise reachability from this specific node's own
+ * Scene for the Event/scene-wide-Audio checks (just whether one exists
+ * ANYWHERE in the graph) — a false positive only offers a token that
+ * happens not to resolve, same harmless-if-imprecise reasoning as
+ * hasAudioContentDeps in overlays/custom.html.
  */
 function useAvailablePlaceholders(nodeId: string): readonly string[] {
   return useStore(
     (s) => {
       const hasEvent = s.edges.some((e) => e.targetHandle === 'event' && s.nodes.find((n) => n.id === e.source)?.type === 'event')
-      const audioIntoScene = s.edges.some((e) => e.targetHandle === 'audioPlayer' && s.nodes.find((n) => n.id === e.source)?.type === 'audioPlayer')
+      // Scoped to a Scene TARGET specifically (not just any 'event' handle —
+      // Start shares the same id for arming a Process, a separate concern
+      // that doesn't arm these scene-wide placeholders).
+      const audioIntoScene = s.edges.some(
+        (e) =>
+          e.targetHandle === 'event' &&
+          s.nodes.find((n) => n.id === e.target)?.type === 'scene' &&
+          s.nodes.find((n) => n.id === e.source)?.type === 'audioPlayer'
+      )
       const directAudioContent = s.edges.some(
         (e) => e.target === nodeId && e.targetHandle === 'content' && s.nodes.find((n) => n.id === e.source)?.type === 'audioPlayer'
       )
@@ -604,10 +625,11 @@ function SocketRow({ id, label, dotClass, title }: { id: string; label: string; 
   )
 }
 
-/** One labeled output-socket row — the source-side mirror of SocketRow, dot on the right edge. Only rendered for node types with an `outputSockets` list (see OutputSocket/NODE_OUTPUTS above); every other node keeps the single generic "output" handle. `help` (optional — see OutputSocket's own doc comment) renders the same small "?" popover BaseNode's header uses, so a node's header help can stay a short one-liner while each output's own exact behavior lives on the row it belongs to. */
+/** One labeled output-socket row — the source-side mirror of SocketRow, dot on the right edge. Only rendered for node types with an `outputSockets` list (see OutputSocket/NODE_OUTPUTS above); every other node keeps the single generic "output" handle. `help` (optional — see OutputSocket's own doc comment) renders the same small "?" popover BaseNode's header uses, so a node's header help can stay a short one-liner while each output's own exact behavior lives on the row it belongs to. Placed AFTER the label (not before) so it sits flush against the row's right edge — the last child in a `justify-end` row lands at a fixed position regardless of the label's own width, so the "?" lines up identically across every output row instead of drifting with each label's length. */
 function OutputRow({ id, label, dotClass, title, help }: { id: string; label: string; dotClass: string; title: string; help?: string }) {
   return (
     <div className="relative flex items-center justify-end gap-1.5 pl-2 pr-3 h-5 text-[10px] text-muted-foreground">
+      <span className="truncate">{label}</span>
       {help && (
         <NodePopover
           side="bottom"
@@ -626,7 +648,6 @@ function OutputRow({ id, label, dotClass, title, help }: { id: string; label: st
           {help}
         </NodePopover>
       )}
-      <span className="truncate">{label}</span>
       <Handle
         type="source"
         position={Position.Right}
@@ -694,17 +715,19 @@ function BaseNode({
   const hasBody = Boolean(children) && !collapsed
   const showTrailingBorder = hasSocketSection || hasBody
 
-  /** Cycle through priority values: clicking rotates all siblings sharing this exact socket (1->2, 2->3, ..., N->1) — see usePriorityInfo's own doc comment for why siblings are scoped by (target, targetHandle) rather than just target. */
+  /** Cycle through priority values: clicking rotates all siblings sharing this exact socket (1->2, 2->3, ..., N->1) — see usePriorityInfo's own doc comment for why siblings are scoped by (target, targetHandle) AND deduplicated by node id rather than by raw edge count. */
   const cyclePriority = () => {
     if (!priority) return
     const edges = getEdges()
     const nodes = getNodes()
     const outEdge = edges.find((e) => e.source === id)
     if (!outEdge) return
+    const seenNodeIds = new Set<string>()
     const siblings = edges
       .filter((e) => e.target === outEdge.target && e.targetHandle === outEdge.targetHandle)
       .map((e) => nodes.find((n) => n.id === e.source))
       .filter((n): n is (typeof nodes)[number] => n != null)
+      .filter((n) => (seenNodeIds.has(n.id) ? false : (seenNodeIds.add(n.id), true)))
       .sort((a, b) => ((a.data.priority as number) ?? 0) - ((b.data.priority as number) ?? 0))
 
     // Shift all priorities by 1, wrapping around
@@ -2254,15 +2277,19 @@ export function RouletteSourceNode({ id, data }: NodeProps) {
  *    below is wired in at all — see hasAudioContentDeps in overlays/
  *    custom.html for how a plain always-on scene still gets live refreshes
  *    purely from having this wire.
- * 2. Event wired into Scene itself (the audioPlayer entry on SCENE_SOCKETS
- *    above) — a visibility-only concern: marks the whole scene as
- *    continuously data-driven instead of one-shot event-triggered, showing
- *    for as long as isPlaying stays true with no Timer/durationMs. Mirrors
- *    isAudioTrigger/showAudioContent in overlays/custom.html. Doing this
- *    ALSO arms {title}/{artist} placeholders scene-wide and an empty-URL
- *    Image's live-album-art fallback, same as before Content sockets
- *    existed — but if you only want live text/cover on specific nodes with
- *    no auto show/hide, skip this and just use the Content wire above.
+ * 2. Event wired into Scene's own Event socket (see the `event` entry on
+ *    SCENE_SOCKETS above, which accepts 'audioPlayer' alongside 'event' —
+ *    the SAME socket a real Event node uses) — a visibility-only concern:
+ *    marks the whole scene as continuously data-driven instead of one-shot
+ *    event-triggered, showing for as long as isPlaying stays true with no
+ *    Timer/durationMs. Mirrors isAudioTrigger/showAudioContent in
+ *    overlays/custom.html. Doing this ALSO arms {title}/{artist}
+ *    placeholders scene-wide and an empty-URL Image's live-album-art
+ *    fallback, same as before Content sockets existed — but if you only
+ *    want live text/cover on specific nodes with no auto show/hide, skip
+ *    this and just use the Content wire above. Being single-value like
+ *    everywhere else a socket isn't `multi`, it can't ALSO have a real
+ *    Event node wired in at the same time — wiring one replaces the other.
  * 3. Event ALSO wired into a Start node (see the `event` entry on
  *    START_SOCKETS above, which accepts 'audioPlayer' alongside 'event') —
  *    arms the SAME Start->Task->...->End process an Event node would, but
@@ -2270,7 +2297,9 @@ export function RouletteSourceNode({ id, data }: NodeProps) {
  *    (see processTrigger's audioArmed in overlays/custom.html). Lets a
  *    process play some animation/sound/update every time a new song starts,
  *    same as it would for a donation/follow/etc. Event can reach Scene AND
- *    Start at once — one output, two simultaneous wires.
+ *    Start at once — one output, two simultaneous wires (they're
+ *    independent sockets on independent nodes, each still single-value on
+ *    its own).
  */
 export function AudioPlayerNode({ id, data }: NodeProps) {
   return (
