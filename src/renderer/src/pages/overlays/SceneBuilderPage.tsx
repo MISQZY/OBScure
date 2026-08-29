@@ -651,7 +651,8 @@ function TextView({
   anim,
   played,
   hiding,
-  vars
+  vars,
+  crossAxis
 }: {
   node: Node
   style: React.CSSProperties
@@ -661,6 +662,16 @@ function TextView({
   hiding: boolean
   /** Current event's placeholder values (see sceneTrigger) — null outside an event-triggered show. */
   vars: Record<string, unknown> | null
+  /**
+   * The CROSS axis of whichever Box/Scene this Text is a direct child of
+   * (crossAxisFor, computed by the caller off THAT parent's own Ordering) —
+   * the axis flexbox's `items-center` (Scene/BoxView's own fixed cross-axis
+   * rule) actually leaves room along. Align/Vertical below only stretch
+   * this element (alignSelf) to fill that room when it's the relevant one
+   * AND the field was actually changed from its default, so a Text using
+   * default settings renders pixel-identical to before this existed.
+   */
+  crossAxis: 'horizontal' | 'vertical'
 }) {
   // Bold defaults true (data.bold !== false) — see the matching comment on
   // TextNode in components/nodes/index.tsx: font-weight:700 used to be
@@ -668,17 +679,30 @@ function TextView({
   // keep rendering bold unless explicitly turned off now that it's a field.
   const bold = node.data.bold !== false
   const italic = Boolean(node.data.italic)
+  const align = (node.data.align as 'left' | 'center' | 'right' | 'justify') || 'left'
   const verticalAlign = (node.data.verticalAlign as string) || 'top'
+  // A Position modifier's own anchor (top-left/top-right/center/...) is
+  // meant to place this element's OWN box at that corner — but the
+  // unconditional width:100% below (kept for the in-flow/in-box case, so
+  // Align has room to matter there) means the box already spans the full
+  // parent width regardless of which corner is picked, so every anchor
+  // ends up looking the same. Once something has actually anchored it
+  // (position:absolute) AND no Size gives it a real width of its own (see
+  // modifierStyle), let it shrink back to its own content instead so the
+  // anchor actually differs.
+  const isAnchored = style.position === 'absolute' && style.width == null
+  const needsStretch = crossAxis === 'horizontal' ? align !== 'left' : verticalAlign !== 'top'
   return (
     <div
       className={cn(anim && played && 'visible', anim && hiding && 'hiding')}
       data-animation={anim?.type}
       style={
         {
-          width: '100%',
+          width: isAnchored ? 'auto' : '100%',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: verticalAlign === 'bottom' ? 'flex-end' : verticalAlign === 'middle' ? 'center' : 'flex-start',
+          alignSelf: needsStretch ? 'stretch' : undefined,
           fontSize: (node.data.fontSize as number) || 32,
           fontWeight: bold ? 700 : 400,
           fontStyle: italic ? 'italic' : 'normal',
@@ -686,7 +710,7 @@ function TextView({
           lineHeight: node.data.lineHeight != null ? (node.data.lineHeight as number) : undefined,
           ...style,
           color: (node.data.color as string) || '#ffffff',
-          textAlign: (node.data.align as 'left' | 'center' | 'right' | 'justify') || 'left',
+          textAlign: align,
           fontFamily: node.data.fontFamily ? `"${node.data.fontFamily as string}"` : undefined,
           ...(anim?.duration ? { '--anim-duration': `${anim.duration}ms` } : {})
         } as React.CSSProperties
@@ -796,7 +820,8 @@ function ContentView({
   schedule,
   clockMs,
   urls,
-  depth = 0
+  depth = 0,
+  crossAxis
 }: {
   node: Node
   edges: Edge[]
@@ -811,6 +836,8 @@ function ContentView({
   urls: OverlayUrls | null
   /** Nesting depth so far (0 = directly on Scene) — see BoxView's own doc comment for why this is capped. */
   depth?: number
+  /** The CROSS axis of whichever Box/Scene `node` is a direct child of — see TextView's own doc comment. Only consumed for a `text` node; a nested Box computes a FRESH one off its own Ordering for ITS OWN children. */
+  crossAxis: 'horizontal' | 'vertical'
 }) {
   // A nested Box (see BOX_SOCKETS' own doc comment in components/nodes/
   // index.tsx) — BoxView resolves its OWN schedule/style/vars, same as a
@@ -825,14 +852,14 @@ function ContentView({
   if (schedule.length > 0 && schedule.some((s) => s.targetId === node.id)) {
     const task = computeTaskState(schedule, node.id, clockMs, mods)
     if (!task.visible) return null
-    if (node.type === 'text') return <TextView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} vars={vars} />
+    if (node.type === 'text') return <TextView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} vars={vars} crossAxis={crossAxis} />
     if (node.type === 'image') return <ImageView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} urls={urls} />
     if (node.type === 'video') return <VideoView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} />
     return null
   }
   const style = modifierStyle(mods)
   const anim = animationAttrs(mods)
-  if (node.type === 'text') return <TextView node={node} style={style} anim={anim} played={played} hiding={hiding} vars={vars} />
+  if (node.type === 'text') return <TextView node={node} style={style} anim={anim} played={played} hiding={hiding} vars={vars} crossAxis={crossAxis} />
   if (node.type === 'image') return <ImageView node={node} style={style} anim={anim} played={played} hiding={hiding} urls={urls} />
   if (node.type === 'video') return <VideoView node={node} style={style} anim={anim} played={played} hiding={hiding} />
   return null
@@ -857,6 +884,13 @@ function orderingClass(mods: Node[]): string {
 function orderingGap(mods: Node[]): number {
   const ordering = mods.find((m) => m.type === 'ordering')
   return (ordering?.data.gap as number) ?? 8
+}
+
+/** Which axis is the CROSS axis for a Box/Scene's children, from the same Ordering modifier orderingClass reads — 'vertical' for a horizontal/row layout, 'horizontal' for the default vertical/column one. Mirrors crossAxisFor in overlays/custom.html; see TextView's own doc comment for what this is used for. */
+function crossAxisFor(mods: Node[]): 'horizontal' | 'vertical' {
+  const ordering = mods.find((m) => m.type === 'ordering')
+  const layout = (ordering?.data.layout as string) || 'vertical'
+  return layout === 'horizontal' ? 'vertical' : 'horizontal'
 }
 
 /** A Box's corner treatment (see BOX_SHAPE_IDS' own doc comment in components/nodes/index.tsx) as borderRadius/clipPath — mirrors boxShapeStyle in overlays/custom.html. */
@@ -916,6 +950,7 @@ function BoxView({
   const children =
     depth >= MAX_BOX_DEPTH ? [] : incomingNodes.filter((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box')
   const orderClass = orderingClass(incomingNodes)
+  const childCrossAxis = crossAxisFor(incomingNodes)
 
   const useProcess = schedule.length > 0 && schedule.some((s) => s.targetId === node.id)
   const task = useProcess ? computeTaskState(schedule, node.id, clockMs, incomingNodes) : null
@@ -968,6 +1003,7 @@ function BoxView({
           clockMs={clockMs}
           urls={urls}
           depth={depth + 1}
+          crossAxis={childCrossAxis}
         />
       ))}
     </div>
@@ -1227,7 +1263,7 @@ function ScenePreview({
           <VideoView key={`${n.id}-${playToken}`} node={n} style={{}} anim={null} played={playToken > 0} hiding={false} />
         ))}
         {texts.map((n) => (
-          <TextView key={`${n.id}-${playToken}`} node={n} style={{}} anim={null} played={playToken > 0} hiding={false} vars={null} />
+          <TextView key={`${n.id}-${playToken}`} node={n} style={{}} anim={null} played={playToken > 0} hiding={false} vars={null} crossAxis="horizontal" />
         ))}
       </div>
     )
@@ -1249,6 +1285,7 @@ function ScenePreview({
 
   const played = eventState.active || playToken > 0
   const hiding = eventState.active && eventState.hiding
+  const crossAxis = crossAxisFor(orderMods)
 
   return (
     <div
@@ -1283,6 +1320,7 @@ function ScenePreview({
             schedule={schedule}
             clockMs={clockMs}
             urls={urls}
+            crossAxis={crossAxis}
           />
         )
       )}

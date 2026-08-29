@@ -464,6 +464,7 @@
         if (state.style.transform) el.style.transform = state.style.transform
         if (state.style.opacity != null) el.style.opacity = state.style.opacity
         if (state.style.filter) el.style.filter = state.style.filter
+        fixAnchoredTextWidth(el)
         if (state.anim) {
           el.dataset.animation = state.anim.type
           el.style.setProperty('--anim-duration', `${state.anim.duration}ms`)
@@ -511,6 +512,17 @@
       function orderingGap(mods) {
         const ordering = mods.find((m) => m.type === 'ordering')
         return (ordering && ordering.data && ordering.data.gap) ?? 8
+      }
+
+      // Which axis is the CROSS axis for a Box/Scene's children, given the
+      // same Ordering modifier orderingFlexDirection reads — 'vertical' for
+      // a horizontal/row layout, 'horizontal' for the default vertical/
+      // column one. Mirrors crossAxisFor in SceneBuilderPage.tsx; see
+      // buildText's own doc comment for what this is used for.
+      function crossAxisFor(mods) {
+        const ordering = mods.find((m) => m.type === 'ordering')
+        const layout = (ordering && ordering.data && ordering.data.layout) || 'vertical'
+        return layout === 'horizontal' ? 'vertical' : 'horizontal'
       }
 
       // `#rrggbb` + an opacity percent -> `rgba(...)` — mirrors hexToRgba in
@@ -595,6 +607,25 @@
         }
       }
 
+      // A Position modifier's own anchor (top-left/top-right/center/...) is
+      // meant to place a Text element's OWN box at that corner — but the
+      // `.text-node` CSS class defaults to width:100% (so Align has room to
+      // matter when centered/in a Box), which means the box already spans
+      // the full parent width regardless of which corner is picked, so
+      // every anchor ends up looking identical. Only once something has
+      // actually anchored it (position:absolute) AND no Size gives it a
+      // real width of its own does undoing that default back to the
+      // browser's native shrink-to-fit let the anchor actually differ. Runs
+      // after both buildText's own applyModifierStyle call and
+      // applyTaskStateToEl's re-application (a Task with its own Position
+      // moment) — reads the element's OWN resolved inline styles rather
+      // than being handed `mods`, so it works identically either way.
+      function fixAnchoredTextWidth(el) {
+        if (el.classList.contains('text-node') && el.style.position === 'absolute' && !el.style.width) {
+          el.style.width = 'auto'
+        }
+      }
+
       // An Animation modifier wired into a node — see the Duration field on
       // that node's own form (components/nodes/index.tsx AnimationNode).
       // Elements are freshly created here on every render(), so just setting
@@ -621,13 +652,29 @@
       // (registry[node.id] = el) — used by showTimelineContent to find each
       // component's DOM element again later when a cue fires, since buildBox
       // otherwise owns its children's elements with no external handle to them.
-      function buildText(node, mods, animate, vars, registry) {
+      //
+      // `crossAxis` (from crossAxisFor, computed by the caller off the
+      // parent Box/Scene's own Ordering) is 'horizontal' or 'vertical' — the
+      // CSS axis flexbox's align-items:center (the parent's fixed cross-axis
+      // rule, #scene/.box) actually leaves room along. The `.text-node` CSS
+      // class defaults to width:100% so Align has room to matter, but that
+      // only gives HORIZONTAL room — height is never set, so Vertical never
+      // has any room at all as a flex sibling. Align/Vertical only stretch
+      // this element (align-self) along whichever axis is the CROSS axis
+      // AND that field was actually changed from its default — never for
+      // the default left/top, so a Text using default settings renders
+      // pixel-identical to before this existed. Skipped when the caller
+      // never wired an Ordering-bearing parent (`crossAxis` omitted — the
+      // legacy pre-Scene fallback below).
+      function buildText(node, mods, animate, vars, registry, crossAxis) {
         const d = node.data || {}
         const el = document.createElement('div')
         el.className = 'text-node'
         el.textContent = interpolate(d.text ?? '', vars)
         el.style.color = d.color || '#ffffff'
-        el.style.textAlign = d.align || 'left'
+        const align = d.align || 'left'
+        const verticalAlign = d.verticalAlign || 'top'
+        el.style.textAlign = align
         if (d.fontFamily) el.style.fontFamily = `"${d.fontFamily}"`
         // bold defaults true (d.bold !== false) — font-weight:700 used to be
         // the class's own unconditional rule; every pre-existing Text node
@@ -639,9 +686,13 @@
         el.style.letterSpacing = `${d.letterSpacing ?? 0}px`
         if (d.lineHeight != null) el.style.lineHeight = d.lineHeight
         if (d.fontSize) el.style.fontSize = `${d.fontSize}px`
-        if (d.verticalAlign === 'middle') el.style.justifyContent = 'center'
-        else if (d.verticalAlign === 'bottom') el.style.justifyContent = 'flex-end'
+        if (verticalAlign === 'middle') el.style.justifyContent = 'center'
+        else if (verticalAlign === 'bottom') el.style.justifyContent = 'flex-end'
+        if ((crossAxis === 'horizontal' && align !== 'left') || (crossAxis === 'vertical' && verticalAlign !== 'top')) {
+          el.style.alignSelf = 'stretch'
+        }
         applyModifierStyle(el, mods)
+        fixAnchoredTextWidth(el)
         applyAnimation(el, mods, animate)
         if (registry) registry[node.id] = el
         return el
@@ -747,9 +798,15 @@
       // scene should ever come close to it.
       const MAX_BOX_DEPTH = 12
 
-      function buildContent(node, edges, map, animate, vars, registry, depth = 0) {
+      // `crossAxis` — see buildText's own doc comment — is the CROSS axis of
+      // whichever Box/Scene THIS node is a direct child of (crossAxisFor,
+      // computed once by the caller off ITS OWN Ordering); only buildText
+      // reads it. buildBox ignores it (Box has no Align/Vertical of its
+      // own) and instead computes a FRESH one off its own Ordering for ITS
+      // OWN children below.
+      function buildContent(node, edges, map, animate, vars, registry, depth = 0, crossAxis) {
         const mods = incoming(node.id, edges, map)
-        if (node.type === 'text') return buildText(node, mods, animate, vars, registry)
+        if (node.type === 'text') return buildText(node, mods, animate, vars, registry, crossAxis)
         if (node.type === 'image') return buildImage(node, mods, animate, vars, registry)
         if (node.type === 'video') return buildVideo(node, mods, animate, registry)
         // A nested Box (see BOX_SOCKETS' own doc comment in
@@ -765,6 +822,7 @@
         const incomingNodes = incoming(node.id, edges, map)
         const children =
           depth >= MAX_BOX_DEPTH ? [] : incomingNodes.filter((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box')
+        const childCrossAxis = crossAxisFor(incomingNodes)
         const d = node.data || {}
         const container = document.createElement('div')
         container.className = 'box'
@@ -779,7 +837,7 @@
         applyAnimation(container, incomingNodes, animate)
         if (registry) registry[node.id] = container
         for (const child of children) {
-          const childEl = buildContent(child, edges, map, animate, vars, registry, depth)
+          const childEl = buildContent(child, edges, map, animate, vars, registry, depth, childCrossAxis)
           if (childEl) container.appendChild(childEl)
         }
         return container
@@ -852,7 +910,7 @@
             if (d.borderEnabled) container.style.border = `${d.borderWidth ?? 2}px solid ${d.borderColor || '#ffffff'}`
           }
           for (const n of images) container.appendChild(buildImage(n, [], animate, null))
-          for (const n of texts) container.appendChild(buildText(n, [], animate))
+          for (const n of texts) container.appendChild(buildText(n, [], animate, undefined, undefined, 'horizontal'))
           sceneEl.appendChild(container)
           return
         }
@@ -863,9 +921,10 @@
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
         const renderable = members.filter((n) => n.type === 'box' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+        const crossAxis = crossAxisFor(members)
 
         for (const n of renderable) {
-          const el = n.type === 'box' ? buildBox(n, edges, map, animate) : buildContent(n, edges, map, animate)
+          const el = n.type === 'box' ? buildBox(n, edges, map, animate) : buildContent(n, edges, map, animate, undefined, undefined, 0, crossAxis)
           if (el) sceneEl.appendChild(el)
         }
       }
@@ -895,8 +954,9 @@
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
         const renderable = members.filter((n) => n.type === 'box' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+        const crossAxis = crossAxisFor(members)
         for (const n of renderable) {
-          const el = n.type === 'box' ? buildBox(n, edges, map, true, vars) : buildContent(n, edges, map, true, vars)
+          const el = n.type === 'box' ? buildBox(n, edges, map, true, vars) : buildContent(n, edges, map, true, vars, undefined, 0, crossAxis)
           if (el) sceneEl.appendChild(el)
         }
         playSceneSound(scene, edges, map)
@@ -941,6 +1001,7 @@
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
         const renderable = members.filter((n) => n.type === 'box' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+        const crossAxis = crossAxisFor(members)
         const registry = {}
         // animate=true: a component with no Task ever targeting it should
         // still play its own Animation modifier once on the process's
@@ -951,7 +1012,7 @@
         // applyAt(0) below re-applies its real t=0 state immediately after,
         // in the same tick, before anything paints.
         for (const n of renderable) {
-          const el = n.type === 'box' ? buildBox(n, edges, map, true, vars, registry) : buildContent(n, edges, map, true, vars, registry)
+          const el = n.type === 'box' ? buildBox(n, edges, map, true, vars, registry) : buildContent(n, edges, map, true, vars, registry, 0, crossAxis)
           if (el) sceneEl.appendChild(el)
         }
 
@@ -1073,8 +1134,9 @@
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
         const renderable = members.filter((n) => n.type === 'box' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+        const crossAxis = crossAxisFor(members)
         for (const n of renderable) {
-          const el = n.type === 'box' ? buildBox(n, edges, map, animate, vars) : buildContent(n, edges, map, animate, vars)
+          const el = n.type === 'box' ? buildBox(n, edges, map, animate, vars) : buildContent(n, edges, map, animate, vars, undefined, 0, crossAxis)
           if (el) sceneEl.appendChild(el)
         }
       }
