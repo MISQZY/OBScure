@@ -15,6 +15,7 @@ import {
   Connection,
   Panel,
   ReactFlowInstance,
+  useViewport,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import './scene-preview-animations.css'
@@ -576,7 +577,7 @@ function displayEdges(nodes: Node[], edges: Edge[]): Edge[] {
         style: { stroke: '#6366f1', strokeWidth: 3 },
         animated: true,
         zIndex: 10,
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1', width: 20, height: 20 }
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1', width: 12, height: 12 }
       }
     }
     if (targetType === 'task' && isContentSource) {
@@ -731,6 +732,102 @@ function buildProcessSchedule(nodes: Node[], edges: Edge[]): { schedule: Schedul
     current = nextProcessNode(current.id, edges, map)
   }
   return { schedule, totalMs: atMs }
+}
+
+/** Rough default size for a process node before React Flow's first layout pass has reported a real `measured` width/height back via onNodesChange's dimension-change events — matches BaseNode's own `min-w-[150px]` and a single-row body, just close enough that ProcessToken doesn't visibly jump once the real measurement arrives a frame later. */
+const DEFAULT_PROCESS_NODE_SIZE = { width: 150, height: 46 }
+
+/**
+ * The right or left edge of `node`'s own box, vertically centered on its
+ * full height, in flow coordinates — matches where BaseNode's plain generic
+ * output Handle (Position.Right, no style override) sits by default, and is
+ * a close approximation for the sequence-flow "event-in" input Handle
+ * (Position.Left) too. Only an approximation for a node like Task that has
+ * OTHER input sockets stacked above "event-in" (nudging that specific
+ * Handle down from true center) — ProcessToken is a visual progress
+ * indicator, not meant to land pixel-exact on the dot.
+ */
+function processNodeAnchor(node: Node, side: 'left' | 'right'): { x: number; y: number } {
+  const width = node.measured?.width ?? DEFAULT_PROCESS_NODE_SIZE.width
+  const height = node.measured?.height ?? DEFAULT_PROCESS_NODE_SIZE.height
+  return { x: node.position.x + (side === 'right' ? width : 0), y: node.position.y + height / 2 }
+}
+
+/**
+ * The linear Start → Task → Wait → ... → End chain as a list of
+ * checkpoints, `atMs` being the process's own clock value (see
+ * buildProcessSchedule, whose exact accumulation this mirrors) at the
+ * moment the token reaches each one — used by processTokenPosition to
+ * interpolate between whichever two checkpoints bracket the current
+ * clockMs. Every Wait node's delay is spent traveling the EDGE leading INTO
+ * it (so the token visibly slides toward a Wait for its own delay, arriving
+ * exactly as it elapses) rather than pausing once there — Start/Task/End
+ * checkpoints themselves take no time to pass through, matching how
+ * buildProcessSchedule only ever advances `atMs` on a Wait. Returns an
+ * empty list when there's no Start node.
+ */
+function processChainNodes(nodes: Node[], edges: Edge[]): { node: Node; atMs: number }[] {
+  const map = buildNodeMap(nodes)
+  const start = nodes.find((n) => n.type === 'start')
+  if (!start) return []
+  const chain: { node: Node; atMs: number }[] = [{ node: start, atMs: 0 }]
+  let atMs = 0
+  let current = nextProcessNode(start.id, edges, map)
+  while (current) {
+    if (current.type === 'wait') atMs += (current.data.delay as number) || 1000
+    chain.push({ node: current, atMs })
+    if (current.type === 'end') break
+    current = nextProcessNode(current.id, edges, map)
+  }
+  return chain
+}
+
+/**
+ * Where ProcessToken currently sits, in flow coordinates — the point along
+ * the chain's path at `clockMs` into the run, clamped to Start's own
+ * position before the run starts and to End's once it's past totalMs (see
+ * handlePlay's own exit-buffer window, during which clockMs keeps advancing
+ * past the last checkpoint's atMs). `null` only when there's no Start node
+ * at all (see processChainNodes).
+ */
+function processTokenPosition(nodes: Node[], edges: Edge[], clockMs: number): { x: number; y: number } | null {
+  const chain = processChainNodes(nodes, edges)
+  if (chain.length === 0) return null
+  if (chain.length === 1) return processNodeAnchor(chain[0].node, 'right')
+  let i = chain.findIndex((c) => c.atMs >= clockMs)
+  if (i === -1) i = chain.length - 1 // past the final checkpoint (handlePlay's exit-buffer window) — clamp to the last segment
+  if (i === 0) return processNodeAnchor(chain[0].node, 'right')
+  const from = chain[i - 1]
+  const to = chain[i]
+  const span = to.atMs - from.atMs
+  const t = span > 0 ? Math.min(1, Math.max(0, (clockMs - from.atMs) / span)) : 1
+  const a = processNodeAnchor(from.node, 'right')
+  const b = processNodeAnchor(to.node, 'left')
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
+}
+
+/**
+ * Small circle that slides along the process's own Sequence-flow edges
+ * during Play/Test, showing at a glance where the running
+ * Start→Task→Wait→...→End chain currently is — purely a visual aid, no
+ * effect on rendering or on ScenePreview's own separately-computed Task
+ * states. Rendered as a plain overlay div (not a React Flow node, which
+ * would mean writing its position into `nodes` state every animation
+ * frame) positioned via useViewport's own pan/zoom — the same transform
+ * React Flow applies to real nodes — since a plain child of `<ReactFlow>`
+ * isn't auto-transformed the way its `nodes` prop is.
+ */
+function ProcessToken({ nodes, edges, clockMs, active }: { nodes: Node[]; edges: Edge[]; clockMs: number; active: boolean }) {
+  const { x: vx, y: vy, zoom } = useViewport()
+  if (!active) return null
+  const point = processTokenPosition(nodes, edges, clockMs)
+  if (!point) return null
+  return (
+    <div
+      className="pointer-events-none absolute left-0 top-0 z-20 size-3 rounded-full bg-indigo-400 ring-2 ring-indigo-200 shadow-[0_0_8px_2px_rgba(99,102,241,0.7)]"
+      style={{ transform: `translate(${point.x * zoom + vx - 6}px, ${point.y * zoom + vy - 6}px)` }}
+    />
+  )
 }
 
 /**
@@ -2149,6 +2246,7 @@ export function SceneBuilderPage({
             zoomable
             className="!bg-card !border !border-border"
           />
+          <ProcessToken nodes={nodes} edges={edges} clockMs={processClockMs} active={proc.active && eventPhase === 'showing'} />
           {/* Floating toolbar — name, URL key, and the save/prettify/test/help/delete actions — centered above the canvas instead of a full-width bar above it, now that the canvas itself fills the whole page. Delete sits apart from the rest (top-right, next to the name) since it's destructive and shouldn't be one click away from Save/Prettify/Test/Help, which live together in a footer row instead. */}
           {/*
             w-[27rem], not min-w: a shrink-to-fit (auto) width here made the
