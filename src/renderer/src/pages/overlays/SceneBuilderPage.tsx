@@ -277,6 +277,27 @@ function sceneTrigger(nodes: Node[], edges: Edge[]): { active: boolean; alertTyp
   return { active: true, alertTypes, durationMs }
 }
 
+/**
+ * Whether Scene is wired to an Audio Player node via its own Event socket
+ * (see the `event` entry on SCENE_SOCKETS in components/nodes/index.tsx,
+ * which accepts 'audioPlayer' alongside 'event') — the continuously
+ * data-driven, show-for-as-long-as-isPlaying visibility mode (see
+ * AudioPlayerNode's own doc comment), mirrors isAudioTrigger in
+ * overlays/custom.html. Only meaningful when sceneTrigger ISN'T already
+ * active — a real Event always wins when both happen to be wired (same
+ * priority order render()'s own isAudioTrigger branch uses in
+ * overlays/custom.html), since the shared socket is single-value anyway.
+ * Previously had no local equivalent at all — Play/Test simply did nothing
+ * for a scene driven purely by Audio Player, unlike the real overlay, which
+ * already simulated this via isAudioTrigger/showAudioContent.
+ */
+function sceneAudioTrigger(nodes: Node[], edges: Edge[]): boolean {
+  const scene = nodes.find((n) => n.type === 'scene')
+  if (!scene) return false
+  const map = buildNodeMap(nodes)
+  return incoming(scene.id, edges, map).some((n) => n.type === 'audioPlayer')
+}
+
 /** Duration (ms) for one Animation modifier — mirrors the CSS fallback each [data-animation] rule in animations.css falls back to when the node's own Duration field is unset. */
 function animationFallbackMs(type: string): number {
   if (type === 'slide') return 300
@@ -1992,27 +2013,6 @@ export function SceneBuilderPage({
   }
 
   /**
-   * Live-previews the CURRENT graph (including anything not yet Saved) in
-   * any real OBS Browser Source/browser tab already pointed at this scene's
-   * URL — see CustomOverlaysProvider.testOverlay / OverlayServer.testCustomOverlay.
-   * Distinct from Save: this replays entrance animations and fires a fresh
-   * (non-repeating) Background FX drop, Save deliberately does not — see the
-   * doc comment on OverlayServer.setCustomOverlays. Purely a broadcast — it
-   * doesn't open anything itself, so it's a no-op if nothing is connected.
-   */
-  const handleTest = async (): Promise<void> => {
-    if (!overlay) return
-    setTestStatus('testing')
-    try {
-      await testOverlay({ ...overlay, nodes, edges })
-      setTestStatus('idle')
-    } catch {
-      setTestStatus('error')
-      setTimeout(() => setTestStatus('idle'), 2000)
-    }
-  }
-
-  /**
    * One-shot auto-arrange via layoutGraph (dagre) — only touches local
    * editor state (`nodes`), same as dragging a node by hand; nothing is
    * persisted until Save, so it's always safe to try and undo by just not
@@ -2038,15 +2038,19 @@ export function SceneBuilderPage({
    * AlertSoundPicker's own preview button.
    *
    * A Start node (processTrigger) takes priority over the plain
-   * Event+Timer→Scene model (sceneTrigger) — see the doc
-   * comment on nodeTypes in components/nodes/index.tsx. Either way this
-   * simulates the event: for a Process, advances processClockMs via rAF
-   * from 0 to the schedule's totalMs, each component resolving its own
-   * state through computeTaskState; for the plain model, the simpler
-   * show-for-durationMs-then-play-one-exit-animation flow this already had.
-   * Both are the local equivalent of a real alert arriving, and of what
+   * Event+Timer→Scene model (sceneTrigger), which itself takes priority over
+   * Audio-Player-driven visibility (sceneAudioTrigger) — see the doc comment
+   * on nodeTypes in components/nodes/index.tsx. Either way this simulates
+   * the event: for a Process, advances processClockMs via rAF from 0 to the
+   * schedule's totalMs, each component resolving its own state through
+   * computeTaskState; for the plain model (real Event OR Audio Player),
+   * the simpler show-for-durationMs-then-play-one-exit-animation flow this
+   * already had — sceneAudioTrigger has no real "stop" signal to preview
+   * locally (unlike the real overlay's own isPlaying-driven one), so it
+   * just reuses sceneTrigger's own 6000ms default. Every case here is the
+   * local equivalent of a real alert/track-change arriving, and of what
    * Test simulates for the real overlay (see handleTest /
-   * overlays/custom.html's processTrigger/isEventTrigger).
+   * overlays/custom.html's processTrigger/isEventTrigger/isAudioTrigger).
    */
   /** Plays one Sound node's configured preset/custom file — shared by handlePlay's Start/Scene-level preview below and its per-Task one. */
   const playSoundNode = (soundNode: Node | undefined): void => {
@@ -2068,7 +2072,8 @@ export function SceneBuilderPage({
     setPlayToken((t) => t + 1)
     const proc = processTrigger(nodes, edges)
     const trigger = proc.active ? null : sceneTrigger(nodes, edges)
-    if (proc.active || trigger?.active) {
+    const audioTrigger = !proc.active && !trigger?.active && sceneAudioTrigger(nodes, edges)
+    if (proc.active || trigger?.active || audioTrigger) {
       if (eventHideTimerRef.current) clearTimeout(eventHideTimerRef.current)
       if (eventIdleTimerRef.current) clearTimeout(eventIdleTimerRef.current)
       if (processRafRef.current != null) cancelAnimationFrame(processRafRef.current)
@@ -2137,6 +2142,39 @@ export function SceneBuilderPage({
         ? incoming(scene.id, edges, map).find((n) => n.type === 'sound')
         : nodes.find((n) => n.type === 'sound')
     playSoundNode(soundNode)
+  }
+
+  /**
+   * Live-previews the CURRENT graph (including anything not yet Saved) in
+   * any real OBS Browser Source/browser tab already pointed at this scene's
+   * URL — see CustomOverlaysProvider.testOverlay / OverlayServer.testCustomOverlay.
+   * Distinct from Save: this replays entrance animations and fires a fresh
+   * (non-repeating) Background FX drop, Save deliberately does not — see the
+   * doc comment on OverlayServer.setCustomOverlays.
+   *
+   * Also runs handlePlay's own local simulation (same as clicking Play)
+   * so this panel's preview — Task states, ProcessToken included — animates
+   * in step with whatever's being pushed to the real page, instead of
+   * sitting untouched while Test does its own separate thing. Previously
+   * Test was a pure broadcast with no local effect at all: a no-op if
+   * nothing was connected (the real overlay's own doc comment on `render`'s
+   * `simulateTest` still applies for the OTHER end — this only fixes what
+   * happens HERE, in the editor), which looked like "Test doesn't do
+   * anything" and, once something WAS connected, made the local Preview and
+   * the real page's result impossible to compare side by side since only
+   * one of them was ever actually running at a time.
+   */
+  const handleTest = async (): Promise<void> => {
+    if (!overlay) return
+    handlePlay()
+    setTestStatus('testing')
+    try {
+      await testOverlay({ ...overlay, nodes, edges })
+      setTestStatus('idle')
+    } catch {
+      setTestStatus('error')
+      setTimeout(() => setTestStatus('idle'), 2000)
+    }
   }
 
   const onNodesChange = useCallback(
@@ -2291,11 +2329,13 @@ export function SceneBuilderPage({
 
   const backgroundFxNode = findBackgroundFx(nodes, edges)
   // A Start node (processTrigger) takes priority over the plain
-  // Event+Timer→Scene model (sceneTrigger) — see the doc
+  // Event+Timer→Scene model (sceneTrigger), which itself takes priority
+  // over Audio-Player-driven visibility (sceneAudioTrigger) — see the doc
   // comment on nodeTypes in components/nodes/index.tsx.
   const proc = processTrigger(nodes, edges)
   const trigger = proc.active ? null : sceneTrigger(nodes, edges)
-  const eventActive = proc.active || Boolean(trigger?.active)
+  const audioTrigger = !proc.active && !trigger?.active && sceneAudioTrigger(nodes, edges)
+  const eventActive = proc.active || Boolean(trigger?.active) || audioTrigger
   const eventState: PreviewEventState = {
     active: eventActive,
     visible: eventPhase !== 'idle',
