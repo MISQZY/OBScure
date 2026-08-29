@@ -66,14 +66,21 @@ export const nodeTypes = {
  * into Scene, and "modifier" nodes (Position, Size, Transform, Animation,
  * Event, Sound, Timer, Hide, Display) have an output only, wired INTO
  * the node they affect. A node's own input sockets are therefore "what
- * modifies or contains me" — one dedicated, labeled socket per parameter
- * (Blender-style — see InputSocket/NODE_SOCKETS below), not a single shared
- * dot; its output is "what I contribute to". This is also what ScenePreview
- * (SceneBuilderPage.tsx) and overlays/custom.html walk to render the
- * scene — both resolve wiring by the connected node's `type`, never by
- * which specific socket it's plugged into, so which socket a wire lands on
- * is purely for the graph to read clearly, not something the interpreters
- * care about.
+ * modifies or contains me" — grouped by ROLE (Blender-style modifier stack —
+ * see InputSocket/NODE_SOCKETS below), not a single shared dot: Transform
+ * (Position/Size/Transform) and Style (Opacity/Shadow/Animation/Hide) each
+ * take any number of wires, any mix of the types they accept, instead of one
+ * dedicated socket per individual node type. Its output is "what I
+ * contribute to". This is also what ScenePreview (SceneBuilderPage.tsx) and
+ * overlays/custom.html walk to render the scene — both resolve wiring by the
+ * connected node's `type`, never by which specific socket it's plugged into,
+ * so which socket a wire lands on is purely for the graph to read clearly,
+ * not something the interpreters care about. Where two wires land in the
+ * same group and would set the same field (e.g. two Position nodes both
+ * feeding one Transform group), whichever was wired more recently wins,
+ * unless reordered via the numbered priority badge (see usePriorityInfo/
+ * cyclePriority) — same as a later modifier overriding an earlier one in a
+ * Blender modifier stack.
  *
  * Background FX is the one exception with BOTH: an output into Scene (to
  * activate it) and an input a Text node can feed (to caption
@@ -94,19 +101,22 @@ export const nodeTypes = {
  * buildProcessSchedule in SceneBuilderPage.tsx and overlays/custom.html.
  */
 
-const RENDERABLE_TYPES = ['box', 'text', 'image', 'video']
-
 /**
  * One labeled input socket on a node — Blender-style: a modifier that
- * overrides a specific parameter plugs into the socket for that parameter,
- * instead of every wire piling onto one shared dot. `accepts` is enforced
- * by isValidConnection in SceneBuilderPage.tsx (shared from NODE_SOCKETS
- * below so BaseNode's rendering and connection validation never drift).
- * `multi` (default false): a single-value socket auto-replaces its existing
- * wire when a new one is dropped on it (see onConnect in
- * SceneBuilderPage.tsx) — same behavior Blender uses for single-value
- * inputs. `multi: true` (Box's children, Scene's content) is a list: any
- * number of wires.
+ * overrides a specific ROLE (Transform, Style, ...) plugs into the socket
+ * for that role, instead of every wire piling onto one shared dot. `accepts`
+ * is enforced by isValidConnection in SceneBuilderPage.tsx (shared from
+ * NODE_SOCKETS below so BaseNode's rendering and connection validation never
+ * drift) — a role socket typically accepts SEVERAL node types (e.g.
+ * Transform accepts Position, Size, AND Transform), any combination of which
+ * can be wired in at once. `multi` (default false): a single-value socket
+ * auto-replaces its existing wire when a new one is dropped on it (see
+ * onConnect in SceneBuilderPage.tsx) — same behavior Blender uses for
+ * single-value inputs. `multi: true` (Box's children, Scene's content, and
+ * every grouped modifier role below) is a list: any number of wires, of any
+ * mix of the types `accepts` lists — see MODIFIER_SOCKETS below, and
+ * modifierStyle's own doc comment in SceneBuilderPage.tsx for how duplicate
+ * fields within one group resolve (last-wired wins).
  */
 export type InputSocket = {
   id: string
@@ -117,42 +127,45 @@ export type InputSocket = {
   multi?: boolean
 }
 
+/**
+ * The two grouped "modifier" roles shared by Text/Image/Video/Box (and,
+ * minus Hide, by Task — see TASK_SOCKETS): Transform (Position + Size +
+ * Transform/scale+rotate — anything that changes WHERE or HOW BIG something
+ * is) and Style (Opacity + Shadow + Animation + Hide — anything that changes
+ * how it LOOKS or whether it shows at all). Each is `multi: true`: wire in a
+ * Position AND a Size AND a Transform node together to get all three at
+ * once, same as before these were separate sockets — see modifierStyle's own
+ * doc comment in SceneBuilderPage.tsx for how the values combine (and how a
+ * second wire of the SAME type in one group is resolved).
+ */
 const MODIFIER_SOCKETS: InputSocket[] = [
-  { id: 'position', label: 'Position', accepts: ['position'], kind: 'style' },
-  { id: 'size', label: 'Size', accepts: ['size'], kind: 'style' },
-  { id: 'transform', label: 'Transform', accepts: ['transform'], kind: 'style' },
-  { id: 'opacity', label: 'Opacity', accepts: ['opacity'], kind: 'style' },
-  { id: 'shadow', label: 'Shadow', accepts: ['shadow'], kind: 'style' },
-  { id: 'animation', label: 'Animation', accepts: ['animation'], kind: 'style' },
-  { id: 'hide', label: 'Hide', accepts: ['hide'], kind: 'style' }
+  { id: 'transform', label: 'Transform', accepts: ['position', 'size', 'transform'], kind: 'style', multi: true },
+  { id: 'style', label: 'Style', accepts: ['opacity', 'shadow', 'animation', 'hide'], kind: 'style', multi: true }
 ]
 
-// Lets an Audio Player's Author/Title output (see AUDIO_PLAYER_OUTPUTS below)
-// be wired straight into a specific Text node instead of only reaching it
+// Lets an Audio Player's Content output (see AUDIO_PLAYER_OUTPUTS below) be
+// wired straight into a specific Text node instead of only reaching it
 // indirectly via {title}/{artist} placeholders in its Content field. Unlike
 // a plain modifier socket, wiring in doesn't replace Content — it just
 // supplies the values Content's OWN {artist}/{title} placeholders resolve
 // to for this node (see buildText's own doc comment in overlays/
 // custom.html), so the field you actually edit is still Content's textarea.
-// `multi: true` since Author and Title are independent values, not
-// alternatives — both can (and normally would) be wired in at once to fill
-// a "{artist} — {title}" template; more producers may feed this socket down
-// the line, not just Audio Player's two.
+// `multi: true` for future producers beyond Audio Player's own single wire —
+// one Content wire already carries both artist and title bundled together.
 // kind 'content' (not 'data'), despite only ever accepting Audio Player
 // today — this socket IS content (a value feeding Content's own template),
 // same family as Box's 'children'/Scene's own 'content' socket, so its dot
 // reads green like theirs instead of the data-source violet/sky-blue tint.
-const TEXT_SOCKETS: InputSocket[] = [...MODIFIER_SOCKETS, { id: 'content', label: 'Content', accepts: ['audioPlayer'], kind: 'content', multi: true }]
+const TEXT_SOCKETS: InputSocket[] = [{ id: 'content', label: 'Content', accepts: ['audioPlayer'], kind: 'content', multi: true }, ...MODIFIER_SOCKETS]
 // Same "Content" concept as TEXT_SOCKETS' own socket above, but for Image:
-// wiring Audio Player's Cover output in shows the live now-playing album art
-// unconditionally (see buildImage's own doc comment), taking priority over a
-// set URL/uploaded image — ImageNode's own URL field goes read-only while
-// this is connected, since the connection already decides what's shown.
-// Own id (not 'content') so isValidConnection's per-output `feeds` check
-// (see AUDIO_PLAYER_OUTPUTS/OutputSocket's own doc comment) can tell Text's
-// Content socket and this one apart despite the identical label — Author/
-// Title can only reach Text's, Cover only this one.
-const IMAGE_SOCKETS: InputSocket[] = [...MODIFIER_SOCKETS, { id: 'imageContent', label: 'Content', accepts: ['audioPlayer'], kind: 'content' }]
+// wiring Audio Player's Content output in shows the live now-playing album
+// art unconditionally (see buildImage's own doc comment), taking priority
+// over a set URL/uploaded image — ImageNode's own URL field goes read-only
+// while this is connected, since the connection already decides what's
+// shown. Own id (not 'content') purely so a Text's Content socket and this
+// one read as visibly different rows despite the identical label — the SAME
+// Content output can reach either (see AUDIO_PLAYER_OUTPUTS' own `feeds`).
+const IMAGE_SOCKETS: InputSocket[] = [{ id: 'imageContent', label: 'Content', accepts: ['audioPlayer'], kind: 'content' }, ...MODIFIER_SOCKETS]
 const VIDEO_SOCKETS: InputSocket[] = MODIFIER_SOCKETS
 
 const BOX_SOCKETS: InputSocket[] = [
@@ -163,7 +176,7 @@ const BOX_SOCKETS: InputSocket[] = [
   // still apply to it normally once nested, same as at the top level.
   { id: 'children', label: 'Children', accepts: ['text', 'image', 'video', 'box'], kind: 'content', multi: true },
   ...MODIFIER_SOCKETS,
-  { id: 'ordering', label: 'Ordering', accepts: ['ordering'], kind: 'style' }
+  { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' }
 ]
 
 const SCENE_SOCKETS: InputSocket[] = [
@@ -174,7 +187,7 @@ const SCENE_SOCKETS: InputSocket[] = [
   // nothing to do with.
   { id: 'backgroundFx', label: 'Background FX', accepts: ['backgroundAnimation'], kind: 'data' },
   { id: 'sound', label: 'Sound', accepts: ['sound'], kind: 'data' },
-  { id: 'ordering', label: 'Ordering', accepts: ['ordering'], kind: 'style' },
+  { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' },
   { id: 'event', label: 'Event', accepts: ['event'], kind: 'data' },
   { id: 'timer', label: 'Timer', accepts: ['timer'], kind: 'data' },
   // OPTIONAL — see AudioPlayerNode's own doc comment for the two independent
@@ -203,12 +216,13 @@ const START_SOCKETS: InputSocket[] = [
 
 const TASK_SOCKETS: InputSocket[] = [
   { id: 'target', label: 'Target', accepts: ['text', 'image', 'box', 'video'], kind: 'content' },
-  { id: 'animation', label: 'Animation', accepts: ['animation'], kind: 'style' },
-  { id: 'position', label: 'Position', accepts: ['position'], kind: 'style' },
-  { id: 'size', label: 'Size', accepts: ['size'], kind: 'style' },
-  { id: 'transform', label: 'Transform', accepts: ['transform'], kind: 'style' },
-  { id: 'opacity', label: 'Opacity', accepts: ['opacity'], kind: 'style' },
-  { id: 'shadow', label: 'Shadow', accepts: ['shadow'], kind: 'style' },
+  // Same Transform/Style grouping as MODIFIER_SOCKETS, minus Hide (a Task's
+  // visibility is already its own show/hide Action field, not a separate
+  // modifier) — these are what THIS step changes, layered on top of the
+  // target's own base Transform/Style at the moment the step fires. See
+  // computeTaskState's own doc comment in SceneBuilderPage.tsx.
+  { id: 'transform', label: 'Transform', accepts: ['position', 'size', 'transform'], kind: 'style', multi: true },
+  { id: 'style', label: 'Style', accepts: ['opacity', 'shadow', 'animation'], kind: 'style', multi: true },
   // A Task's own one-shot cue — plays once when THIS step fires (e.g. a
   // cash-register sound only when the donation amount appears), distinct
   // from Start's Sound (fires once at the process's very beginning). See
@@ -240,18 +254,42 @@ export const NODE_SOCKETS: Record<string, InputSocket[]> = {
  * see BaseNode's `outputSockets` prop, only set for the types below.
  * `feeds`: which target INPUT socket ids this output is meant to connect
  * to, enforced by isValidConnection in SceneBuilderPage.tsx exactly like
- * InputSocket.accepts is on the input side.
+ * InputSocket.accepts is on the input side. `help`: an optional per-output
+ * tooltip (a "?" popover on the row itself, same mechanism as BaseNode's own
+ * header `help` — see OutputRow) for spelling out exactly what THIS output
+ * does and where to wire it, so the node's header help can stay a short
+ * one-liner about the node as a whole instead of cramming every output's
+ * behavior into one popover.
  */
 export type OutputSocket = {
   id: string
   label: string
   kind: 'content' | 'style' | 'data'
   feeds: string[]
+  help?: string
 }
 
-const STRUCTURAL_OUTPUT: OutputSocket = { id: 'structural', label: 'Structural', kind: 'content', feeds: ['children', 'content'] }
-const TARGET_OUTPUT: OutputSocket = { id: 'target', label: 'As Target', kind: 'content', feeds: ['target'] }
-const CAPTION_OUTPUT: OutputSocket = { id: 'caption', label: 'As Caption', kind: 'content', feeds: ['caption'] }
+const STRUCTURAL_OUTPUT: OutputSocket = {
+  id: 'structural',
+  label: 'Structural',
+  kind: 'content',
+  feeds: ['children', 'content'],
+  help: "Makes this part of what's actually rendered — wire it into a Box's Children socket to nest it, or straight into Scene's own Content socket to place it at the top level."
+}
+const TARGET_OUTPUT: OutputSocket = {
+  id: 'target',
+  label: 'As Target',
+  kind: 'content',
+  feeds: ['target'],
+  help: "Wire into a Task's own Target socket to mark this as the thing that step shows, hides, or updates. Doesn't replace Structural — a component still needs that wire too, or it has nothing to render at all."
+}
+const CAPTION_OUTPUT: OutputSocket = {
+  id: 'caption',
+  label: 'As Caption',
+  kind: 'content',
+  feeds: ['caption'],
+  help: "Wire into a Background FX node's own Caption socket to caption a paratrooper/airdrop drop with this text."
+}
 
 const TEXT_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT, CAPTION_OUTPUT]
 const IMAGE_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
@@ -259,35 +297,49 @@ const VIDEO_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
 const BOX_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
 
 /**
- * Audio Player's five roles for its single Now Playing feed. Author/Title
- * both feed a Text node's Content socket (id `content` — see TEXT_SOCKETS
- * above): each just supplies ITS OWN value, so wiring both in at once fills
- * {artist} and {title} together in one Content template like
- * "{artist} — {title}" (see audioContentValues in overlays/custom.html).
- * Cover feeds an Image node's Content socket (id `imageContent`) and
- * unconditionally replaces what it shows, since Image has no
- * placeholder-template field of its own to merge into. Event feeds a
- * Start node's own Event socket (see START_SOCKETS above) — a process
- * armed this way triggers on a TRACK CHANGE rather than matching a real
- * alert's type (see processTrigger's audioArmed in overlays/custom.html).
- * Feed is the one that reaches Scene's own `audioPlayer` socket (see
- * SCENE_SOCKETS above) — the whole-scene visibility switch (show/hide by
- * isPlaying), a role none of the other four can reach since their `feeds`
- * lists point elsewhere. Skipping all of these wires entirely still works
- * exactly as before — see AudioPlayerNode's own doc comment.
+ * Audio Player's two roles for its single Now Playing feed, collapsed from
+ * five separate outputs into these — one wire per role covers everything a
+ * consumer on that side could want, instead of picking which of several
+ * near-identical dots to wire in. Content carries Cover+Artist+Title
+ * bundled together: wired into a Text node's Content socket (id `content` —
+ * see TEXT_SOCKETS above) it fills {artist}/{title} in that node's own
+ * template (see audioContentValues in overlays/custom.html); wired into an
+ * Image node's Content socket (id `imageContent`) it shows the live album
+ * art instead, unconditionally (Image has no placeholder template of its
+ * own to merge into) — which fields actually apply is decided by which
+ * socket it lands on, not by which wire you dragged. Event carries the
+ * track-change/now-playing signal itself: wired into a Start node's own
+ * Event socket (see START_SOCKETS above) it arms a process on a TRACK
+ * CHANGE rather than matching a real alert's type (see processTrigger's
+ * audioArmed in overlays/custom.html); wired into Scene's own `audioPlayer`
+ * socket (see SCENE_SOCKETS above) it's the whole-scene visibility switch
+ * (show/hide by isPlaying) instead — same "one wire, meaning depends on
+ * where it lands" idea. Both can be wired into their two respective targets
+ * at once (fan-out from one output handle needs no `multi` flag — see
+ * InputSocket's own doc comment for why that flag only matters on the INPUT
+ * side). Skipping either entirely still works exactly as before — see
+ * AudioPlayerNode's own doc comment.
  */
 const AUDIO_PLAYER_OUTPUTS: OutputSocket[] = [
-  // kind 'content' on these three (not 'data') to match the Content sockets
-  // they feed — see TEXT_SOCKETS/IMAGE_SOCKETS' own comments, and
-  // displayEdges' own doc comment in SceneBuilderPage.tsx for how this
-  // colors their wire green despite the node's own 'data' category.
-  // trackChanged/feed stay 'data': one's a trigger, the other a whole-scene
-  // visibility switch, neither is a value feeding a Content template.
-  { id: 'author', label: 'Author', kind: 'content', feeds: ['content'] },
-  { id: 'title', label: 'Title', kind: 'content', feeds: ['content'] },
-  { id: 'cover', label: 'Cover', kind: 'content', feeds: ['imageContent'] },
-  { id: 'trackChanged', label: 'Event', kind: 'data', feeds: ['event'] },
-  { id: 'feed', label: 'Now Playing', kind: 'data', feeds: ['audioPlayer'] }
+  // kind 'content' (not 'data') to match the Content sockets it feeds — see
+  // TEXT_SOCKETS/IMAGE_SOCKETS' own comments, and displayEdges' own doc
+  // comment in SceneBuilderPage.tsx for how this colors the wire green
+  // despite the node's own 'data' category.
+  {
+    id: 'content',
+    label: 'Content',
+    kind: 'content',
+    feeds: ['content', 'imageContent'],
+    help: "Bundles Artist, Title, and Cover in one wire. Wire into a Text node's own Content socket to fill its {artist}/{title} placeholders, or into an Image node's own Content socket to show the live album art instead — which fields apply depends on where it lands, not on anything you choose here."
+  },
+  // kind 'data': a trigger/state signal, not a value feeding a template.
+  {
+    id: 'event',
+    label: 'Event',
+    kind: 'data',
+    feeds: ['event', 'audioPlayer'],
+    help: "The track-change/now-playing signal. Wire into a Start node's own Event socket to arm a process on track change, and/or into Scene's own Audio Player socket to show/hide the whole scene by isPlaying — both at once is fine, they're independent."
+  }
 ]
 
 /** Every node type's OUTPUT sockets, keyed by node `type` — analogous to NODE_SOCKETS. Node types absent here (the large majority) render the single generic "output" handle unchanged. */
@@ -394,27 +446,31 @@ export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
 }
 
 /**
- * Returns the 1-based priority position of `nodeId` among all nodes whose
- * output connects to the same target, plus the total count of siblings.
+ * Returns the 1-based priority position of `nodeId` among all nodes wired
+ * into the exact same (target, targetHandle) socket, plus the total count of
+ * siblings. Scoping by socket (not just target) is what keeps this correct
+ * now that a role socket like Transform/Style (see MODIFIER_SOCKETS in this
+ * file) can hold several DIFFERENT node types at once — a Position and an
+ * Opacity node feeding two different sockets on the same Text are never
+ * "siblings" for this purpose, only two nodes actually competing for the
+ * same socket are. Was previously restricted to Text/Image/Video/Box (Box's
+ * children / Scene's content, the only pre-existing multi sockets); now
+ * generic, since single-value sockets can never have 2 edges anyway (onConnect
+ * auto-replaces) so the restriction was never load-bearing for those.
  * Only meaningful when outputs === true (the node can connect somewhere).
- * Returns `null` when the node has no outgoing edge or is the only child.
+ * Returns `null` when the node has no outgoing edge or is the only sibling.
  */
 function usePriorityInfo(nodeId: string) {
   const result = useStore(
     (s) => {
-      const selfNode = s.nodes.find((n) => n.id === nodeId)
-      if (!selfNode || !RENDERABLE_TYPES.includes(selfNode.type!)) {
-        return { position: null, total: null }
-      }
-
       const outEdge = s.edges.find((e) => e.source === nodeId)
       if (!outEdge) return { position: null, total: null }
 
-      const siblingEdges = s.edges.filter((e) => e.target === outEdge.target)
+      const siblingEdges = s.edges.filter((e) => e.target === outEdge.target && e.targetHandle === outEdge.targetHandle)
 
       const siblingNodes = siblingEdges
         .map((e) => s.nodes.find((n) => n.id === e.source))
-        .filter((n): n is (typeof s.nodes)[number] => n != null && RENDERABLE_TYPES.includes(n.type!))
+        .filter((n): n is (typeof s.nodes)[number] => n != null)
         .sort((a, b) => ((a.data.priority as number) ?? 0) - ((b.data.priority as number) ?? 0))
 
       if (siblingNodes.length < 2) return { position: null, total: null }
@@ -432,10 +488,10 @@ function usePriorityInfo(nodeId: string) {
 /**
  * Whether `nodeId` currently has an incoming edge on socket `targetHandle`
  * — used by ImageNode to know when its Content socket (see IMAGE_SOCKETS)
- * is wired to Audio Player's Cover output, in which case the URL field goes
- * read-only: the connection already decides what's shown (see buildImage's
- * own doc comment in overlays/custom.html), so an editable-but-ignored URL
- * field would just be confusing.
+ * is wired to Audio Player's Content output, in which case the URL field
+ * goes read-only: the connection already decides what's shown (see
+ * buildImage's own doc comment in overlays/custom.html), so an
+ * editable-but-ignored URL field would just be confusing.
  */
 function useHasIncomingEdge(nodeId: string, targetHandle: string): boolean {
   return useStore((s) => s.edges.some((e) => e.target === nodeId && e.targetHandle === targetHandle))
@@ -449,31 +505,29 @@ function useHasIncomingEdge(nodeId: string, targetHandle: string): boolean {
  * with no Audio Player anywhere in the scene). EVENT_PLACEHOLDERS (user/
  * amount/message/source) need an Event node wired into Scene or Start —
  * either one arms all four together, same as sceneTrigger/processTrigger
- * elsewhere. 'artist'/'title' each need either Audio Player wired into
- * Scene (arms both, scene-wide — see the audioPlayer entry on
- * SCENE_SOCKETS) or wired directly into THIS node's own Content socket
- * (arms only whichever output(s) are actually connected — see
- * AUDIO_PLAYER_OUTPUTS/audioContentValues in overlays/custom.html).
- * Doesn't verify precise reachability from this specific node's own Scene
- * for the Event/scene-wide-Audio checks (just whether one exists ANYWHERE
- * in the graph) — a false positive only offers a token that happens not to
- * resolve, same harmless-if-imprecise reasoning as hasAudioContentDeps in
- * overlays/custom.html.
+ * elsewhere. 'artist'/'title' both need either Audio Player's Event output
+ * wired into Scene (arms both, scene-wide — see the audioPlayer entry on
+ * SCENE_SOCKETS) or its Content output wired directly into THIS node's own
+ * Content socket (Content is one bundled wire — see AUDIO_PLAYER_OUTPUTS/
+ * audioContentValues in overlays/custom.html — so wiring it in arms both
+ * placeholders together, never just one). Doesn't verify precise
+ * reachability from this specific node's own Scene for the Event/scene-wide-
+ * Audio checks (just whether one exists ANYWHERE in the graph) — a false
+ * positive only offers a token that happens not to resolve, same
+ * harmless-if-imprecise reasoning as hasAudioContentDeps in overlays/
+ * custom.html.
  */
 function useAvailablePlaceholders(nodeId: string): readonly string[] {
   return useStore(
     (s) => {
       const hasEvent = s.edges.some((e) => e.targetHandle === 'event' && s.nodes.find((n) => n.id === e.source)?.type === 'event')
       const audioIntoScene = s.edges.some((e) => e.targetHandle === 'audioPlayer' && s.nodes.find((n) => n.id === e.source)?.type === 'audioPlayer')
-      const directAudioHandles = new Set(
-        s.edges
-          .filter((e) => e.target === nodeId && e.targetHandle === 'content' && s.nodes.find((n) => n.id === e.source)?.type === 'audioPlayer')
-          .map((e) => e.sourceHandle)
+      const directAudioContent = s.edges.some(
+        (e) => e.target === nodeId && e.targetHandle === 'content' && s.nodes.find((n) => n.id === e.source)?.type === 'audioPlayer'
       )
       const result: string[] = []
       if (hasEvent) result.push(...EVENT_PLACEHOLDERS)
-      if (audioIntoScene || directAudioHandles.has('author')) result.push('artist')
-      if (audioIntoScene || directAudioHandles.has('title')) result.push('title')
+      if (audioIntoScene || directAudioContent) result.push('artist', 'title')
       return result
     },
     (a, b) => a.length === b.length && a.every((v, i) => v === b[i])
@@ -550,10 +604,28 @@ function SocketRow({ id, label, dotClass, title }: { id: string; label: string; 
   )
 }
 
-/** One labeled output-socket row — the source-side mirror of SocketRow, dot on the right edge. Only rendered for node types with an `outputSockets` list (see OutputSocket/NODE_OUTPUTS above); every other node keeps the single generic "output" handle. */
-function OutputRow({ id, label, dotClass, title }: { id: string; label: string; dotClass: string; title: string }) {
+/** One labeled output-socket row — the source-side mirror of SocketRow, dot on the right edge. Only rendered for node types with an `outputSockets` list (see OutputSocket/NODE_OUTPUTS above); every other node keeps the single generic "output" handle. `help` (optional — see OutputSocket's own doc comment) renders the same small "?" popover BaseNode's header uses, so a node's header help can stay a short one-liner while each output's own exact behavior lives on the row it belongs to. */
+function OutputRow({ id, label, dotClass, title, help }: { id: string; label: string; dotClass: string; title: string; help?: string }) {
   return (
     <div className="relative flex items-center justify-end gap-1.5 pl-2 pr-3 h-5 text-[10px] text-muted-foreground">
+      {help && (
+        <NodePopover
+          side="bottom"
+          className="w-56 text-xs leading-snug p-2.5"
+          trigger={
+            <button
+              type="button"
+              onClick={(e) => e.stopPropagation()}
+              title="Help"
+              className="nodrag shrink-0 flex items-center justify-center size-3.5 rounded-full border border-muted-foreground/50 text-muted-foreground text-[9px] font-bold leading-none hover:bg-accent hover:text-accent-foreground hover:border-foreground/50 transition-colors cursor-pointer"
+            >
+              ?
+            </button>
+          }
+        >
+          {help}
+        </NodePopover>
+      )}
       <span className="truncate">{label}</span>
       <Handle
         type="source"
@@ -622,7 +694,7 @@ function BaseNode({
   const hasBody = Boolean(children) && !collapsed
   const showTrailingBorder = hasSocketSection || hasBody
 
-  /** Cycle through priority values: clicking rotates all siblings (1->2, 2->3, ..., N->1) */
+  /** Cycle through priority values: clicking rotates all siblings sharing this exact socket (1->2, 2->3, ..., N->1) — see usePriorityInfo's own doc comment for why siblings are scoped by (target, targetHandle) rather than just target. */
   const cyclePriority = () => {
     if (!priority) return
     const edges = getEdges()
@@ -630,9 +702,9 @@ function BaseNode({
     const outEdge = edges.find((e) => e.source === id)
     if (!outEdge) return
     const siblings = edges
-      .filter((e) => e.target === outEdge.target)
+      .filter((e) => e.target === outEdge.target && e.targetHandle === outEdge.targetHandle)
       .map((e) => nodes.find((n) => n.id === e.source))
-      .filter((n): n is (typeof nodes)[number] => n != null && RENDERABLE_TYPES.includes(n.type!))
+      .filter((n): n is (typeof nodes)[number] => n != null)
       .sort((a, b) => ((a.data.priority as number) ?? 0) - ((b.data.priority as number) ?? 0))
 
     // Shift all priorities by 1, wrapping around
@@ -812,7 +884,7 @@ function BaseNode({
         (outputSockets && outputSockets.length > 0 ? (
           <div className="flex flex-col border-t py-0.5">
             {outputSockets.map((socket) => (
-              <OutputRow key={socket.id} id={socket.id} label={socket.label} dotClass={SOCKET_DOT[socket.kind]} title={`${socket.label} out`} />
+              <OutputRow key={socket.id} id={socket.id} label={socket.label} dotClass={SOCKET_DOT[socket.kind]} title={`${socket.label} out`} help={socket.help} />
             ))}
           </div>
         ) : (
@@ -971,7 +1043,7 @@ const textInputClass = 'nodrag select-text w-full h-6 bg-muted px-1 rounded outl
 /** Multi-line sibling of textInputClass, for Text's own Content field — starts at `rows={3}` (set on the element itself) and resize-y lets a longer caption grow past that instead of scrolling inside a fixed box. */
 const textAreaClass = 'nodrag select-text w-full bg-muted px-1 py-1 rounded outline-none resize-y'
 
-/** Filled in from an Event node's real/simulated alert — see EventNode/interpolate. Read by useAvailablePlaceholders, which is what actually decides PlaceholderPicker's {} menu contents ('title'/'artist', the other half, are handled individually there since each has its own wiring condition — see that hook's own doc comment). */
+/** Filled in from an Event node's real/simulated alert — see EventNode/interpolate. Read by useAvailablePlaceholders, which is what actually decides PlaceholderPicker's {} menu contents ('title'/'artist', the other half, are handled there together since Audio Player's Content wire always arms both at once — see that hook's own doc comment). */
 const EVENT_PLACEHOLDERS = ['user', 'amount', 'message', 'source'] as const
 
 type SavedNodeMap = Record<string, Record<string, unknown>>
@@ -1803,7 +1875,7 @@ export function ImageNode({ id, data }: NodeProps) {
   const [uploading, setUploading] = useState(false)
   const customImageName = (data.customImageName as string) || null
   const borderEnabled = Boolean(data.borderEnabled)
-  // Audio Player's Cover output wired into this node's Content socket (see
+  // Audio Player's Content output wired into this node's Content socket (see
   // IMAGE_SOCKETS/AUDIO_PLAYER_OUTPUTS) already decides what's shown, same
   // priority buildImage in overlays/custom.html gives it — the URL field
   // goes read-only rather than sitting there editable but silently ignored.
@@ -1834,7 +1906,7 @@ export function ImageNode({ id, data }: NodeProps) {
       category="content"
       sockets={IMAGE_SOCKETS}
       outputSockets={IMAGE_OUTPUTS}
-      help="Leave URL empty for the live now-playing album art, or wire Audio Player's Cover output into Content for the same thing made explicit (URL field goes read-only). Defaults to 96×96 — wire a Size node to override."
+      help="Leave URL empty for the live now-playing album art, or wire Audio Player's Content output into Content for the same thing made explicit (URL field goes read-only). Defaults to 96×96 — wire a Size node to override."
     >
       <div className="flex flex-col gap-1 text-xs">
         <label>Image URL</label>
@@ -2169,35 +2241,36 @@ export function RouletteSourceNode({ id, data }: NodeProps) {
 }
 
 /**
- * THREE independent ways to use the Now Playing feed (Spotify/Windows
- * Media — see NowPlayingPayload), which can be used together, any subset,
- * or not at all:
+ * TWO output wires for the Now Playing feed (Spotify/Windows Media — see
+ * NowPlayingPayload), each usable for more than one purpose depending on
+ * where it lands — any subset can be wired in, or neither:
  *
- * 1. Author/Title/Cover outputs (AUDIO_PLAYER_OUTPUTS) wired straight into a
- *    Text/Image's own Content socket — Author/Title just supply the values
- *    a Text's {artist}/{title} placeholders resolve to (see
- *    audioContentValues in overlays/custom.html), Cover replaces an Image
- *    outright. These read the live feed directly and keep updating on their
- *    own regardless of whether Scene below is wired in at all — see
- *    hasAudioContentDeps in overlays/custom.html for how a plain always-on
- *    scene still gets live refreshes purely from having one of these wires.
- * 2. Its Feed output wired into Scene itself (the audioPlayer entry on
- *    SCENE_SOCKETS above) — a SEPARATE concern, visibility only: marks the
- *    whole scene as continuously data-driven instead of one-shot
- *    event-triggered, showing for as long as isPlaying stays true with no
- *    Timer/durationMs. Mirrors isAudioTrigger/showAudioContent in
- *    overlays/custom.html. Doing this ALSO arms {title}/{artist}
- *    placeholders scene-wide and an empty-URL Image's live-album-art
- *    fallback, same as before Content sockets existed — but if you only
- *    want live text/cover on specific nodes with no auto show/hide, skip
- *    this and just use the Content wires above.
- * 3. Its Event output wired into a Start node (see the `event` entry on
- *    START_SOCKETS above, which now accepts 'audioPlayer' alongside
- *    'event') — arms the SAME Start->Task->...->End process an Event node
- *    would, but the trigger is "the track changed" rather than a matching
- *    alert type (see processTrigger's audioArmed in overlays/custom.html).
- *    Lets a process play some animation/sound/update every time a new song
- *    starts, same as it would for a donation/follow/etc.
+ * 1. Content (AUDIO_PLAYER_OUTPUTS) wired straight into a Text/Image's own
+ *    Content socket — bundles artist+title+cover in one wire: landing on a
+ *    Text supplies the values its {artist}/{title} placeholders resolve to
+ *    (see audioContentValues in overlays/custom.html), landing on an Image
+ *    replaces it outright with the live album art. Reads the live feed
+ *    directly and keeps updating on its own regardless of whether Scene
+ *    below is wired in at all — see hasAudioContentDeps in overlays/
+ *    custom.html for how a plain always-on scene still gets live refreshes
+ *    purely from having this wire.
+ * 2. Event wired into Scene itself (the audioPlayer entry on SCENE_SOCKETS
+ *    above) — a visibility-only concern: marks the whole scene as
+ *    continuously data-driven instead of one-shot event-triggered, showing
+ *    for as long as isPlaying stays true with no Timer/durationMs. Mirrors
+ *    isAudioTrigger/showAudioContent in overlays/custom.html. Doing this
+ *    ALSO arms {title}/{artist} placeholders scene-wide and an empty-URL
+ *    Image's live-album-art fallback, same as before Content sockets
+ *    existed — but if you only want live text/cover on specific nodes with
+ *    no auto show/hide, skip this and just use the Content wire above.
+ * 3. Event ALSO wired into a Start node (see the `event` entry on
+ *    START_SOCKETS above, which accepts 'audioPlayer' alongside 'event') —
+ *    arms the SAME Start->Task->...->End process an Event node would, but
+ *    the trigger is "the track changed" rather than a matching alert type
+ *    (see processTrigger's audioArmed in overlays/custom.html). Lets a
+ *    process play some animation/sound/update every time a new song starts,
+ *    same as it would for a donation/follow/etc. Event can reach Scene AND
+ *    Start at once — one output, two simultaneous wires.
  */
 export function AudioPlayerNode({ id, data }: NodeProps) {
   return (
@@ -2207,7 +2280,7 @@ export function AudioPlayerNode({ id, data }: NodeProps) {
       title="Audio Player"
       category="data"
       outputSockets={AUDIO_PLAYER_OUTPUTS}
-      help="Wire Author/Title into a Text's Content socket, Cover into an Image's, and/or Event into a Start node (fires on track change) — each works independently, live, with no Scene connection needed. Wiring Feed into Scene too additionally shows/hides the whole scene by isPlaying."
+      help="Live now-playing data from Spotify or Windows Media. See each output's own ? for exactly what it does and where to wire it."
     />
   )
 }

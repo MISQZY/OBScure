@@ -18,6 +18,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import './scene-preview-animations.css'
+import './scene-builder-canvas.css'
 import dagre from 'dagre'
 import { nodeTypes, NODE_SOCKETS, NODE_OUTPUTS, CATEGORY_STYLES, NODE_CATEGORY, NODE_DEFAULTS, SavedNodeDataProvider } from '@/components/nodes'
 import { useTheme } from '@/providers/ThemeProvider'
@@ -59,19 +60,25 @@ const NODE_PALETTE: { type: string; label: string; group: string }[] = [
   { type: 'text', label: 'Text', group: 'Content' },
   { type: 'image', label: 'Image', group: 'Content' },
   { type: 'video', label: 'Video', group: 'Content' },
-  { type: 'box', label: 'Shape', group: 'Layout' },
+  { type: 'box', label: 'Shape', group: 'Content' },
+  // Matches the Transform socket's own `accepts` list (see MODIFIER_SOCKETS
+  // in components/nodes/index.tsx) — these three are exactly what a Text/
+  // Image/Video/Box/Task's single Transform input now takes.
+  { type: 'position', label: 'Position', group: 'Transform' },
+  { type: 'size', label: 'Size', group: 'Transform' },
+  { type: 'transform', label: 'Transform', group: 'Transform' },
+  // Matches the Style socket's own `accepts` list.
+  { type: 'opacity', label: 'Opacity', group: 'Style' },
+  { type: 'shadow', label: 'Shadow', group: 'Style' },
+  { type: 'animation', label: 'Animation', group: 'Style' },
+  { type: 'hide', label: 'Hide', group: 'Style' },
+  // Matches Box/Scene's own Layout socket (formerly labeled "Ordering") —
+  // the only node type it accepts.
+  { type: 'ordering', label: 'Ordering', group: 'Layout' },
   { type: 'start', label: 'Start', group: 'Process' },
   { type: 'task', label: 'Task', group: 'Process' },
   { type: 'wait', label: 'Wait', group: 'Process' },
   { type: 'end', label: 'End', group: 'Process' },
-  { type: 'ordering', label: 'Ordering', group: 'Transform' },
-  { type: 'position', label: 'Position', group: 'Transform' },
-  { type: 'size', label: 'Size', group: 'Transform' },
-  { type: 'transform', label: 'Transform', group: 'Transform' },
-  { type: 'opacity', label: 'Opacity', group: 'Transform' },
-  { type: 'shadow', label: 'Shadow', group: 'Transform' },
-  { type: 'animation', label: 'Animation', group: 'Style' },
-  { type: 'hide', label: 'Hide', group: 'Style' },
   { type: 'sound', label: 'Sound', group: 'Behavior' },
   { type: 'timer', label: 'Timer', group: 'Behavior' },
   { type: 'backgroundAnimation', label: 'Background FX', group: 'Behavior' },
@@ -99,42 +106,116 @@ function incoming(nodeId: string, edges: Edge[], map: NodeMap): Node[] {
     .sort((a, b) => ((a.data.priority as number) ?? 0) - ((b.data.priority as number) ?? 0))
 }
 
+/**
+ * The last node of `type` in `mods` — used instead of `.find()` wherever a
+ * grouped Transform/Style socket (see MODIFIER_SOCKETS/TASK_SOCKETS in
+ * components/nodes/index.tsx) is resolved, since that socket now accepts
+ * more than one wire and, occasionally, more than one wire OF THE SAME TYPE
+ * (two Position nodes both feeding one Transform group, say). `mods` must
+ * already be ordered so the intended winner comes LAST — `incoming()`'s
+ * ascending-priority order already does this (ties keep insertion order, so
+ * with no explicit priority set the most-recently-connected wire naturally
+ * wins), and computeTaskState orders its own accumulated mods the same way
+ * for the identical reason.
+ */
+function lastOfType(mods: Node[], type: string): Node | undefined {
+  for (let i = mods.length - 1; i >= 0; i--) {
+    if (mods[i].type === type) return mods[i]
+  }
+  return undefined
+}
+
+/**
+ * One-time upgrade for edges saved before Position/Size/Transform and
+ * Opacity/Shadow/Animation/Hide were consolidated into the single multi-wire
+ * `transform`/`style` sockets (see MODIFIER_SOCKETS/TASK_SOCKETS in
+ * components/nodes/index.tsx) — remaps each old per-parameter targetHandle
+ * to the group socket id that now carries it, purely so the EDITOR can still
+ * attach the wire to a socket row that actually exists (isValidConnection/
+ * SocketRow both look up sockets by id). The runtime resolvers (modifierStyle
+ * below, applyModifierStyle in overlays/custom.html) never read targetHandle
+ * at all — they already resolve wiring by the connected node's own `type` —
+ * so an un-migrated overlay still renders correctly live; this only matters
+ * for editing it further. 'transform' needs no remapping: that id already
+ * meant exactly the same thing (only Transform-type nodes) before and after.
+ */
+const LEGACY_MODIFIER_HANDLE_REMAP: Record<string, string> = {
+  position: 'transform',
+  size: 'transform',
+  opacity: 'style',
+  shadow: 'style',
+  animation: 'style',
+  hide: 'style'
+}
+function migrateLegacyModifierEdges(edges: Edge[]): Edge[] {
+  return edges.map((e) => {
+    const remapped = e.targetHandle ? LEGACY_MODIFIER_HANDLE_REMAP[e.targetHandle] : undefined
+    return remapped ? { ...e, targetHandle: remapped } : e
+  })
+}
+
+/**
+ * One-time upgrade for edges saved before Audio Player's five outputs
+ * (Author/Title/Cover/Event/Now Playing) were consolidated into two —
+ * Content (bundles Author+Title+Cover) and Event (bundles the track-change
+ * trigger and the Now Playing feed) — see AUDIO_PLAYER_OUTPUTS in
+ * components/nodes/index.tsx. Remaps each old sourceHandle to the id that
+ * now carries it, purely so the EDITOR can still attach the wire to an
+ * output row that actually exists (OutputRow, like SocketRow, looks up
+ * sockets by id). Every consumer of these edges (audioContentValues,
+ * hasAudioCover, processTrigger's audioArmed, custom.html's isAudioTrigger)
+ * already resolves wiring by targetHandle + the source node's own `type`,
+ * never by sourceHandle — so an un-migrated overlay still renders correctly
+ * live; this only matters for editing it further. These 5 ids are unique to
+ * Audio Player's old outputs (no other node type's NODE_OUTPUTS uses them),
+ * so remapping by sourceHandle alone, with no source-type check, is safe.
+ */
+const LEGACY_AUDIO_PLAYER_SOURCE_HANDLE_REMAP: Record<string, string> = {
+  author: 'content',
+  title: 'content',
+  cover: 'content',
+  trackChanged: 'event',
+  feed: 'event'
+}
+function migrateLegacyAudioPlayerEdges(edges: Edge[]): Edge[] {
+  return edges.map((e) => {
+    const remapped = e.sourceHandle ? LEGACY_AUDIO_PLAYER_SOURCE_HANDLE_REMAP[e.sourceHandle] : undefined
+    return remapped ? { ...e, sourceHandle: remapped } : e
+  })
+}
+
 /** Sample vars used to simulate a real alert from Play/Test — see sceneTrigger and handlePlay. */
 const SAMPLE_ALERT_VARS = { user: 'Viewer', amount: 25, message: 'Sample message', source: 'twitch' }
 
 /**
- * Sample now-playing vars for previewing an Audio Player's Author/Title/
- * Cover outputs (see AUDIO_PLAYER_OUTPUTS in components/nodes) in the
- * editor — there's no live now-playing feed inside the builder (unlike the
- * real overlay, which gets one over the 'now-playing' broadcast channel —
- * see overlays/custom.html), so a Text/Image wired to one of these outputs
- * always previews with this fixed sample instead. Mirrors the sample vars
- * render() in overlays/custom.html uses for its own Test-button simulation.
+ * Sample now-playing vars for previewing an Audio Player's Content/Event
+ * outputs (see AUDIO_PLAYER_OUTPUTS in components/nodes) in the editor —
+ * there's no live now-playing feed inside the builder (unlike the real
+ * overlay, which gets one over the 'now-playing' broadcast channel — see
+ * overlays/custom.html), so a Text/Image wired to Content always previews
+ * with this fixed sample instead. Mirrors the sample vars render() in
+ * overlays/custom.html uses for its own Test-button simulation.
  */
 const SAMPLE_AUDIO_VARS = { artist: 'Sample Artist', title: 'Sample Track', albumArt: '' }
 
 /**
- * { artist, title } sourced from SAMPLE_AUDIO_VARS for whichever of Audio
- * Player's Author/Title outputs feed this Text's Content socket (id
- * `content` — see TEXT_SOCKETS/AUDIO_PLAYER_OUTPUTS in components/nodes/
- * index.tsx), or null when neither is wired in. Merged into `vars` by
+ * { artist, title } from SAMPLE_AUDIO_VARS when Audio Player's Content
+ * output (see TEXT_SOCKETS/AUDIO_PLAYER_OUTPUTS in components/nodes/
+ * index.tsx) feeds this Text's own Content socket (id `content`), or null
+ * when it isn't wired in. Both fields always come together — Content is one
+ * bundled wire, not separate Author/Title ones — so a template like
+ * "{artist} — {title}" fills in full or not at all. Merged into `vars` by
  * TextView, same as audioContentValues merges the live feed into `vars` in
  * overlays/custom.html — Content's own template still decides what's shown,
  * this only supplies the values its {artist}/{title} placeholders resolve
  * to.
  */
 function audioContentValues(nodeId: string, edges: Edge[], map: NodeMap): { artist?: string; title?: string } | null {
-  const audioEdges = edges.filter((e) => e.target === nodeId && e.targetHandle === 'content' && map[e.source]?.type === 'audioPlayer')
-  if (audioEdges.length === 0) return null
-  const values: { artist?: string; title?: string } = {}
-  for (const e of audioEdges) {
-    if (e.sourceHandle === 'author') values.artist = SAMPLE_AUDIO_VARS.artist
-    if (e.sourceHandle === 'title') values.title = SAMPLE_AUDIO_VARS.title
-  }
-  return values
+  const hasAudioContent = edges.some((e) => e.target === nodeId && e.targetHandle === 'content' && map[e.source]?.type === 'audioPlayer')
+  return hasAudioContent ? { artist: SAMPLE_AUDIO_VARS.artist, title: SAMPLE_AUDIO_VARS.title } : null
 }
 
-/** Whether this Image's `imageContent` socket is wired to Audio Player's Cover output. Mirrors hasAudioCover in overlays/custom.html. */
+/** Whether this Image's `imageContent` socket is wired to Audio Player's Content output. Mirrors hasAudioCover in overlays/custom.html. */
 function hasAudioCover(nodeId: string, edges: Edge[], map: NodeMap): boolean {
   return edges.some((e) => e.target === nodeId && e.targetHandle === 'imageContent' && map[e.source]?.type === 'audioPlayer')
 }
@@ -187,7 +268,7 @@ function maxExitDurationMs(nodes: Node[], edges: Edge[]): number {
   const map = buildNodeMap(nodes)
   let max = 0
   const consider = (mods: Node[]): void => {
-    const anim = mods.find((m) => m.type === 'animation')
+    const anim = lastOfType(mods, 'animation')
     if (!anim) return
     const type = (anim.data.type as string) || 'fade'
     if (type === 'none') return
@@ -250,9 +331,9 @@ function hexToRgba(hex: string, opacityPercent: number): string {
 
 function modifierStyle(mods: Node[], baseMods?: Node[]): React.CSSProperties {
   const style: React.CSSProperties = {}
-  
-  const size = mods.find((m) => m.type === 'size')
-  const baseSize = baseMods?.find((m) => m.type === 'size')
+
+  const size = lastOfType(mods, 'size')
+  const baseSize = baseMods && lastOfType(baseMods, 'size')
   if (size || baseSize) {
     const targetSize = size || baseSize
     if (targetSize?.data.width != null) style.width = targetSize.data.width as number
@@ -261,8 +342,8 @@ function modifierStyle(mods: Node[], baseMods?: Node[]): React.CSSProperties {
   
   let transformStr = ''
   
-  const transform = mods.find((m) => m.type === 'transform')
-  const baseTransform = baseMods?.find((m) => m.type === 'transform')
+  const transform = lastOfType(mods, 'transform')
+  const baseTransform = baseMods && lastOfType(baseMods, 'transform')
   if (transform || baseTransform) {
     const bsx = (baseTransform?.data.scaleX as number) ?? 1
     const bsy = (baseTransform?.data.scaleY as number) ?? 1
@@ -277,8 +358,8 @@ function modifierStyle(mods: Node[], baseMods?: Node[]): React.CSSProperties {
     }
   }
   
-  const position = mods.find((m) => m.type === 'position')
-  const basePosition = baseMods?.find((m) => m.type === 'position')
+  const position = lastOfType(mods, 'position')
+  const basePosition = baseMods && lastOfType(baseMods, 'position')
   if (position || basePosition) {
     const bx = (basePosition?.data.x as number) ?? 0
     const by = (basePosition?.data.y as number) ?? 0
@@ -319,8 +400,8 @@ function modifierStyle(mods: Node[], baseMods?: Node[]): React.CSSProperties {
     style.transform = transformStr.trim()
   }
   
-  const opacity = mods.find((m) => m.type === 'opacity')
-  const baseOpacity = baseMods?.find((m) => m.type === 'opacity')
+  const opacity = lastOfType(mods, 'opacity')
+  const baseOpacity = baseMods && lastOfType(baseMods, 'opacity')
   if (opacity || baseOpacity) {
     const bOp = (baseOpacity?.data.value as number) ?? 100
     if (opacity) {
@@ -331,7 +412,7 @@ function modifierStyle(mods: Node[], baseMods?: Node[]): React.CSSProperties {
     }
   }
 
-  const shadow = mods.find((m) => m.type === 'shadow')
+  const shadow = lastOfType(mods, 'shadow')
   if (shadow) {
     const color = hexToRgba((shadow.data.color as string) || '#000000', (shadow.data.opacity as number) ?? 60)
     const offsetX = (shadow.data.offsetX as number) ?? 0
@@ -339,7 +420,7 @@ function modifierStyle(mods: Node[], baseMods?: Node[]): React.CSSProperties {
     const blur = (shadow.data.blur as number) ?? 6
     style.filter = `drop-shadow(${offsetX}px ${offsetY}px ${blur}px ${color})`
   } else if (baseMods) {
-    const baseShadow = baseMods.find((m) => m.type === 'shadow')
+    const baseShadow = lastOfType(baseMods, 'shadow')
     if (baseShadow) {
       const color = hexToRgba((baseShadow.data.color as string) || '#000000', (baseShadow.data.opacity as number) ?? 60)
       const offsetX = (baseShadow.data.offsetX as number) ?? 0
@@ -349,8 +430,8 @@ function modifierStyle(mods: Node[], baseMods?: Node[]): React.CSSProperties {
     }
   }
 
-  const hide = mods.find((m) => m.type === 'hide')
-  const baseHide = baseMods?.find((m) => m.type === 'hide')
+  const hide = lastOfType(mods, 'hide')
+  const baseHide = baseMods && lastOfType(baseMods, 'hide')
   if (hide) {
     if (hide.data.hidden !== false) style.display = 'none'
   } else if (baseHide) {
@@ -383,7 +464,7 @@ type Anim = { type: string; duration?: number; subType?: 'in' | 'out' } | null
  * already unambiguous from lifecycle: entrance on build, exit on hide).
  */
 function animationAttrs(mods: Node[]): Anim {
-  const anim = mods.find((m) => m.type === 'animation')
+  const anim = lastOfType(mods, 'animation')
   if (!anim) return null
   const type = (anim.data.type as string) || 'fade'
   if (type === 'none') return null
@@ -447,9 +528,9 @@ const DATA_TYPES = new Set(['event', 'sound', 'timer', 'backgroundAnimation', 'r
  * A node with its own labeled OUTPUT sockets (NODE_OUTPUTS/OutputSocket in
  * components/nodes) can fan out to a DIFFERENT kind per socket than its own
  * overall category — Audio Player (category 'data') is the case that
- * matters here: Author/Title/Cover are kind 'content' (they feed a Content
- * socket, same family as Text/Image's own structural wires), only its Event
- * output is actually 'data' (a trigger, not a value). `outSocket` below
+ * matters here: Content is kind 'content' (it feeds a Content socket, same
+ * family as Text/Image's own structural wires), only its Event output is
+ * actually 'data' (a trigger/state signal, not a value). `outSocket` below
  * checks the SPECIFIC socket this edge left from for that override; Text/
  * Image/Box's own outputSockets are all kind 'content' anyway (matching
  * their node-level category), so this changes nothing for them.
@@ -687,14 +768,17 @@ interface TaskState {
  * Resolves ONE component's state at time `atMs` from every Task in
  * `schedule` targeting it — "last Task wins" for visibility; style
  * (position/size/transform) accumulates from every one of its Tasks'
- * modifiers up to `atMs`, most recent field wins (reuses modifierStyle,
- * fed mods ordered newest-first so its own `.find()` picks the latest).
+ * modifiers up to `atMs`, most recent field wins (reuses modifierStyle, fed
+ * mods ordered OLDEST-first so its own lastOfType() picks the latest —
+ * same "last in the array wins" convention every other modifierStyle caller
+ * uses, so a Task's own Transform/Style group with 2 wires of the same type
+ * resolves the identical way a component's direct one does).
  * `action: 'update'` never affects visibility, only style — see
  * buildProcessSchedule. Mirrors computeTaskState in overlays/custom.html.
  */
 function computeTaskState(schedule: ScheduledTask[], targetId: string, atMs: number, baseMods?: Node[]): TaskState {
   const mine = schedule.filter((s) => s.targetId === targetId && s.atMs <= atMs)
-  const orderedMods = [...mine].sort((a, b) => b.atMs - a.atMs).flatMap((s) => s.mods)
+  const orderedMods = [...mine].sort((a, b) => a.atMs - b.atMs).flatMap((s) => s.mods)
   const style = modifierStyle(orderedMods, baseMods)
 
   const showHide = [...mine].filter((s) => s.action === 'show' || s.action === 'hide').sort((a, b) => b.atMs - a.atMs)[0]
@@ -733,7 +817,7 @@ function TextView({
   hiding: boolean
   /** Current event's placeholder values (see sceneTrigger) — null outside an event-triggered show. */
   vars: Record<string, unknown> | null
-  /** { artist, title } from any Author/Title wire into this node's Content socket, or null — see audioContentValues. Merged into `vars` below, same as buildText merges the live feed in overlays/custom.html; Content's own template still decides what's shown. */
+  /** { artist, title } from Audio Player's Content wire into this node's own Content socket, or null — see audioContentValues. Merged into `vars` below, same as buildText merges the live feed in overlays/custom.html; Content's own template still decides what's shown. */
   audioValues: { artist?: string; title?: string } | null
   /**
    * The CROSS axis of whichever Box/Scene this Text is a direct child of
@@ -820,7 +904,7 @@ function ImageView({
   hiding: boolean
   /** Needed to build an absolute URL for an uploaded custom-images file (node.data.customImageName, takes priority over data.src — see ImageNode's own doc comment) — null before getOverlayUrls() resolves, in which case the node just shows its placeholder icon a beat longer. */
   urls: OverlayUrls | null
-  /** Whether this node's `imageContent` socket is wired to Audio Player's Cover output — see hasAudioCover. Forces the sample album-art placeholder, same priority buildImage in overlays/custom.html gives the live feed over a set URL/uploaded image. */
+  /** Whether this node's `imageContent` socket is wired to Audio Player's Content output — see hasAudioCover. Forces the sample album-art placeholder, same priority buildImage in overlays/custom.html gives the live feed over a set URL/uploaded image. */
   audioCover: boolean
 }) {
   const customImageName = node.data.customImageName as string | undefined
@@ -859,7 +943,7 @@ function ImageView({
         // Editor-only affordance, same reasoning as TextView's "Empty text"
         // — no live album art to preview in the builder, so a distinct icon
         // (rather than the plain ImageIcon an unwired Image shows) confirms
-        // the Cover wire is doing something instead of looking identical to
+        // the Content wire is doing something instead of looking identical to
         // an empty node.
         <Music className="text-white/40 size-6" />
       ) : (
@@ -1598,7 +1682,7 @@ export function SceneBuilderPage({
     if (overlay) {
       const isBlank = !overlay.nodes || overlay.nodes.length === 0
       setNodes(isBlank ? defaultNodes : overlay.nodes)
-      setEdges(isBlank ? defaultEdges : overlay.edges || [])
+      setEdges(isBlank ? defaultEdges : migrateLegacyAudioPlayerEdges(migrateLegacyModifierEdges(overlay.edges || [])))
       setNameInput(overlay.name)
       setUrlKeyInput(overlay.urlKey)
       setUrlKeyError(null)
@@ -2013,6 +2097,12 @@ export function SceneBuilderPage({
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           isValidConnection={isValidConnection}
+          // Default is 20px — bumped up since sockets are small, densely
+          // labeled rows (see SocketRow/OutputRow in components/nodes/
+          // index.tsx): this is how forgiving the DROP end of a drag is,
+          // once it's already under way (the .react-flow__handle::after
+          // rule in scene-builder-canvas.css is what forgives the START).
+          connectionRadius={40}
           onEdgeDoubleClick={onEdgeDoubleClick}
           onInit={(instance) => {
             reactFlowInstanceRef.current = instance

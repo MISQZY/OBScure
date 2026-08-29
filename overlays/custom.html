@@ -313,15 +313,16 @@
        * One component's resolved state at time `atMs`, from every Task in
        * `schedule` targeting it — "last Task wins" for visibility, style
        * accumulates across all of them (most recent field wins, via
-       * Array.find on mods ordered newest-first).
+       * lastOfType on mods ordered OLDEST-first — same "last in the array
+       * wins" convention every other lastOfType call uses).
        */
       function computeTaskState(schedule, targetId, atMs, baseMods = []) {
         const mine = schedule.filter((s) => s.targetId === targetId && s.atMs <= atMs)
-        const orderedMods = [...mine].sort((a, b) => b.atMs - a.atMs).flatMap((s) => s.mods)
+        const orderedMods = [...mine].sort((a, b) => a.atMs - b.atMs).flatMap((s) => s.mods)
         const style = {}
 
-        const size = orderedMods.find((m) => m.type === 'size')
-        const baseSize = baseMods.find((m) => m.type === 'size')
+        const size = lastOfType(orderedMods, 'size')
+        const baseSize = lastOfType(baseMods, 'size')
         if (size || baseSize) {
           const targetSize = size || baseSize
           if (targetSize.data.width != null) style.width = targetSize.data.width
@@ -329,8 +330,8 @@
         }
         
         let transformStr = ''
-        const transform = orderedMods.find((m) => m.type === 'transform')
-        const baseTransform = baseMods.find((m) => m.type === 'transform')
+        const transform = lastOfType(orderedMods, 'transform')
+        const baseTransform = lastOfType(baseMods, 'transform')
         if (transform || baseTransform) {
           const bsx = baseTransform?.data?.scaleX ?? 1
           const bsy = baseTransform?.data?.scaleY ?? 1
@@ -345,8 +346,8 @@
           }
         }
 
-        const position = orderedMods.find((m) => m.type === 'position')
-        const basePosition = baseMods.find((m) => m.type === 'position')
+        const position = lastOfType(orderedMods, 'position')
+        const basePosition = lastOfType(baseMods, 'position')
         if (position || basePosition) {
           const bx = basePosition?.data?.x ?? 0
           const by = basePosition?.data?.y ?? 0
@@ -387,8 +388,8 @@
           style.transform = transformStr.trim()
         }
         
-        const opacity = orderedMods.find((m) => m.type === 'opacity')
-        const baseOpacity = baseMods.find((m) => m.type === 'opacity')
+        const opacity = lastOfType(orderedMods, 'opacity')
+        const baseOpacity = lastOfType(baseMods, 'opacity')
         if (opacity || baseOpacity) {
           const bOp = baseOpacity?.data?.value ?? 100
           if (opacity) {
@@ -399,13 +400,13 @@
           }
         }
         
-        const shadow = orderedMods.find((m) => m.type === 'shadow')
+        const shadow = lastOfType(orderedMods, 'shadow')
         if (shadow) {
           const d = shadow.data || {}
           const color = hexToRgba(d.color || '#000000', d.opacity ?? 60)
           style.filter = `drop-shadow(${d.offsetX ?? 0}px ${d.offsetY ?? 2}px ${d.blur ?? 6}px ${color})`
         } else {
-          const baseShadow = baseMods.find((m) => m.type === 'shadow')
+          const baseShadow = lastOfType(baseMods, 'shadow')
           if (baseShadow) {
             const d = baseShadow.data || {}
             const color = hexToRgba(d.color || '#000000', d.opacity ?? 60)
@@ -418,7 +419,7 @@
         let anim = null
         let hiding = false
         if (showHide) {
-          const animMod = showHide.mods.find((m) => m.type === 'animation')
+          const animMod = lastOfType(showHide.mods, 'animation')
           const animType = animMod ? animMod.data.type || 'fade' : 'none'
           const duration = animMod ? animMod.data.duration || (animType === 'slide' ? 300 : animType === 'bounce' ? 500 : 250) : 0
           const withinAnim = animType !== 'none' && atMs - showHide.atMs < duration
@@ -452,7 +453,7 @@
         let max = 0
         for (const s of schedule) {
           if (s.atMs !== totalMs) continue
-          const anim = s.mods.find((m) => m.type === 'animation')
+          const anim = lastOfType(s.mods, 'animation')
           if (!anim) continue
           const type = anim.data.type || 'fade'
           if (type === 'none') continue
@@ -527,30 +528,41 @@
           .sort((a, b) => ((a.data && a.data.priority) || 0) - ((b.data && b.data.priority) || 0))
       }
 
+      // The last node of `type` in `mods` — mirrors lastOfType in
+      // SceneBuilderPage.tsx, used everywhere a grouped Transform/Style
+      // socket (see MODIFIER_SOCKETS/TASK_SOCKETS in components/nodes/
+      // index.tsx) is resolved instead of Array.find, since that socket now
+      // accepts more than one wire of the same type. `mods` must already be
+      // ordered so the intended winner comes LAST — see that function's own
+      // doc comment for why incoming()'s and computeTaskState's own orderings
+      // both already satisfy this.
+      function lastOfType(mods, type) {
+        for (let i = mods.length - 1; i >= 0; i--) {
+          if (mods[i].type === type) return mods[i]
+        }
+        return undefined
+      }
+
       // { artist, title } sourced straight from `latestNowPlaying` (the
       // always-current global, NOT this render's own `vars` — see its own
-      // doc comment) for whichever of Audio Player's Author/Title outputs
-      // feed this Text's Content socket (see TEXT_SOCKETS/
-      // AUDIO_PLAYER_OUTPUTS in components/nodes/index.tsx), or null when
-      // neither is wired in — in which case buildText's {title}/{artist}
-      // placeholders resolve from `vars` alone, unchanged. Reading the
+      // doc comment) when Audio Player's Content output (see TEXT_SOCKETS/
+      // AUDIO_PLAYER_OUTPUTS in components/nodes/index.tsx) feeds this
+      // Text's own Content socket, or null when it isn't wired in — in
+      // which case buildText's {title}/{artist} placeholders resolve from
+      // `vars` alone, unchanged. Both fields always come together — Content
+      // is one bundled wire, not separate Author/Title ones. Reading the
       // global rather than `vars` is what lets this work with NO Scene
       // wiring at all (see hasAudioContentDeps below) — `vars` only ever
       // carries title/artist when the SCENE itself is Audio-Player-driven
       // (showAudioContent), which this deliberately doesn't require.
       function audioContentValues(nodeId, edges, map) {
-        const audioEdges = edges.filter((e) => e.target === nodeId && e.targetHandle === 'content' && map[e.source] && map[e.source].type === 'audioPlayer')
-        if (audioEdges.length === 0) return null
-        const values = {}
-        for (const e of audioEdges) {
-          if (e.sourceHandle === 'author') values.artist = latestNowPlaying.artist || ''
-          if (e.sourceHandle === 'title') values.title = latestNowPlaying.title || ''
-        }
-        return values
+        const hasAudioContent = edges.some((e) => e.target === nodeId && e.targetHandle === 'content' && map[e.source] && map[e.source].type === 'audioPlayer')
+        if (!hasAudioContent) return null
+        return { artist: latestNowPlaying.artist || '', title: latestNowPlaying.title || '' }
       }
 
       // Whether this Image's `imageContent` socket is wired to Audio
-      // Player's Cover output — forces the live album art unconditionally
+      // Player's Content output — forces the live album art unconditionally
       // (from the same always-current `latestNowPlaying` global
       // audioContentValues reads above), taking priority over a set
       // URL/uploaded image the same way leaving the URL empty already does
@@ -623,13 +635,13 @@
 
       function applyModifierStyle(el, mods) {
         let transformStr = ''
-        const transform = mods.find((m) => m.type === 'transform')
+        const transform = lastOfType(mods, 'transform')
         if (transform) {
           const d = transform.data || {}
           transformStr += `scale(${d.scaleX ?? 1}, ${d.scaleY ?? 1}) rotate(${d.rotation ?? 0}deg) `
         }
         
-        const position = mods.find((m) => m.type === 'position')
+        const position = lastOfType(mods, 'position')
         if (position) {
           const d = position.data || {}
           const mode = d.mode || 'absolute'
@@ -663,18 +675,18 @@
           el.style.transform = transformStr.trim()
         }
 
-        const size = mods.find((m) => m.type === 'size')
+        const size = lastOfType(mods, 'size')
         if (size) {
           const d = size.data || {}
           if (d.width != null) el.style.width = `${d.width}px`
           if (d.height != null) el.style.height = `${d.height}px`
         }
-        
-        const opacity = mods.find((m) => m.type === 'opacity')
+
+        const opacity = lastOfType(mods, 'opacity')
         if (opacity) {
           el.style.opacity = ((opacity.data && opacity.data.value) ?? 100) / 100
         }
-        const shadow = mods.find((m) => m.type === 'shadow')
+        const shadow = lastOfType(mods, 'shadow')
         if (shadow) {
           const d = shadow.data || {}
           const color = hexToRgba(d.color || '#000000', d.opacity ?? 60)
@@ -686,7 +698,7 @@
         // Play/Test needed — see HideNode's own doc comment in
         // components/nodes/index.tsx for how this differs from a Task's
         // show/hide.
-        const hide = mods.find((m) => m.type === 'hide')
+        const hide = lastOfType(mods, 'hide')
         if (hide && (!hide.data || hide.data.hidden !== false)) {
           el.style.display = 'none'
         }
@@ -723,7 +735,7 @@
       // replaying one every time an unrelated field is saved.
       function applyAnimation(el, mods, animate) {
         if (!animate) return
-        const anim = mods.find((m) => m.type === 'animation')
+        const anim = lastOfType(mods, 'animation')
         if (!anim) return
         const d = anim.data || {}
         const type = d.type || 'fade'
@@ -756,9 +768,9 @@
         const el = document.createElement('div')
         el.className = 'text-node'
         // Content still interpolates the SAME placeholder template it
-        // always has — audioValues (from audioContentValues, an Author/
-        // Title wire into this node's Content socket) just adds {artist}/
-        // {title} to whatever vars this render already carries, so
+        // always has — audioValues (from audioContentValues, Audio Player's
+        // Content wire into this node's own Content socket) just adds
+        // {artist}/{title} to whatever vars this render already carries, so
         // Content's own "{artist} — {title}" keeps working whether that
         // data comes from an Audio-Player-triggered Scene's vars, a direct
         // Content wire, or (typically) not at all.
@@ -828,8 +840,8 @@
         wrap.style.height = '96px'
         wrap.style.borderRadius = `${d.borderRadius ?? 8}px`
         applyBorder(wrap, d)
-        // An explicit Cover wire (forceAudioCover, from Audio Player's own
-        // output into this node's Content socket — see hasAudioCover/
+        // An explicit Content wire (forceAudioCover, from Audio Player's own
+        // Content output into this node's Content socket — see hasAudioCover/
         // AUDIO_PLAYER_OUTPUTS in components/nodes/index.tsx) takes priority
         // over a set custom image/URL, unlike the passive empty-URL fallback
         // below — and, like audioContentValues, reads the always-current

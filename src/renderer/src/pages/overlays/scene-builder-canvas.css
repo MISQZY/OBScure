@@ -1,0 +1,19 @@
+/*
+  Enlarges each connection dot's actual clickable/draggable area well beyond
+  its tiny visible size (10-12px — see SocketRow/OutputRow/BaseNode's plain
+  "output" Handle in components/nodes/index.tsx) without changing how big it
+  LOOKS, via a transparent, oversized ::after pseudo-element. Needed because
+  starting a drag requires the pointer-down to land on the Handle's own DOM
+  box — React Flow's connectionRadius prop (see the <ReactFlow> element in
+  SceneBuilderPage.tsx) only forgives imprecision once a drag is already
+  under way and you're aiming for the drop target, not the initial click.
+
+  8px capped on every side: SocketRow/OutputRow stack sockets in fixed 20px
+  rows, so anything past an 8px radius (16px total) would start overlapping
+  the next socket's own hit area and make aiming WORSE, not better.
+*/
+.react-flow__handle::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
