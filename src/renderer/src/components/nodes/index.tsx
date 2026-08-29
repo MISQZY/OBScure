@@ -295,6 +295,39 @@ export const NODE_CATEGORY: Record<string, NodeCategory> = {
 }
 
 /**
+ * Every node type's default `data`, keyed by node `type` — applied by addNode
+ * (SceneBuilderPage.tsx) the moment a node is placed, so a fresh node's data
+ * already holds concrete values instead of an empty object that only *looks*
+ * populated because each field below falls back to the same default at
+ * render time. That per-field fallback stays in place regardless (it's what
+ * keeps a scene saved before some field existed — e.g. Text's `bold` —
+ * rendering unchanged), this just makes a brand-new node's data match what
+ * it visibly shows from the start rather than lagging until the first edit.
+ * Node types absent here have no fields of their own (Scene, Start, End,
+ * Size, ...) — Size's width/height default to `null` ("auto") anyway, the
+ * same as never having been set.
+ */
+export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
+  transform: { scaleX: 1, scaleY: 1, rotation: 0 },
+  position: { mode: 'absolute', anchor: 'top-left', x: 0, y: 0 },
+  opacity: { value: 100 },
+  shadow: { color: '#000000', opacity: 60, blur: 6, offsetX: 0, offsetY: 2 },
+  text: { text: '', color: '#ffffff', fontSize: 32, letterSpacing: 0, align: 'left', verticalAlign: 'top', bold: true, italic: false },
+  timer: { delay: 1000 },
+  animation: { type: 'fade', duration: 500, subType: 'auto' },
+  box: { background: '#18181b', paddingX: 16, paddingY: 12, shape: 'rectangle', borderRadius: 10, borderEnabled: false, borderWidth: 2, borderColor: '#ffffff' },
+  image: { borderRadius: 8, borderEnabled: false, borderWidth: 2, borderColor: '#ffffff' },
+  video: { muted: true, loop: true, borderRadius: 8, borderEnabled: false, borderWidth: 2, borderColor: '#ffffff' },
+  backgroundAnimation: { type: 'none', color: '#18181b', speed: 1, repeat: false },
+  sound: { soundId: 'none', volume: 1 },
+  event: { kind: 'alert', alertType: ALERT_TYPES[0] },
+  ordering: { layout: 'vertical', direction: 'direct', gap: 8 },
+  hide: { hidden: true },
+  task: { action: 'show' },
+  wait: { delay: 1000 }
+}
+
+/**
  * Returns the 1-based priority position of `nodeId` among all nodes whose
  * output connects to the same target, plus the total count of siblings.
  * Only meaningful when outputs === true (the node can connect somewhere).
@@ -821,6 +854,109 @@ const textInputClass = 'nodrag select-text w-full h-6 bg-muted px-1 rounded outl
 const TEXT_PLACEHOLDERS = ['user', 'amount', 'message', 'source', 'title', 'artist'] as const
 
 /**
+ * Text-backed replacement for `<input type="number">`. A controlled native
+ * number input snaps its DOM value back to `Number(x) || fallback` on every
+ * keystroke, so intermediate states while typing — "-" before a negative
+ * number, "" while clearing the field, "1." before a decimal — get erased
+ * mid-type instead of staying editable (the "can't erase/type a negative
+ * value" bugs). Keeping a local text buffer while focused lets those
+ * intermediate states survive; a syntactically valid number commits (clamped
+ * to min/max) live so the canvas preview stays in sync while typing, and
+ * blur/Enter always resolves the field to a concrete number (or `null` when
+ * `allowEmpty`, e.g. Size's "auto") — never leaves it stuck on garbage.
+ */
+// A node's `data` should already hold this field's default the moment it's
+// placed (see NODE_DEFAULTS in addNode, SceneBuilderPage.tsx), but this
+// still falls back to `fallback` for a nullish `value` regardless (a node
+// type not yet covered there, a hand-edited/older saved scene) so the field
+// never displays blank when it isn't meant to. Module-level, not a closure
+// inside NumberInput, so its own effect can list it without an
+// exhaustive-deps warning over a function that's recreated every render.
+function displayValue(value: number | null | undefined, allowEmpty: boolean, fallback: number): string {
+  if (value !== null && value !== undefined) return String(value)
+  return allowEmpty ? '' : String(fallback)
+}
+
+function NumberInput({
+  value,
+  onChange,
+  min,
+  max,
+  placeholder,
+  className,
+  allowEmpty = false,
+  fallback = 0
+}: {
+  value: number | null | undefined
+  onChange: (v: number | null) => void
+  min?: number
+  max?: number
+  placeholder?: string
+  className?: string
+  /** Empty commits `null` instead of snapping back to `fallback` — for optional fields like Size's width/height ("auto"). */
+  allowEmpty?: boolean
+  /** What an empty/unparsable field resolves to on blur when `allowEmpty` is false. */
+  fallback?: number
+}) {
+  const [text, setText] = useState(displayValue(value, allowEmpty, fallback))
+  const isFocused = useRef(false)
+
+  useEffect(() => {
+    if (isFocused.current) return
+    setText(displayValue(value, allowEmpty, fallback))
+  }, [value, allowEmpty, fallback])
+
+  const clamp = (n: number): number => {
+    let out = n
+    if (min !== undefined) out = Math.max(min, out)
+    if (max !== undefined) out = Math.min(max, out)
+    return out
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      placeholder={placeholder}
+      className={className}
+      value={text}
+      onFocus={() => {
+        isFocused.current = true
+      }}
+      onChange={(e) => {
+        const raw = e.target.value
+        // Reject anything that isn't a (possibly partial) signed decimal —
+        // keeps stray letters out while still allowing "-", ".", "-." mid-type.
+        if (raw !== '' && !/^-?\d*\.?\d*$/.test(raw)) return
+        setText(raw)
+        if (raw === '' || raw === '-' || raw === '.' || raw === '-.') return
+        const parsed = Number(raw)
+        if (!Number.isNaN(parsed)) onChange(clamp(parsed))
+      }}
+      onBlur={() => {
+        isFocused.current = false
+        if (text.trim() === '') {
+          if (allowEmpty) {
+            onChange(null)
+          } else {
+            onChange(fallback)
+            setText(String(fallback))
+          }
+          return
+        }
+        const parsed = Number(text)
+        const resolved = Number.isNaN(parsed) ? fallback : clamp(parsed)
+        onChange(resolved)
+        setText(String(resolved))
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur()
+      }}
+    />
+  )
+}
+
+/**
  * A custom dropdown that looks like the native `<select>` used elsewhere in
  * nodes but supports arbitrary React content per option (e.g. badges). The
  * menu is portaled to `document.body` (same trick as PlaceholderPicker) so
@@ -1028,13 +1164,13 @@ export function TransformNode({ id, data }: NodeProps) {
   return (
     <BaseNode id={id} data={data} title="Transform" category="style">
       <Field label="Scale X">
-        <input type="number" value={data.scaleX as number || 1} onChange={(e) => updateNodeData(id, { scaleX: Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.scaleX as number} onChange={(v) => updateNodeData(id, { scaleX: v })} fallback={1} className={numberInputClass} />
       </Field>
       <Field label="Scale Y">
-        <input type="number" value={data.scaleY as number || 1} onChange={(e) => updateNodeData(id, { scaleY: Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.scaleY as number} onChange={(v) => updateNodeData(id, { scaleY: v })} fallback={1} className={numberInputClass} />
       </Field>
       <Field label="Rotation">
-        <input type="number" value={data.rotation as number || 0} onChange={(e) => updateNodeData(id, { rotation: Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.rotation as number} onChange={(v) => updateNodeData(id, { rotation: v })} fallback={0} className={numberInputClass} />
       </Field>
     </BaseNode>
   )
@@ -1068,10 +1204,10 @@ export function PositionNode({ id, data }: NodeProps) {
         </Field>
       )}
       <Field label={mode === 'absolute' ? 'Offset X' : 'Shift X'}>
-        <input type="number" value={data.x as number || 0} onChange={(e) => updateNodeData(id, { x: Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.x as number} onChange={(v) => updateNodeData(id, { x: v })} fallback={0} className={numberInputClass} />
       </Field>
       <Field label={mode === 'absolute' ? 'Offset Y' : 'Shift Y'}>
-        <input type="number" value={data.y as number || 0} onChange={(e) => updateNodeData(id, { y: Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.y as number} onChange={(v) => updateNodeData(id, { y: v })} fallback={0} className={numberInputClass} />
       </Field>
     </BaseNode>
   )
@@ -1082,10 +1218,10 @@ export function SizeNode({ id, data }: NodeProps) {
   return (
     <BaseNode id={id} data={data} title="Size" category="style">
       <Field label="Width">
-        <input type="number" placeholder="auto" value={data.width as number ?? ''} onChange={(e) => updateNodeData(id, { width: e.target.value === '' ? null : Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.width as number} onChange={(v) => updateNodeData(id, { width: v })} min={0} allowEmpty placeholder="auto" className={numberInputClass} />
       </Field>
       <Field label="Height">
-        <input type="number" placeholder="auto" value={data.height as number ?? ''} onChange={(e) => updateNodeData(id, { height: e.target.value === '' ? null : Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.height as number} onChange={(v) => updateNodeData(id, { height: v })} min={0} allowEmpty placeholder="auto" className={numberInputClass} />
       </Field>
     </BaseNode>
   )
@@ -1128,13 +1264,13 @@ export function ShadowNode({ id, data }: NodeProps) {
         <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">{(data.opacity as number) ?? 60}%</span>
       </Field>
       <Field label="Blur">
-        <input type="number" min="0" value={(data.blur as number) ?? 6} onChange={(e) => updateNodeData(id, { blur: Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.blur as number} onChange={(v) => updateNodeData(id, { blur: v })} min={0} fallback={6} className={numberInputClass} />
       </Field>
       <Field label="Offset X">
-        <input type="number" value={(data.offsetX as number) ?? 0} onChange={(e) => updateNodeData(id, { offsetX: Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.offsetX as number} onChange={(v) => updateNodeData(id, { offsetX: v })} fallback={0} className={numberInputClass} />
       </Field>
       <Field label="Offset Y">
-        <input type="number" value={(data.offsetY as number) ?? 2} onChange={(e) => updateNodeData(id, { offsetY: Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.offsetY as number} onChange={(v) => updateNodeData(id, { offsetY: v })} fallback={2} className={numberInputClass} />
       </Field>
     </BaseNode>
   )
@@ -1296,30 +1432,29 @@ export function TextNode({ id, data }: NodeProps) {
         />
       </Field>
       <Field label="Size">
-        <input
-          type="number"
-          value={(data.fontSize as number) || 32}
-          onChange={(e) => updateNodeData(id, { fontSize: Number(e.target.value) })}
+        <NumberInput
+          value={data.fontSize as number}
+          onChange={(v) => updateNodeData(id, { fontSize: v })}
+          min={1}
+          fallback={32}
           className={numberInputClass}
         />
       </Field>
       <Field label="Letter spacing">
-        <input
-          type="number"
-          step="0.1"
-          value={(data.letterSpacing as number) ?? 0}
-          onChange={(e) => updateNodeData(id, { letterSpacing: Number(e.target.value) })}
+        <NumberInput
+          value={data.letterSpacing as number}
+          onChange={(v) => updateNodeData(id, { letterSpacing: v })}
+          fallback={0}
           className={numberInputClass}
         />
       </Field>
       <Field label="Line height">
-        <input
-          type="number"
-          step="0.1"
-          min="0"
+        <NumberInput
+          value={data.lineHeight as number}
+          onChange={(v) => updateNodeData(id, { lineHeight: v })}
+          min={0}
+          allowEmpty
           placeholder="auto"
-          value={(data.lineHeight as number) ?? ''}
-          onChange={(e) => updateNodeData(id, { lineHeight: e.target.value === '' ? null : Number(e.target.value) })}
           className={numberInputClass}
         />
       </Field>
@@ -1376,7 +1511,7 @@ export function TimerNode({ id, data }: NodeProps) {
   return (
     <BaseNode id={id} data={data} title="Timer" category="data">
       <Field label="Delay (ms)">
-        <input type="number" value={data.delay as number || 1000} onChange={(e) => updateNodeData(id, { delay: Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.delay as number} onChange={(v) => updateNodeData(id, { delay: v })} min={0} fallback={1000} className={numberInputClass} />
       </Field>
     </BaseNode>
   )
@@ -1398,7 +1533,7 @@ export function AnimationNode({ id, data }: NodeProps) {
         />
       </Field>
       <Field label="Duration">
-        <input type="number" value={data.duration as number || 500} onChange={(e) => updateNodeData(id, { duration: Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.duration as number} onChange={(v) => updateNodeData(id, { duration: v })} min={0} fallback={500} className={numberInputClass} />
       </Field>
       {type !== 'none' && (
         <Field label="Sub-type">
@@ -1436,17 +1571,17 @@ export function BoxNode({ id, data }: NodeProps) {
         <ColorPicker value={(data.background as string) || '#18181b'} onChange={(val) => updateNodeData(id, { background: val })} />
       </Field>
       <Field label="Padding X">
-        <input type="number" value={data.paddingX as number ?? 16} onChange={(e) => updateNodeData(id, { paddingX: Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.paddingX as number} onChange={(v) => updateNodeData(id, { paddingX: v })} min={0} fallback={16} className={numberInputClass} />
       </Field>
       <Field label="Padding Y">
-        <input type="number" value={data.paddingY as number ?? 12} onChange={(e) => updateNodeData(id, { paddingY: Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.paddingY as number} onChange={(v) => updateNodeData(id, { paddingY: v })} min={0} fallback={12} className={numberInputClass} />
       </Field>
       <Field label="Shape">
         <NodeSelect value={shape} options={BOX_SHAPE_IDS} onChange={(next) => updateNodeData(id, { shape: next })} />
       </Field>
       {shape === 'rectangle' && (
         <Field label="Radius">
-          <input type="number" value={data.borderRadius as number ?? 10} onChange={(e) => updateNodeData(id, { borderRadius: Number(e.target.value) })} className={numberInputClass} />
+          <NumberInput value={data.borderRadius as number} onChange={(v) => updateNodeData(id, { borderRadius: v })} min={0} fallback={10} className={numberInputClass} />
         </Field>
       )}
       {(shape === 'hexagon' || shape === 'diamond') && (
@@ -1462,7 +1597,7 @@ export function BoxNode({ id, data }: NodeProps) {
       {borderEnabled && (
         <>
           <Field label="Border width">
-            <input type="number" value={data.borderWidth as number ?? 2} onChange={(e) => updateNodeData(id, { borderWidth: Number(e.target.value) })} className={numberInputClass} />
+            <NumberInput value={data.borderWidth as number} onChange={(v) => updateNodeData(id, { borderWidth: v })} min={0} fallback={2} className={numberInputClass} />
           </Field>
           <Field label="Border color">
             <ColorPicker value={(data.borderColor as string) || '#ffffff'} onChange={(val) => updateNodeData(id, { borderColor: val })} />
@@ -1526,7 +1661,7 @@ export function ImageNode({ id, data }: NodeProps) {
           this node/scene. */}
       <UploadRow uploading={uploading} hasCustom={Boolean(customImageName)} onUpload={() => void upload()} onRemove={() => void removeCustom()} label={customImageName ? 'Replace' : 'Upload'} />
       <Field label="Radius">
-        <input type="number" value={data.borderRadius as number ?? 8} onChange={(e) => updateNodeData(id, { borderRadius: Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.borderRadius as number} onChange={(v) => updateNodeData(id, { borderRadius: v })} min={0} fallback={8} className={numberInputClass} />
       </Field>
       <Field label="Border">
         <Checkbox checked={borderEnabled} onCheckedChange={(checked) => updateNodeData(id, { borderEnabled: !!checked })} className="nodrag" />
@@ -1534,7 +1669,7 @@ export function ImageNode({ id, data }: NodeProps) {
       {borderEnabled && (
         <>
           <Field label="Border width">
-            <input type="number" value={data.borderWidth as number ?? 2} onChange={(e) => updateNodeData(id, { borderWidth: Number(e.target.value) })} className={numberInputClass} />
+            <NumberInput value={data.borderWidth as number} onChange={(v) => updateNodeData(id, { borderWidth: v })} min={0} fallback={2} className={numberInputClass} />
           </Field>
           <Field label="Border color">
             <ColorPicker value={(data.borderColor as string) || '#ffffff'} onChange={(val) => updateNodeData(id, { borderColor: val })} />
@@ -1581,7 +1716,7 @@ export function VideoNode({ id, data }: NodeProps) {
         />
       </div>
       <Field label="Radius">
-        <input type="number" value={data.borderRadius as number ?? 8} onChange={(e) => updateNodeData(id, { borderRadius: Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.borderRadius as number} onChange={(v) => updateNodeData(id, { borderRadius: v })} min={0} fallback={8} className={numberInputClass} />
       </Field>
       <Field label="Loop">
         <Checkbox checked={loop} onCheckedChange={(checked) => updateNodeData(id, { loop: !!checked })} className="nodrag" />
@@ -1595,7 +1730,7 @@ export function VideoNode({ id, data }: NodeProps) {
       {borderEnabled && (
         <>
           <Field label="Border width">
-            <input type="number" value={data.borderWidth as number ?? 2} onChange={(e) => updateNodeData(id, { borderWidth: Number(e.target.value) })} className={numberInputClass} />
+            <NumberInput value={data.borderWidth as number} onChange={(v) => updateNodeData(id, { borderWidth: v })} min={0} fallback={2} className={numberInputClass} />
           </Field>
           <Field label="Border color">
             <ColorPicker value={(data.borderColor as string) || '#ffffff'} onChange={(val) => updateNodeData(id, { borderColor: val })} />
@@ -1649,7 +1784,7 @@ export function BackgroundAnimationNode({ id, data }: NodeProps) {
         <ColorPicker value={(data.color as string) || '#18181b'} onChange={(val) => updateNodeData(id, { color: val })} />
       </Field>
       <Field label="Speed">
-        <input type="number" step="0.1" min="0.5" max="2.5" value={data.speed as number ?? 1} onChange={(e) => updateNodeData(id, { speed: Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.speed as number} onChange={(v) => updateNodeData(id, { speed: v })} min={0.5} max={2.5} fallback={1} className={numberInputClass} />
       </Field>
       {isDropEffect && (
         <>
@@ -1844,7 +1979,7 @@ export function OrderingNode({ id, data }: NodeProps) {
         />
       </Field>
       <Field label="Gap">
-        <input type="number" min="0" value={data.gap as number ?? 8} onChange={(e) => updateNodeData(id, { gap: Number(e.target.value) })} className={numberInputClass} />
+        <NumberInput value={data.gap as number} onChange={(v) => updateNodeData(id, { gap: v })} min={0} fallback={8} className={numberInputClass} />
       </Field>
     </BaseNode>
   )
@@ -1948,12 +2083,7 @@ export function WaitNode({ id, data }: NodeProps) {
   return (
     <BaseNode id={id} data={data} title="Wait" category="process" sequenceIn>
       <Field label="Delay (ms)">
-        <input
-          type="number"
-          value={(data.delay as number) || 1000}
-          onChange={(e) => updateNodeData(id, { delay: Number(e.target.value) })}
-          className={numberInputClass}
-        />
+        <NumberInput value={data.delay as number} onChange={(v) => updateNodeData(id, { delay: v })} min={0} fallback={1000} className={numberInputClass} />
       </Field>
     </BaseNode>
   )

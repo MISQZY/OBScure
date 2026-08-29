@@ -19,7 +19,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import './scene-preview-animations.css'
 import dagre from 'dagre'
-import { nodeTypes, NODE_SOCKETS, NODE_OUTPUTS, CATEGORY_STYLES, NODE_CATEGORY } from '@/components/nodes'
+import { nodeTypes, NODE_SOCKETS, NODE_OUTPUTS, CATEGORY_STYLES, NODE_CATEGORY, NODE_DEFAULTS } from '@/components/nodes'
 import { useTheme } from '@/providers/ThemeProvider'
 import { useCustomOverlays } from '@/providers/CustomOverlaysProvider'
 import { CopyableUrl } from '@/components/CopyableUrl'
@@ -1787,7 +1787,10 @@ export function SceneBuilderPage({
       id: `${type}-${Date.now()}`,
       type,
       position,
-      data: {}
+      // Spread a fresh copy of NODE_DEFAULTS[type] (rather than the same
+      // object reference) so editing this node's data can never mutate the
+      // shared defaults for every other node of this type.
+      data: { ...(NODE_DEFAULTS[type] ?? {}) }
     }
     setNodes((nds) => [...nds, newNode])
   }
