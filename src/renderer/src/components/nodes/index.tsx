@@ -22,12 +22,13 @@ import {
 } from 'lucide-react'
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
 import { ANIMATION_IDS, BACKGROUND_ANIMATION_IDS } from '@shared/overlayConfig'
-import { ALERT_TYPES } from '@shared/types'
+import { ALERT_PLATFORMS, ALERT_TYPES_BY_PLATFORM, type AlertPlatform, type AlertType } from '@shared/types'
 import { SOUND_IDS } from '@shared/sounds'
 import { cn } from '@/lib/utils'
 import { MBadge } from '@/components/MBadge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useSystemFonts } from '@/hooks/use-system-fonts'
+import { useIntegrationsStatus } from '@/hooks/use-integration-status'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
 import { HexColorPicker, HexColorInput } from 'react-colorful'
@@ -320,7 +321,7 @@ export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
   video: { muted: true, loop: true, borderRadius: 8, borderEnabled: false, borderWidth: 2, borderColor: '#ffffff' },
   backgroundAnimation: { type: 'none', color: '#18181b', speed: 1, repeat: false },
   sound: { soundId: 'none', volume: 1 },
-  event: { kind: 'alert', alertType: ALERT_TYPES[0] },
+  event: { kind: 'alert', platform: 'twitch', alertType: ALERT_TYPES_BY_PLATFORM.twitch[0] },
   ordering: { layout: 'vertical', direction: 'direct', gap: 8 },
   hide: { hidden: true },
   task: { action: 'show' },
@@ -1924,19 +1925,22 @@ export function SoundNode({ id, data }: NodeProps) {
  * join a Roulette) arms this scene — wired into Start (for a Process — see
  * the Start/Task/Wait/End doc comment at the top of this file) or directly
  * into Scene (the older, simpler model): switches it from always-visible to
- * hidden-until-triggered. For Kind Alert, it then waits for a real alert of
- * the picked Type, fills every connected Text node's
- * {user}/{amount}/{message}/{source} placeholders from that event, shows
- * (Animation/Background FX/Sound wired in all fire), holds for however long
- * a Wait/Timer says (default 6s without one), then hides again. See
- * sceneTrigger/processTrigger in SceneBuilderPage.tsx and
+ * hidden-until-triggered. For Kind Alert, Type picks the platform
+ * (Twitch/YouTube) and Sub-type picks which real alert on that platform —
+ * same Type/Sub-type split as AnimationNode above, since no AlertType is
+ * shared between platforms (see ALERT_TYPES_BY_PLATFORM in shared/types.ts).
+ * It then waits for a real alert of the picked Sub-type, fills every
+ * connected Text node's {user}/{amount}/{message}/{source} placeholders from
+ * that event, shows (Animation/Background FX/Sound wired in all fire), holds
+ * for however long a Wait/Timer says (default 6s without one), then hides
+ * again. See sceneTrigger/processTrigger in SceneBuilderPage.tsx and
  * isEventTrigger/processTrigger in overlays/custom.html — both only ever
- * read alertType, so a Command-kind Event contributes nothing there yet
- * (not wired into a live chat-command trigger, same "reserved" state as
- * RandomSourceNode/RouletteSourceNode/AudioPlayerNode below). Multiple
- * Event nodes on the same Start/Scene, each a different Type, all arm it —
- * whichever fires first triggers the show/hold/hide. Test/Play simulate
- * this with sample data instead of waiting for a real event.
+ * read alertType (Sub-type), so a Command-kind Event contributes nothing
+ * there yet (not wired into a live chat-command trigger, same "reserved"
+ * state as RandomSourceNode/RouletteSourceNode/AudioPlayerNode below).
+ * Multiple Event nodes on the same Start/Scene, each a different Sub-type,
+ * all arm it — whichever fires first triggers the show/hold/hide. Test/Play
+ * simulate this with sample data instead of waiting for a real event.
  *
  * Split out from the old single "Data Source" node, which also covered
  * Now Playing/Random/Roulette — those are RandomSourceNode/
@@ -1945,9 +1949,28 @@ export function SoundNode({ id, data }: NodeProps) {
  */
 const EVENT_KINDS = ['alert', 'command'] as const
 
+const ALERT_PLATFORM_LABELS: Record<AlertPlatform, string> = { twitch: 'Twitch', youtube: 'YouTube' }
+
+/** Falls back to inferring platform from a saved alertType (pre-platform-field scenes) rather than always defaulting to 'twitch' — otherwise loading an old YouTube-typed Event node would show a Sub-type list that doesn't contain its own saved value. */
+function inferAlertPlatform(data: Record<string, unknown>): AlertPlatform {
+  if (data.platform === 'twitch' || data.platform === 'youtube') return data.platform
+  const savedType = data.alertType as string
+  return (ALERT_TYPES_BY_PLATFORM.youtube as string[]).includes(savedType) ? 'youtube' : 'twitch'
+}
+
 export function EventNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
   const kind = (data.kind as string) || 'alert'
+  const statusMap = useIntegrationsStatus()
+  // Only a connected integration can actually deliver an alert, so Type only
+  // ever offers platforms with status 'connected' (see IntegrationStatus in
+  // main/integrations/types.ts) — an unconnected platform doesn't appear as
+  // an option at all rather than showing disabled.
+  const connectedPlatforms = ALERT_PLATFORMS.filter((p) => statusMap?.[p] === 'connected')
+  const savedPlatform = inferAlertPlatform(data)
+  const platform = connectedPlatforms.includes(savedPlatform) ? savedPlatform : connectedPlatforms[0]
+  const typesForPlatform = platform ? ALERT_TYPES_BY_PLATFORM[platform] : []
+  const alertType = platform && typesForPlatform.includes(data.alertType as AlertType) ? (data.alertType as string) : typesForPlatform[0]
   return (
     <BaseNode id={id} data={data} title="Event" category="data">
       <Field label="Kind">
@@ -1969,14 +1992,26 @@ export function EventNode({ id, data }: NodeProps) {
           />
           <p className="text-[11px] text-amber-500 leading-snug w-40">SOON — not wired into a live trigger yet.</p>
         </div>
+      ) : !platform ? (
+        <p className="text-[11px] text-amber-500 leading-snug w-40">No connected Twitch/YouTube integration — connect one to pick an alert type.</p>
       ) : (
-        <Field label="Alert Type">
-          <NodeSelect
-            value={(data.alertType as string) || ALERT_TYPES[0]}
-            options={ALERT_TYPES}
-            onChange={(next) => updateNodeData(id, { alertType: next })}
-          />
-        </Field>
+        <>
+          <Field label="Type">
+            <NodeSelect
+              value={platform}
+              options={connectedPlatforms}
+              onChange={(next) => updateNodeData(id, { platform: next, alertType: ALERT_TYPES_BY_PLATFORM[next][0] })}
+              renderOption={(opt) => ALERT_PLATFORM_LABELS[opt]}
+            />
+          </Field>
+          <Field label="Sub-type">
+            <NodeSelect
+              value={alertType}
+              options={typesForPlatform}
+              onChange={(next) => updateNodeData(id, { alertType: next })}
+            />
+          </Field>
+        </>
       )}
     </BaseNode>
   )

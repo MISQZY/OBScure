@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { IntegrationKey } from '@shared/types'
+import type { IntegrationKey, IntegrationsStatusMap } from '@shared/types'
 
 
 export function useIntegrationStatus(key: IntegrationKey): [string, () => void] {
@@ -15,4 +15,16 @@ export function useIntegrationStatus(key: IntegrationKey): [string, () => void] 
   }, [fetchStatus, key])
 
   return [status, fetchStatus]
+}
+
+/** Full status map, live-updated — see DashboardPage's identical fetch+subscribe pair. Null until the first fetch resolves, same as DashboardPage. */
+export function useIntegrationsStatus(): IntegrationsStatusMap | null {
+  const [status, setStatus] = useState<IntegrationsStatusMap | null>(null)
+
+  useEffect(() => {
+    window.maddoner.getIntegrationsStatus().then(setStatus)
+    return window.maddoner.onIntegrationsStatusUpdate(setStatus)
+  }, [])
+
+  return status
 }

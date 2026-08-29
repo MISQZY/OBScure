@@ -11,6 +11,16 @@ export type AlertType = 'subscription' | 'raid' | 'follow' | 'membership' | 'sup
 /** Every type a Twitch/YouTube alert can be — still meaningful without a standalone Alerts overlay: a custom overlay's Event node (see nodes/index.tsx EventNode) reacts to these directly. */
 export const ALERT_TYPES: AlertType[] = ['subscription', 'raid', 'follow', 'membership', 'super-chat']
 
+export type AlertPlatform = 'twitch' | 'youtube'
+
+export const ALERT_PLATFORMS: AlertPlatform[] = ['twitch', 'youtube']
+
+/** Which AlertType each platform can actually emit — see mapNotificationToAlert in integrations/twitch.ts (follow/subscription/raid) and the membership/super-chat plan in integrations/youtube.ts. No type is shared between platforms, so Event node's Sub-type options (see EventNode) are scoped to whichever platform its Type field picks. */
+export const ALERT_TYPES_BY_PLATFORM: Record<AlertPlatform, AlertType[]> = {
+  twitch: ['subscription', 'raid', 'follow'],
+  youtube: ['membership', 'super-chat']
+}
+
 export interface CustomOverlay {
   id: string
   name: string
