@@ -851,6 +851,9 @@ const selectClass = 'nodrag select-text flex-1 min-w-0 bg-muted px-1 py-0.5 roun
 
 const textInputClass = 'nodrag select-text w-full h-6 bg-muted px-1 rounded outline-none'
 
+/** Multi-line sibling of textInputClass, for Text's own Content field — resize-y lets a longer caption grow past its 3-row default instead of scrolling inside a fixed box. */
+const textAreaClass = 'nodrag select-text w-full min-h-[4.5rem] bg-muted px-1 py-1 rounded outline-none resize-y'
+
 const TEXT_PLACEHOLDERS = ['user', 'amount', 'message', 'source', 'title', 'artist'] as const
 
 type SavedNodeMap = Record<string, Record<string, unknown>>
@@ -1423,7 +1426,7 @@ function UploadRow({
 export function TextNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
   const saved = useSavedNodeData(id)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const text = (data.text as string) ?? ''
   const fonts = useSystemFonts()
   // Bold defaults true (data.bold !== false, not Boolean(data.bold)) so
@@ -1453,13 +1456,12 @@ export function TextNode({ id, data }: NodeProps) {
     <BaseNode id={id} data={data} title="Text" labelable category="content" sockets={TEXT_SOCKETS} outputSockets={TEXT_OUTPUTS}>
       <div className="flex flex-col gap-1 text-xs">
         <label>Content</label>
-        <div className="flex items-stretch gap-1">
-          <input
+        <div className="flex items-start gap-1">
+          <textarea
             ref={inputRef}
-            type="text"
             value={text}
             onChange={(e) => updateNodeData(id, { text: e.target.value })}
-            className={textInputClass}
+            className={textAreaClass}
           />
           <PlaceholderPicker onInsert={insertPlaceholder} />
         </div>

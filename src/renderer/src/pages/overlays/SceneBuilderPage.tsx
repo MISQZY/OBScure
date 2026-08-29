@@ -703,6 +703,10 @@ function TextView({
           flexDirection: 'column',
           justifyContent: verticalAlign === 'bottom' ? 'flex-end' : verticalAlign === 'middle' ? 'center' : 'flex-start',
           alignSelf: needsStretch ? 'stretch' : undefined,
+          // Content's own field is a multi-line textarea — preserves both
+          // the line breaks the user typed and normal word-wrapping,
+          // instead of CSS's default collapsing every "\n" to a space.
+          whiteSpace: 'pre-wrap',
           fontSize: (node.data.fontSize as number) || 32,
           fontWeight: bold ? 700 : 400,
           fontStyle: italic ? 'italic' : 'normal',

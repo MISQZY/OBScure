@@ -53,6 +53,11 @@
         font-weight: 700;
         color: #ffffff;
         width: 100%;
+        /* Content's own field is a multi-line textarea (see TextNode in
+           components/nodes/index.tsx) - preserves the line breaks the user
+           typed, on top of normal word-wrapping, instead of collapsing
+           every newline to a space like the default `normal` would. */
+        white-space: pre-wrap;
       }
       #missing {
         display: none;
