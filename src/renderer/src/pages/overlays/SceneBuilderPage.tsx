@@ -26,7 +26,7 @@ import { CopyableUrl } from '@/components/CopyableUrl'
 import { slugify, uniqueUrlKey } from '@/lib/custom-overlays'
 import { cn } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Workflow, Trash2, Check, X, Image as ImageIcon, Video as VideoIcon, ChevronRight, Play, FlaskConical, Sparkles, HelpCircle, PanelLeft, PanelRight } from 'lucide-react'
+import { Workflow, Trash2, Check, X, Image as ImageIcon, Video as VideoIcon, Music, ChevronRight, Play, FlaskConical, Sparkles, HelpCircle, PanelLeft, PanelRight } from 'lucide-react'
 import type { NavKey } from '@/lib/nav'
 import type { OverlayUrls } from '@shared/types'
 import { CanvasConfig, DEFAULT_CANVAS_CONFIG } from '@shared/canvasConfig'
@@ -103,6 +103,43 @@ function incoming(nodeId: string, edges: Edge[], map: NodeMap): Node[] {
 const SAMPLE_ALERT_VARS = { user: 'Viewer', amount: 25, message: 'Sample message', source: 'twitch' }
 
 /**
+ * Sample now-playing vars for previewing an Audio Player's Author/Title/
+ * Cover outputs (see AUDIO_PLAYER_OUTPUTS in components/nodes) in the
+ * editor — there's no live now-playing feed inside the builder (unlike the
+ * real overlay, which gets one over the 'now-playing' broadcast channel —
+ * see overlays/custom.html), so a Text/Image wired to one of these outputs
+ * always previews with this fixed sample instead. Mirrors the sample vars
+ * render() in overlays/custom.html uses for its own Test-button simulation.
+ */
+const SAMPLE_AUDIO_VARS = { artist: 'Sample Artist', title: 'Sample Track', albumArt: '' }
+
+/**
+ * { artist, title } sourced from SAMPLE_AUDIO_VARS for whichever of Audio
+ * Player's Author/Title outputs feed this Text's Content socket (id
+ * `content` — see TEXT_SOCKETS/AUDIO_PLAYER_OUTPUTS in components/nodes/
+ * index.tsx), or null when neither is wired in. Merged into `vars` by
+ * TextView, same as audioContentValues merges the live feed into `vars` in
+ * overlays/custom.html — Content's own template still decides what's shown,
+ * this only supplies the values its {artist}/{title} placeholders resolve
+ * to.
+ */
+function audioContentValues(nodeId: string, edges: Edge[], map: NodeMap): { artist?: string; title?: string } | null {
+  const audioEdges = edges.filter((e) => e.target === nodeId && e.targetHandle === 'content' && map[e.source]?.type === 'audioPlayer')
+  if (audioEdges.length === 0) return null
+  const values: { artist?: string; title?: string } = {}
+  for (const e of audioEdges) {
+    if (e.sourceHandle === 'author') values.artist = SAMPLE_AUDIO_VARS.artist
+    if (e.sourceHandle === 'title') values.title = SAMPLE_AUDIO_VARS.title
+  }
+  return values
+}
+
+/** Whether this Image's `imageContent` socket is wired to Audio Player's Cover output. Mirrors hasAudioCover in overlays/custom.html. */
+function hasAudioCover(nodeId: string, edges: Edge[], map: NodeMap): boolean {
+  return edges.some((e) => e.target === nodeId && e.targetHandle === 'imageContent' && map[e.source]?.type === 'audioPlayer')
+}
+
+/**
  * Whether Scene is wired to an Event node — if so, the scene is hidden
  * until a matching alert fires (for real: a live event; in the editor:
  * Play/Test simulating one), shows for `durationMs`, then hides again. See
@@ -175,10 +212,21 @@ function maxExitDurationMs(nodes: Node[], edges: Edge[]): number {
   return max || 250
 }
 
-/** Fills {user}/{amount}/{message}/{source}-style placeholders from an event's vars — mirrors interpolate() in overlays/custom.html. `vars` is null outside an event-triggered show, in which case placeholders are left as literal text. */
+/**
+ * Fills {user}/{amount}/{message}/{source}-style placeholders (or
+ * {artist}/{title} from audioContentValues — see TextView) from an event's
+ * vars — mirrors interpolate() in overlays/custom.html. `vars` is null
+ * outside an event-triggered show, in which case every placeholder is left
+ * as literal text. A key NOT present in `vars` (as opposed to present but
+ * empty) is left literal too, same reasoning — only actually-AVAILABLE
+ * placeholders get filled in, so e.g. "{user}: {title}" with Event vars but
+ * no {title} source keeps "{title}" literal instead of collapsing to a bare
+ * "Viewer: ".
+ */
 function interpolate(template: string, vars: Record<string, unknown> | null): string {
   if (!vars) return template
   return template.replace(/\{(\w+)\}/g, (match, key: string) => {
+    if (!(key in vars)) return match
     const value = vars[key]
     return value === undefined || value === null ? '' : String(value)
   })
@@ -377,7 +425,7 @@ const DATA_TYPES = new Set(['event', 'sound', 'timer', 'backgroundAnimation', 'r
  *
  * Colors reuse the exact same category palette as the node headers
  * themselves (CATEGORY_STYLES in components/nodes/index.tsx: indigo =
- * process, emerald = content, amber = style, violet = data) — a wire's
+ * process, emerald = content, amber = style, sky blue = data) — a wire's
  * color always matches its SOURCE node's own header tint, so there's one
  * mental model to learn, not two. Six looks, from most to least prominent:
  *  - sequence flow (Start/Task/Wait/End → Start/Task/Wait/End): bold,
@@ -392,15 +440,27 @@ const DATA_TYPES = new Set(['event', 'sound', 'timer', 'backgroundAnimation', 'r
  *  - a Position/Size/Transform/Animation/Hide/Display/Ordering modifier
  *    wired into its target: amber, thin, dashed.
  *  - an Event/Sound/Timer/Background FX/instrumental-data node wired into
- *    Start or Scene: violet, thin, dashed.
+ *    Start or Scene: sky blue, thin, dashed.
  *  - anything uncategorized: muted gray fallback — should be rare; every
  *    real node type today falls into one of the buckets above.
+ *
+ * A node with its own labeled OUTPUT sockets (NODE_OUTPUTS/OutputSocket in
+ * components/nodes) can fan out to a DIFFERENT kind per socket than its own
+ * overall category — Audio Player (category 'data') is the case that
+ * matters here: Author/Title/Cover are kind 'content' (they feed a Content
+ * socket, same family as Text/Image's own structural wires), only its Event
+ * output is actually 'data' (a trigger, not a value). `outSocket` below
+ * checks the SPECIFIC socket this edge left from for that override; Text/
+ * Image/Box's own outputSockets are all kind 'content' anyway (matching
+ * their node-level category), so this changes nothing for them.
  */
 function displayEdges(nodes: Node[], edges: Edge[]): Edge[] {
   const map = buildNodeMap(nodes)
   return edges.map((e) => {
     const sourceType = map[e.source]?.type
     const targetType = map[e.target]?.type
+    const outSocket = sourceType ? NODE_OUTPUTS[sourceType]?.find((o) => o.id === e.sourceHandle) : undefined
+    const isContentSource = (sourceType && CONTENT_TYPES.has(sourceType)) || outSocket?.kind === 'content'
     if (sourceType && targetType && PROCESS_TYPES.has(sourceType) && PROCESS_TYPES.has(targetType)) {
       return {
         ...e,
@@ -410,14 +470,14 @@ function displayEdges(nodes: Node[], edges: Edge[]): Edge[] {
         markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1', width: 20, height: 20 }
       }
     }
-    if (targetType === 'task' && sourceType && CONTENT_TYPES.has(sourceType)) {
+    if (targetType === 'task' && isContentSource) {
       return {
         ...e,
         style: { stroke: '#10b981', strokeWidth: 2, strokeDasharray: '5 3' },
         markerEnd: { type: MarkerType.ArrowClosed, color: '#10b981', width: 16, height: 16 }
       }
     }
-    if (sourceType && CONTENT_TYPES.has(sourceType)) {
+    if (isContentSource) {
       return {
         ...e,
         style: { stroke: '#10b981', strokeWidth: 1.5 },
@@ -434,8 +494,8 @@ function displayEdges(nodes: Node[], edges: Edge[]): Edge[] {
     if (sourceType && DATA_TYPES.has(sourceType)) {
       return {
         ...e,
-        style: { stroke: '#8b5cf6', strokeWidth: 1.25, strokeDasharray: '2 3' },
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#8b5cf6', width: 12, height: 12 }
+        style: { stroke: '#0ea5e9', strokeWidth: 1.25, strokeDasharray: '2 3' },
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#0ea5e9', width: 12, height: 12 }
       }
     }
     return {
@@ -456,7 +516,7 @@ function minimapNodeColor(node: Node): string {
   if (node.type && PROCESS_TYPES.has(node.type)) return '#6366f1'
   if (node.type && CONTENT_TYPES_WITH_SCENE.has(node.type)) return '#10b981'
   if (node.type && STYLE_TYPES.has(node.type)) return '#f59e0b'
-  if (node.type && DATA_TYPES.has(node.type)) return '#8b5cf6'
+  if (node.type && DATA_TYPES.has(node.type)) return '#0ea5e9'
   return '#94a3b8'
 }
 
@@ -588,19 +648,29 @@ function processExitBufferMs(schedule: ScheduledTask[], totalMs: number): number
 }
 
 /** Whether Scene's process is armed by an Event node wired into its Start node — the process equivalent of sceneTrigger. Takes priority over sceneTrigger wherever both are checked. */
-function processTrigger(nodes: Node[], edges: Edge[]): { active: boolean; alertTypes: string[] } {
+/**
+ * Whether Scene's process is armed — either by a DataSource(alert) wired
+ * into its Start node (`alertTypes`, matched against a real alert), or by
+ * an Audio Player wired into Start (`audioArmed` — a track-change trigger
+ * instead of a type match, only meaningful in the real overlay since the
+ * editor has no live now-playing feed to react to — see processTrigger in
+ * overlays/custom.html). Either one alone makes `active` true.
+ */
+function processTrigger(nodes: Node[], edges: Edge[]): { active: boolean; alertTypes: string[]; audioArmed: boolean } {
   const start = nodes.find((n) => n.type === 'start')
-  if (!start) return { active: false, alertTypes: [] }
+  if (!start) return { active: false, alertTypes: [], audioArmed: false }
   const map = buildNodeMap(nodes)
+  const members = incoming(start.id, edges, map)
   const alertTypes = [
     ...new Set(
-      incoming(start.id, edges, map)
+      members
         .filter((n) => n.type === 'event')
         .map((n) => n.data.alertType as string)
         .filter(Boolean)
     )
   ]
-  return { active: alertTypes.length > 0, alertTypes }
+  const audioArmed = members.some((n) => n.type === 'audioPlayer')
+  return { active: alertTypes.length > 0 || audioArmed, alertTypes, audioArmed }
 }
 
 /** One component's resolved state at a point in a running Process — see computeTaskState. */
@@ -652,6 +722,7 @@ function TextView({
   played,
   hiding,
   vars,
+  audioValues,
   crossAxis
 }: {
   node: Node
@@ -662,6 +733,8 @@ function TextView({
   hiding: boolean
   /** Current event's placeholder values (see sceneTrigger) — null outside an event-triggered show. */
   vars: Record<string, unknown> | null
+  /** { artist, title } from any Author/Title wire into this node's Content socket, or null — see audioContentValues. Merged into `vars` below, same as buildText merges the live feed in overlays/custom.html; Content's own template still decides what's shown. */
+  audioValues: { artist?: string; title?: string } | null
   /**
    * The CROSS axis of whichever Box/Scene this Text is a direct child of
    * (crossAxisFor, computed by the caller off THAT parent's own Ordering) —
@@ -720,7 +793,7 @@ function TextView({
         } as React.CSSProperties
       }
     >
-      {interpolate((node.data.text as string) ?? '', vars) || (
+      {interpolate((node.data.text as string) ?? '', audioValues ? { ...vars, ...audioValues } : vars) || (
         // Editor-only affordance — see the matching one on BoxView's empty
         // state. An empty Text node has zero natural width, so without this
         // it (and any Box wrapping only it) collapses to a near-invisible
@@ -737,7 +810,8 @@ function ImageView({
   anim,
   played,
   hiding,
-  urls
+  urls,
+  audioCover
 }: {
   node: Node
   style: React.CSSProperties
@@ -746,10 +820,13 @@ function ImageView({
   hiding: boolean
   /** Needed to build an absolute URL for an uploaded custom-images file (node.data.customImageName, takes priority over data.src — see ImageNode's own doc comment) — null before getOverlayUrls() resolves, in which case the node just shows its placeholder icon a beat longer. */
   urls: OverlayUrls | null
+  /** Whether this node's `imageContent` socket is wired to Audio Player's Cover output — see hasAudioCover. Forces the sample album-art placeholder, same priority buildImage in overlays/custom.html gives the live feed over a set URL/uploaded image. */
+  audioCover: boolean
 }) {
   const customImageName = node.data.customImageName as string | undefined
-  const src =
-    customImageName && urls
+  const src = audioCover
+    ? undefined
+    : customImageName && urls
       ? `http://${urls.host}:${urls.port}/overlays/custom-images/${encodeURIComponent(customImageName)}`
       : (node.data.src as string | undefined)
   return (
@@ -776,7 +853,18 @@ function ImageView({
         } as React.CSSProperties
       }
     >
-      {src ? <img src={src} className="w-full h-full object-cover" /> : <ImageIcon className="text-white/40 size-6" />}
+      {src ? (
+        <img src={src} className="w-full h-full object-cover" />
+      ) : audioCover ? (
+        // Editor-only affordance, same reasoning as TextView's "Empty text"
+        // — no live album art to preview in the builder, so a distinct icon
+        // (rather than the plain ImageIcon an unwired Image shows) confirms
+        // the Cover wire is doing something instead of looking identical to
+        // an empty node.
+        <Music className="text-white/40 size-6" />
+      ) : (
+        <ImageIcon className="text-white/40 size-6" />
+      )}
     </div>
   )
 }
@@ -853,18 +941,20 @@ function ContentView({
     )
   }
   const mods = incoming(node.id, edges, map)
+  const audioValues = node.type === 'text' ? audioContentValues(node.id, edges, map) : null
+  const audioCover = node.type === 'image' && hasAudioCover(node.id, edges, map)
   if (schedule.length > 0 && schedule.some((s) => s.targetId === node.id)) {
     const task = computeTaskState(schedule, node.id, clockMs, mods)
     if (!task.visible) return null
-    if (node.type === 'text') return <TextView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} vars={vars} crossAxis={crossAxis} />
-    if (node.type === 'image') return <ImageView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} urls={urls} />
+    if (node.type === 'text') return <TextView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} vars={vars} audioValues={audioValues} crossAxis={crossAxis} />
+    if (node.type === 'image') return <ImageView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} urls={urls} audioCover={audioCover} />
     if (node.type === 'video') return <VideoView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} />
     return null
   }
   const style = modifierStyle(mods)
   const anim = animationAttrs(mods)
-  if (node.type === 'text') return <TextView node={node} style={style} anim={anim} played={played} hiding={hiding} vars={vars} crossAxis={crossAxis} />
-  if (node.type === 'image') return <ImageView node={node} style={style} anim={anim} played={played} hiding={hiding} urls={urls} />
+  if (node.type === 'text') return <TextView node={node} style={style} anim={anim} played={played} hiding={hiding} vars={vars} audioValues={audioValues} crossAxis={crossAxis} />
+  if (node.type === 'image') return <ImageView node={node} style={style} anim={anim} played={played} hiding={hiding} urls={urls} audioCover={audioCover} />
   if (node.type === 'video') return <VideoView node={node} style={style} anim={anim} played={played} hiding={hiding} />
   return null
 }
@@ -1261,13 +1351,13 @@ function ScenePreview({
         }
       >
         {images.map((n) => (
-          <ImageView key={`${n.id}-${playToken}`} node={n} style={{}} anim={null} played={playToken > 0} hiding={false} urls={urls} />
+          <ImageView key={`${n.id}-${playToken}`} node={n} style={{}} anim={null} played={playToken > 0} hiding={false} urls={urls} audioCover={false} />
         ))}
         {videos.map((n) => (
           <VideoView key={`${n.id}-${playToken}`} node={n} style={{}} anim={null} played={playToken > 0} hiding={false} />
         ))}
         {texts.map((n) => (
-          <TextView key={`${n.id}-${playToken}`} node={n} style={{}} anim={null} played={playToken > 0} hiding={false} vars={null} crossAxis="horizontal" />
+          <TextView key={`${n.id}-${playToken}`} node={n} style={{}} anim={null} played={playToken > 0} hiding={false} vars={null} audioValues={null} crossAxis="horizontal" />
         ))}
       </div>
     )
@@ -1276,7 +1366,8 @@ function ScenePreview({
   if (eventState.active && !eventState.visible) {
     return (
       <span className="text-white/40 text-xs text-center px-4">
-        Waiting for {eventState.alertTypes.join(' / ')} — press Play to simulate it.
+        {/* alertTypes is empty when armed purely by Audio Player (no Event — see processTrigger's audioArmed), which has no "type" to name — describe the trigger instead of joining an empty list into a bare "Waiting for  —". */}
+        Waiting for {eventState.alertTypes.length > 0 ? eventState.alertTypes.join(' / ') : 'a track change'} — press Play to simulate it.
       </span>
     )
   }
@@ -1671,7 +1762,15 @@ export function SceneBuilderPage({
       if (processRafRef.current != null) cancelAnimationFrame(processRafRef.current)
       taskSoundTimersRef.current.forEach(clearTimeout)
       taskSoundTimersRef.current = []
-      setEventVars({ type: (proc.active ? proc.alertTypes : trigger!.alertTypes)[0], ...SAMPLE_ALERT_VARS })
+      // Sample data shaped to whichever trigger is actually armed — mirrors
+      // render()'s own simulateTest branch in overlays/custom.html: a
+      // process armed purely by Audio Player (proc.audioArmed, no Event —
+      // see processTrigger) gets Now-Playing-shaped sample vars instead of
+      // alert-shaped ones, or a Task's own {title}/{artist} placeholders
+      // would just preview as literal text. alertTypes wins when both are
+      // wired to the same Start.
+      const alertTypes = proc.active ? proc.alertTypes : trigger!.alertTypes
+      setEventVars(alertTypes.length > 0 ? { type: alertTypes[0], ...SAMPLE_ALERT_VARS } : { ...SAMPLE_AUDIO_VARS, source: 'spotify', isPlaying: true })
       setEventPhase('showing')
       if (proc.active) {
         const built = buildProcessSchedule(nodes, edges)

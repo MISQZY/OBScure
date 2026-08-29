@@ -127,8 +127,32 @@ const MODIFIER_SOCKETS: InputSocket[] = [
   { id: 'hide', label: 'Hide', accepts: ['hide'], kind: 'style' }
 ]
 
-const TEXT_SOCKETS: InputSocket[] = MODIFIER_SOCKETS
-const IMAGE_SOCKETS: InputSocket[] = MODIFIER_SOCKETS
+// Lets an Audio Player's Author/Title output (see AUDIO_PLAYER_OUTPUTS below)
+// be wired straight into a specific Text node instead of only reaching it
+// indirectly via {title}/{artist} placeholders in its Content field. Unlike
+// a plain modifier socket, wiring in doesn't replace Content — it just
+// supplies the values Content's OWN {artist}/{title} placeholders resolve
+// to for this node (see buildText's own doc comment in overlays/
+// custom.html), so the field you actually edit is still Content's textarea.
+// `multi: true` since Author and Title are independent values, not
+// alternatives — both can (and normally would) be wired in at once to fill
+// a "{artist} — {title}" template; more producers may feed this socket down
+// the line, not just Audio Player's two.
+// kind 'content' (not 'data'), despite only ever accepting Audio Player
+// today — this socket IS content (a value feeding Content's own template),
+// same family as Box's 'children'/Scene's own 'content' socket, so its dot
+// reads green like theirs instead of the data-source violet/sky-blue tint.
+const TEXT_SOCKETS: InputSocket[] = [...MODIFIER_SOCKETS, { id: 'content', label: 'Content', accepts: ['audioPlayer'], kind: 'content', multi: true }]
+// Same "Content" concept as TEXT_SOCKETS' own socket above, but for Image:
+// wiring Audio Player's Cover output in shows the live now-playing album art
+// unconditionally (see buildImage's own doc comment), taking priority over a
+// set URL/uploaded image — ImageNode's own URL field goes read-only while
+// this is connected, since the connection already decides what's shown.
+// Own id (not 'content') so isValidConnection's per-output `feeds` check
+// (see AUDIO_PLAYER_OUTPUTS/OutputSocket's own doc comment) can tell Text's
+// Content socket and this one apart despite the identical label — Author/
+// Title can only reach Text's, Cover only this one.
+const IMAGE_SOCKETS: InputSocket[] = [...MODIFIER_SOCKETS, { id: 'imageContent', label: 'Content', accepts: ['audioPlayer'], kind: 'content' }]
 const VIDEO_SOCKETS: InputSocket[] = MODIFIER_SOCKETS
 
 const BOX_SOCKETS: InputSocket[] = [
@@ -153,18 +177,26 @@ const SCENE_SOCKETS: InputSocket[] = [
   { id: 'ordering', label: 'Ordering', accepts: ['ordering'], kind: 'style' },
   { id: 'event', label: 'Event', accepts: ['event'], kind: 'data' },
   { id: 'timer', label: 'Timer', accepts: ['timer'], kind: 'data' },
-  // Marks the scene as continuously data-driven (see isAudioTrigger in
-  // overlays/custom.html) rather than one-shot event-triggered — wiring
-  // this in arms {title}/{artist}/{albumArt} placeholders on any
-  // Text/Image reachable from Scene, live off the now-playing feed, with
-  // no durationMs/auto-hide (visible for as long as isPlaying is true).
+  // OPTIONAL — see AudioPlayerNode's own doc comment for the two independent
+  // ways to use Audio Player. Wiring it in here is purely a visibility
+  // switch: marks the scene as continuously data-driven (see isAudioTrigger
+  // in overlays/custom.html) rather than one-shot event-triggered, visible
+  // for as long as isPlaying is true with no durationMs/auto-hide, and (as a
+  // bonus) arms {title}/{artist}/{albumArt} placeholders scene-wide. A
+  // Text/Image's own Content socket gets live values with no Scene wiring
+  // at all — this input only matters if you also want the whole scene to
+  // show/hide by playback state.
   { id: 'audioPlayer', label: 'Audio Player', accepts: ['audioPlayer'], kind: 'data' }
 ]
 
 const BACKGROUND_FX_SOCKETS: InputSocket[] = [{ id: 'caption', label: 'Caption', accepts: ['text'], kind: 'content' }]
 
 const START_SOCKETS: InputSocket[] = [
-  { id: 'event', label: 'Event', accepts: ['event'], kind: 'data' },
+  // Accepts 'audioPlayer' too, via its own Event output (see
+  // AUDIO_PLAYER_OUTPUTS below) — an alternative to an Event node for
+  // arming a process: fires on a track change instead of matching a real
+  // alert's type. See processTrigger's audioArmed in overlays/custom.html.
+  { id: 'event', label: 'Event', accepts: ['event', 'audioPlayer'], kind: 'data' },
   { id: 'sound', label: 'Sound', accepts: ['sound'], kind: 'data' },
   { id: 'backgroundFx', label: 'Background FX', accepts: ['backgroundAnimation'], kind: 'data' }
 ]
@@ -226,12 +258,45 @@ const IMAGE_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
 const VIDEO_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
 const BOX_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
 
+/**
+ * Audio Player's five roles for its single Now Playing feed. Author/Title
+ * both feed a Text node's Content socket (id `content` — see TEXT_SOCKETS
+ * above): each just supplies ITS OWN value, so wiring both in at once fills
+ * {artist} and {title} together in one Content template like
+ * "{artist} — {title}" (see audioContentValues in overlays/custom.html).
+ * Cover feeds an Image node's Content socket (id `imageContent`) and
+ * unconditionally replaces what it shows, since Image has no
+ * placeholder-template field of its own to merge into. Event feeds a
+ * Start node's own Event socket (see START_SOCKETS above) — a process
+ * armed this way triggers on a TRACK CHANGE rather than matching a real
+ * alert's type (see processTrigger's audioArmed in overlays/custom.html).
+ * Feed is the one that reaches Scene's own `audioPlayer` socket (see
+ * SCENE_SOCKETS above) — the whole-scene visibility switch (show/hide by
+ * isPlaying), a role none of the other four can reach since their `feeds`
+ * lists point elsewhere. Skipping all of these wires entirely still works
+ * exactly as before — see AudioPlayerNode's own doc comment.
+ */
+const AUDIO_PLAYER_OUTPUTS: OutputSocket[] = [
+  // kind 'content' on these three (not 'data') to match the Content sockets
+  // they feed — see TEXT_SOCKETS/IMAGE_SOCKETS' own comments, and
+  // displayEdges' own doc comment in SceneBuilderPage.tsx for how this
+  // colors their wire green despite the node's own 'data' category.
+  // trackChanged/feed stay 'data': one's a trigger, the other a whole-scene
+  // visibility switch, neither is a value feeding a Content template.
+  { id: 'author', label: 'Author', kind: 'content', feeds: ['content'] },
+  { id: 'title', label: 'Title', kind: 'content', feeds: ['content'] },
+  { id: 'cover', label: 'Cover', kind: 'content', feeds: ['imageContent'] },
+  { id: 'trackChanged', label: 'Event', kind: 'data', feeds: ['event'] },
+  { id: 'feed', label: 'Now Playing', kind: 'data', feeds: ['audioPlayer'] }
+]
+
 /** Every node type's OUTPUT sockets, keyed by node `type` — analogous to NODE_SOCKETS. Node types absent here (the large majority) render the single generic "output" handle unchanged. */
 export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
   text: TEXT_OUTPUTS,
   image: IMAGE_OUTPUTS,
   video: VIDEO_OUTPUTS,
-  box: BOX_OUTPUTS
+  box: BOX_OUTPUTS,
+  audioPlayer: AUDIO_PLAYER_OUTPUTS
 }
 
 /**
@@ -255,7 +320,7 @@ export const CATEGORY_STYLES: Record<NodeCategory, { header: string; border: str
   process: { header: 'bg-indigo-500/15', border: 'border-l-indigo-500', dot: 'bg-indigo-500' },
   content: { header: 'bg-emerald-500/15', border: 'border-l-emerald-500', dot: 'bg-emerald-500' },
   style: { header: 'bg-amber-500/15', border: 'border-l-amber-500', dot: 'bg-amber-500' },
-  data: { header: 'bg-violet-500/15', border: 'border-l-violet-500', dot: 'bg-violet-500' }
+  data: { header: 'bg-sky-500/15', border: 'border-l-sky-500', dot: 'bg-sky-500' }
 }
 
 const PROCESS_TYPES = new Set(['start', 'task', 'wait', 'end'])
@@ -365,6 +430,57 @@ function usePriorityInfo(nodeId: string) {
 }
 
 /**
+ * Whether `nodeId` currently has an incoming edge on socket `targetHandle`
+ * — used by ImageNode to know when its Content socket (see IMAGE_SOCKETS)
+ * is wired to Audio Player's Cover output, in which case the URL field goes
+ * read-only: the connection already decides what's shown (see buildImage's
+ * own doc comment in overlays/custom.html), so an editable-but-ignored URL
+ * field would just be confusing.
+ */
+function useHasIncomingEdge(nodeId: string, targetHandle: string): boolean {
+  return useStore((s) => s.edges.some((e) => e.target === nodeId && e.targetHandle === targetHandle))
+}
+
+/**
+ * Which of TEXT_PLACEHOLDERS this Text node can actually get a value for
+ * right now, given the current graph — PlaceholderPicker's {} menu only
+ * offers these, instead of every token whether or not anything would ever
+ * fill it in (this is what the user reported: {title}/{artist} showing up
+ * with no Audio Player anywhere in the scene). EVENT_PLACEHOLDERS (user/
+ * amount/message/source) need an Event node wired into Scene or Start —
+ * either one arms all four together, same as sceneTrigger/processTrigger
+ * elsewhere. 'artist'/'title' each need either Audio Player wired into
+ * Scene (arms both, scene-wide — see the audioPlayer entry on
+ * SCENE_SOCKETS) or wired directly into THIS node's own Content socket
+ * (arms only whichever output(s) are actually connected — see
+ * AUDIO_PLAYER_OUTPUTS/audioContentValues in overlays/custom.html).
+ * Doesn't verify precise reachability from this specific node's own Scene
+ * for the Event/scene-wide-Audio checks (just whether one exists ANYWHERE
+ * in the graph) — a false positive only offers a token that happens not to
+ * resolve, same harmless-if-imprecise reasoning as hasAudioContentDeps in
+ * overlays/custom.html.
+ */
+function useAvailablePlaceholders(nodeId: string): readonly string[] {
+  return useStore(
+    (s) => {
+      const hasEvent = s.edges.some((e) => e.targetHandle === 'event' && s.nodes.find((n) => n.id === e.source)?.type === 'event')
+      const audioIntoScene = s.edges.some((e) => e.targetHandle === 'audioPlayer' && s.nodes.find((n) => n.id === e.source)?.type === 'audioPlayer')
+      const directAudioHandles = new Set(
+        s.edges
+          .filter((e) => e.target === nodeId && e.targetHandle === 'content' && s.nodes.find((n) => n.id === e.source)?.type === 'audioPlayer')
+          .map((e) => e.sourceHandle)
+      )
+      const result: string[] = []
+      if (hasEvent) result.push(...EVENT_PLACEHOLDERS)
+      if (audioIntoScene || directAudioHandles.has('author')) result.push('artist')
+      if (audioIntoScene || directAudioHandles.has('title')) result.push('title')
+      return result
+    },
+    (a, b) => a.length === b.length && a.every((v, i) => v === b[i])
+  )
+}
+
+/**
  * Returns this node's 1-based step number when walking the sequence-flow
  * chain forward from Start (Start itself is step 1) — answers "what order
  * do these Tasks run in" at a glance, the process equivalent of
@@ -396,7 +512,7 @@ function useSequenceInfo(nodeId: string): number | null {
 const SOCKET_DOT: Record<InputSocket['kind'], string> = {
   content: '!bg-emerald-500',
   style: '!bg-amber-500',
-  data: '!bg-violet-500'
+  data: '!bg-sky-500'
 }
 
 /**
@@ -414,7 +530,7 @@ const CATEGORY_DOT: Record<NodeCategory, string> = {
   process: '!bg-indigo-500',
   content: '!bg-emerald-500',
   style: '!bg-amber-500',
-  data: '!bg-violet-500'
+  data: '!bg-sky-500'
 }
 
 /** One labeled input-socket row — the dot is nested inside this (relatively positioned) row rather than placed by percentage on the whole node, so any number of sockets stacks cleanly regardless of node height. */
@@ -855,7 +971,8 @@ const textInputClass = 'nodrag select-text w-full h-6 bg-muted px-1 rounded outl
 /** Multi-line sibling of textInputClass, for Text's own Content field — starts at `rows={3}` (set on the element itself) and resize-y lets a longer caption grow past that instead of scrolling inside a fixed box. */
 const textAreaClass = 'nodrag select-text w-full bg-muted px-1 py-1 rounded outline-none resize-y'
 
-const TEXT_PLACEHOLDERS = ['user', 'amount', 'message', 'source', 'title', 'artist'] as const
+/** Filled in from an Event node's real/simulated alert — see EventNode/interpolate. Read by useAvailablePlaceholders, which is what actually decides PlaceholderPicker's {} menu contents ('title'/'artist', the other half, are handled individually there since each has its own wiring condition — see that hook's own doc comment). */
+const EVENT_PLACEHOLDERS = ['user', 'amount', 'message', 'source'] as const
 
 type SavedNodeMap = Record<string, Record<string, unknown>>
 
@@ -1122,14 +1239,17 @@ function NodeSelect<T extends string>({
 }
 
 /**
- * The {} button next to a text field — opens a list of available placeholders
- * and inserts the chosen one at the cursor. Rendered via a portal to
- * document.body: React Flow's own Panels (Add Node, Save Changes, Preview)
- * live outside the pannable node layer with their own z-index, so a menu
- * nested inside a node can never stack above them — it'd render fully
- * visible but silently un-clickable wherever a Panel happens to overlap it.
+ * The {} button next to a text field — opens a list of AVAILABLE
+ * placeholders (see useAvailablePlaceholders — `tokens`, not the full
+ * TEXT_PLACEHOLDERS, so a Text with nothing wired in doesn't offer
+ * {title}/{artist} that would just render literally) and inserts the
+ * chosen one at the cursor. Rendered via a portal to document.body: React
+ * Flow's own Panels (Add Node, Save Changes, Preview) live outside the
+ * pannable node layer with their own z-index, so a menu nested inside a
+ * node can never stack above them — it'd render fully visible but
+ * silently un-clickable wherever a Panel happens to overlap it.
  */
-function PlaceholderPicker({ onInsert }: { onInsert: (token: string) => void }) {
+function PlaceholderPicker({ tokens, onInsert }: { tokens: readonly string[]; onInsert: (token: string) => void }) {
   const [anchor, setAnchor] = useState<{ right: number; top: number } | null>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -1174,20 +1294,26 @@ function PlaceholderPicker({ onInsert }: { onInsert: (token: string) => void }) 
             style={{ right: anchor.right, top: anchor.top }}
             className="nodrag fixed z-[9999] min-w-[110px] rounded-md border bg-popover text-popover-foreground shadow-lg py-1"
           >
-            {TEXT_PLACEHOLDERS.map((token) => (
-              <button
-                key={token}
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onInsert(token)
-                  setAnchor(null)
-                }}
-                className="w-full text-left px-2 py-1 text-xs font-mono hover:bg-accent hover:text-accent-foreground"
-              >
-                {`{${token}}`}
-              </button>
-            ))}
+            {tokens.length === 0 ? (
+              <p className="w-48 px-2 py-1 text-[11px] text-muted-foreground leading-snug">
+                Nothing wired in yet — connect an Event (for user/amount/message/source) or Audio Player (for title/artist) to enable placeholders.
+              </p>
+            ) : (
+              tokens.map((token) => (
+                <button
+                  key={token}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    onInsert(token)
+                    setAnchor(null)
+                  }}
+                  className="w-full text-left px-2 py-1 text-xs font-mono hover:bg-accent hover:text-accent-foreground"
+                >
+                  {`{${token}}`}
+                </button>
+              ))
+            )}
           </div>,
           document.body
         )}
@@ -1438,6 +1564,7 @@ export function TextNode({ id, data }: NodeProps) {
   // set" already meant.
   const bold = data.bold !== false
   const italic = Boolean(data.italic)
+  const availablePlaceholders = useAvailablePlaceholders(id)
 
   const insertPlaceholder = (token: string) => {
     const el = inputRef.current
@@ -1465,7 +1592,7 @@ export function TextNode({ id, data }: NodeProps) {
             onChange={(e) => updateNodeData(id, { text: e.target.value })}
             className={textAreaClass}
           />
-          <PlaceholderPicker onInsert={insertPlaceholder} />
+          <PlaceholderPicker tokens={availablePlaceholders} onInsert={insertPlaceholder} />
         </div>
       </div>
       <Field label="Color">
@@ -1676,6 +1803,11 @@ export function ImageNode({ id, data }: NodeProps) {
   const [uploading, setUploading] = useState(false)
   const customImageName = (data.customImageName as string) || null
   const borderEnabled = Boolean(data.borderEnabled)
+  // Audio Player's Cover output wired into this node's Content socket (see
+  // IMAGE_SOCKETS/AUDIO_PLAYER_OUTPUTS) already decides what's shown, same
+  // priority buildImage in overlays/custom.html gives it — the URL field
+  // goes read-only rather than sitting there editable but silently ignored.
+  const contentConnected = useHasIncomingEdge(id, 'imageContent')
 
   const upload = async (): Promise<void> => {
     setUploading(true)
@@ -1702,17 +1834,17 @@ export function ImageNode({ id, data }: NodeProps) {
       category="content"
       sockets={IMAGE_SOCKETS}
       outputSockets={IMAGE_OUTPUTS}
-      help="Leave URL empty for the live now-playing album art. Defaults to 96×96 — wire a Size node to override."
+      help="Leave URL empty for the live now-playing album art, or wire Audio Player's Cover output into Content for the same thing made explicit (URL field goes read-only). Defaults to 96×96 — wire a Size node to override."
     >
       <div className="flex flex-col gap-1 text-xs">
         <label>Image URL</label>
         <input
           type="text"
-          placeholder={customImageName ? 'Uploaded file in use' : 'Leave empty for album art'}
-          disabled={Boolean(customImageName)}
+          placeholder={contentConnected ? 'Provided by Content connection' : customImageName ? 'Uploaded file in use' : 'Leave empty for album art'}
+          disabled={contentConnected || Boolean(customImageName)}
           value={(data.src as string) || ''}
           onChange={(e) => updateNodeData(id, { src: e.target.value })}
-          className={cn(textInputClass, customImageName && 'opacity-50')}
+          className={cn(textInputClass, (contentConnected || customImageName) && 'opacity-50')}
         />
       </div>
       {/* Uploaded file takes priority over the URL above (see ImageView in
@@ -1937,7 +2069,9 @@ export function SoundNode({ id, data }: NodeProps) {
  * isEventTrigger/processTrigger in overlays/custom.html — both only ever
  * read alertType (Sub-type), so a Command-kind Event contributes nothing
  * there yet (not wired into a live chat-command trigger, same "reserved"
- * state as RandomSourceNode/RouletteSourceNode/AudioPlayerNode below).
+ * state as RandomSourceNode/RouletteSourceNode below — AudioPlayerNode,
+ * despite the historical grouping, actually is wired into rendering; see
+ * its own doc comment).
  * Multiple Event nodes on the same Start/Scene, each a different Sub-type,
  * all arm it — whichever fires first triggers the show/hold/hide. Test/Play
  * simulate this with sample data instead of waiting for a real event.
@@ -2020,9 +2154,11 @@ export function EventNode({ id, data }: NodeProps) {
 /**
  * Instrumental data sources — ongoing feeds/tools rather than one-shot
  * events, unlike EventNode above. Documents that a scene is meant to react
- * to Random/Roulette/the audio player; not wired into any render logic yet
- * (no effect on rendering — same "reserved" state the old Data Source
- * node's non-alert options were already in).
+ * to Random/Roulette; not wired into any render logic yet (no effect on
+ * rendering — same "reserved" state the old Data Source node's non-alert
+ * options were already in). AudioPlayerNode below is the third member of
+ * this "instrumental" group but, unlike these two, IS wired into rendering —
+ * see its own doc comment.
  */
 export function RandomSourceNode({ id, data }: NodeProps) {
   return <BaseNode id={id} data={data} title="Random" category="data" soon help="Reserved for a Random-roll feed." />
@@ -2033,15 +2169,35 @@ export function RouletteSourceNode({ id, data }: NodeProps) {
 }
 
 /**
- * Wired into Scene (see the audioPlayer entry on SCENE_SOCKETS above) marks
- * the scene as continuously data-driven off the Now Playing feed
- * (Spotify/Windows Media — see NowPlayingPayload) instead of one-shot
- * event-triggered: {title}/{artist} placeholders on any Text reachable from
- * Scene fill live (see the {} picker), any such Image left with an empty URL
- * shows the live album art (see ImageNode's own doc comment/showAlbumArt),
- * and the scene shows for as long as isPlaying stays true — no
- * Timer/durationMs, unlike an Event-triggered scene. Mirrors
- * isAudioTrigger/showAudioContent in overlays/custom.html.
+ * THREE independent ways to use the Now Playing feed (Spotify/Windows
+ * Media — see NowPlayingPayload), which can be used together, any subset,
+ * or not at all:
+ *
+ * 1. Author/Title/Cover outputs (AUDIO_PLAYER_OUTPUTS) wired straight into a
+ *    Text/Image's own Content socket — Author/Title just supply the values
+ *    a Text's {artist}/{title} placeholders resolve to (see
+ *    audioContentValues in overlays/custom.html), Cover replaces an Image
+ *    outright. These read the live feed directly and keep updating on their
+ *    own regardless of whether Scene below is wired in at all — see
+ *    hasAudioContentDeps in overlays/custom.html for how a plain always-on
+ *    scene still gets live refreshes purely from having one of these wires.
+ * 2. Its Feed output wired into Scene itself (the audioPlayer entry on
+ *    SCENE_SOCKETS above) — a SEPARATE concern, visibility only: marks the
+ *    whole scene as continuously data-driven instead of one-shot
+ *    event-triggered, showing for as long as isPlaying stays true with no
+ *    Timer/durationMs. Mirrors isAudioTrigger/showAudioContent in
+ *    overlays/custom.html. Doing this ALSO arms {title}/{artist}
+ *    placeholders scene-wide and an empty-URL Image's live-album-art
+ *    fallback, same as before Content sockets existed — but if you only
+ *    want live text/cover on specific nodes with no auto show/hide, skip
+ *    this and just use the Content wires above.
+ * 3. Its Event output wired into a Start node (see the `event` entry on
+ *    START_SOCKETS above, which now accepts 'audioPlayer' alongside
+ *    'event') — arms the SAME Start->Task->...->End process an Event node
+ *    would, but the trigger is "the track changed" rather than a matching
+ *    alert type (see processTrigger's audioArmed in overlays/custom.html).
+ *    Lets a process play some animation/sound/update every time a new song
+ *    starts, same as it would for a donation/follow/etc.
  */
 export function AudioPlayerNode({ id, data }: NodeProps) {
   return (
@@ -2050,8 +2206,8 @@ export function AudioPlayerNode({ id, data }: NodeProps) {
       data={data}
       title="Audio Player"
       category="data"
-      soon
-      help="Connect to Scene to show it only while music is playing. Text supports {title}/{artist}; leave an Image's URL empty for live album art."
+      outputSockets={AUDIO_PLAYER_OUTPUTS}
+      help="Wire Author/Title into a Text's Content socket, Cover into an Image's, and/or Event into a Start node (fires on track change) — each works independently, live, with no Scene connection needed. Wiring Feed into Scene too additionally shows/hides the whole scene by isPlaying."
     />
   )
 }

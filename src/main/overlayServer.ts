@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { extname, join, normalize, sep } from 'node:path'
 import { WebSocket, WebSocketServer } from 'ws'
 import type { EventBus } from './eventBus'
-import type { AppEvents, CustomOverlay, OverlayAddress, OverlayUrls } from '../shared/types'
+import type { AppEvents, CustomOverlay, NowPlayingPayload, OverlayAddress, OverlayUrls } from '../shared/types'
 
 const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -58,6 +58,18 @@ export class OverlayServer {
   private customOverlays: Map<string, CustomOverlay> = new Map()
   private server: Server | null = null
   private wss: WebSocketServer | null = null
+  /**
+   * The most recent payload passed to pushNowPlaying, or null before the
+   * first one ever arrives (or after a profile switch resets it) — served
+   * from GET .../config/now-playing.json so a freshly-opened/reconnected
+   * overlay page can pick up the CURRENT track immediately instead of
+   * waiting for the next actual change (pollers only emit 'now-playing' on
+   * change — see NowPlayingCache's own doc comment — so with no snapshot a
+   * page opened mid-track would otherwise show nothing until the NEXT
+   * track). See overlays/custom.html's initial fetch, alongside its
+   * existing custom.json one.
+   */
+  private latestNowPlaying: NowPlayingPayload | null = null
 
   constructor(options: OverlayServerOptions) {
     this.host = options.host
@@ -70,11 +82,29 @@ export class OverlayServer {
 
     // Registered once here rather than in start() so restart() (stop + start)
     // never ends up with duplicate listeners piling up on the shared eventBus.
-    // 'alert' and 'now-playing' are the only AppEvents channels a custom
-    // scene actually consumes today — see EventNode/isEventTrigger/
-    // processTrigger and AudioPlayerNode/isAudioTrigger in overlays/custom.html.
+    // 'alert' is the only AppEvents channel besides now-playing (pushed
+    // explicitly via pushNowPlaying, not subscribed here — see its own doc
+    // comment) that a custom scene actually consumes today — see
+    // EventNode/isEventTrigger/processTrigger in overlays/custom.html.
     this.eventBus.on('alert', (payload) => this.broadcast('alert', payload))
-    this.eventBus.on('now-playing', (payload) => this.broadcast('now-playing', payload))
+  }
+
+  /**
+   * Pushes the CURRENT now-playing state to every connected overlay page —
+   * called from main/index.ts's own eventBus 'now-playing' listener with
+   * the SAME resolved (cover downloaded to a data: URI — overlay pages'
+   * CSP is img-src 'self' data: only, so a raw Spotify CDN URL would
+   * silently fail to load) and source-precedence-applied (Spotify over
+   * Windows Media — see getEffectiveNowPlaying) payload already computed
+   * for the dashboard's own 'now-playing:update' IPC push, rather than
+   * OverlayServer subscribing to the raw per-source eventBus channel
+   * itself and re-broadcasting whichever source happened to emit last.
+   * `null` (no source connected/playing, or a profile switch reset) clears
+   * the cached snapshot too.
+   */
+  pushNowPlaying(payload: NowPlayingPayload | null): void {
+    this.latestNowPlaying = payload
+    this.broadcast('now-playing', payload)
   }
 
   /**
@@ -185,6 +215,12 @@ export class OverlayServer {
       const overlay = key ? (this.customOverlays.get(key) ?? null) : null
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
       res.end(JSON.stringify(overlay))
+      return
+    }
+
+    if (pathname === `${OVERLAYS_PREFIX}/config/now-playing.json`) {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
+      res.end(JSON.stringify(this.latestNowPlaying))
       return
     }
 

@@ -272,7 +272,7 @@
       },
       "sceneBuilderWiring": {
         "title": "Wiring nodes together",
-        "description": "Drag from the dot on a node's right to a socket on another node's left. The socket's color shows its type: green — content (Text/Image/Video/Shape), amber — a style modifier, violet — data, indigo — process sequence. Something only renders once it reaches the Scene node."
+        "description": "Drag from the dot on a node's right to a socket on another node's left. The socket's color shows its type: green — content (Text/Image/Video/Shape), amber — a style modifier, sky blue — data, indigo — process sequence. Something only renders once it reaches the Scene node."
       },
       "sceneBuilderModifiers": {
         "title": "Modifiers",

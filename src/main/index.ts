@@ -251,16 +251,27 @@ function getEffectiveNowPlaying(): NowPlayingPayload | null {
 // this one only ever sees the winning source, so it can't confuse a Spotify
 // cover with a Windows Media track if both happen to update in the same tick.
 // The callback pushes a follow-up update once a cover that missed the
-// initial resolve() (see its doc comment) finishes downloading.
+// initial resolve() (see its doc comment) finishes downloading — pushed to
+// both the dashboard AND OverlayServer (see pushNowPlaying's own doc
+// comment), same as the eventBus listener below.
 const nowPlayingFileCache = new NowPlayingCache(app.getPath('userData'), (payload) => {
   mainWindow?.webContents.send('now-playing:update', payload)
+  overlayServer.pushNowPlaying(payload)
 })
 
-// Pushed to the dashboard's "Now playing" card so it updates live.
+// Pushed to the dashboard's "Now playing" card so it updates live, and to
+// every connected overlay page via OverlayServer.pushNowPlaying — both get
+// the SAME resolved (cover as a data: URI, not a raw external CDN URL an
+// overlay page's CSP would block — see NowPlayingCache.resolve) and
+// source-precedence-applied (getEffectiveNowPlaying: Spotify over Windows
+// Media) payload, rather than OverlayServer separately re-broadcasting each
+// raw per-source poller tick.
 eventBus.on('now-playing', (payload) => {
   nowPlayingRaw[payload.source] = payload
   const effective = getEffectiveNowPlaying()
-  mainWindow?.webContents.send('now-playing:update', effective ? nowPlayingFileCache.resolve(effective) : null)
+  const resolved = effective ? nowPlayingFileCache.resolve(effective) : null
+  mainWindow?.webContents.send('now-playing:update', resolved)
+  overlayServer.pushNowPlaying(resolved)
 })
 
 // Pushed to the renderer so the dashboard/settings pages immediately show connection status changes
@@ -286,6 +297,7 @@ async function reinitializeForActiveProfile(): Promise<void> {
   delete nowPlayingRaw.spotify
   delete nowPlayingRaw.windows
   nowPlayingFileCache.reset()
+  overlayServer.pushNowPlaying(null)
 
   config = new ConfigStore(profileManager.getActiveProfileDir())
 

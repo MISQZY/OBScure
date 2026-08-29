@@ -103,8 +103,11 @@
       let alertQueue = []
       const MAX_QUEUED_ALERTS = 5
       // Last payload seen on the 'now-playing' channel — see isAudioTrigger/
-      // showAudioContent. Defaults to not-playing so a scene with an Audio
-      // Player wired in starts hidden until the feed says otherwise.
+      // showAudioContent/audioContentValues. Defaults to not-playing so a
+      // scene with an Audio Player wired in starts hidden until the feed
+      // says otherwise — immediately overwritten with the CURRENT snapshot
+      // (if any) by the now-playing.json fetch below, so this default is
+      // only ever actually used if that fetch fails.
       let latestNowPlaying = { isPlaying: false }
       // Whether an Audio-Player-driven scene is currently on screen — see
       // showAudioContent/hideAudioContent. Separate from hideTimer, which is
@@ -151,12 +154,19 @@
       }
 
       // Fills {user}/{amount}/{message}/{source}-style placeholders from an
-      // event's vars — mirrors interpolate() in SceneBuilderPage.tsx. `vars`
+      // event's vars (or {artist}/{title} from audioContentValues — see
+      // buildText) — mirrors interpolate() in SceneBuilderPage.tsx. `vars`
       // is null/undefined outside an event-triggered show (a plain scene),
-      // in which case placeholders are left as literal text.
+      // in which case every placeholder is left as literal text. A key NOT
+      // present in `vars` (as opposed to present but empty) is left literal
+      // too, same reasoning as the `!vars` case — only actually-AVAILABLE
+      // placeholders get filled in, so e.g. "{user}: {title}" in a scene
+      // with Event vars but no {title} source keeps "{title}" literal
+      // instead of collapsing to a bare "Viewer: ".
       function interpolate(template, vars) {
         if (!vars) return template
         return String(template ?? '').replace(/\{(\w+)\}/g, (match, key) => {
+          if (!(key in vars)) return match
           const value = vars[key]
           return value === undefined || value === null ? '' : String(value)
         })
@@ -193,7 +203,11 @@
        * components/nodes/index.tsx) instead of a one-shot alert: no
        * durationMs, shows for as long as the Now Playing feed says
        * isPlaying. Checked independently of isEventTrigger/processTrigger —
-       * see render()'s own priority order among the three.
+       * see render()'s own priority order among the three. Purely a
+       * visibility switch — a Text/Image wired straight into Audio Player's
+       * own Content socket gets live values with no Scene wiring at all (see
+       * audioContentValues/hasAudioContentDeps), so this only matters if you
+       * also want the whole scene to auto show/hide by playback state.
        */
       function isAudioTrigger(overlay) {
         const nodes = overlay?.nodes || []
@@ -267,20 +281,32 @@
         return { schedule, totalMs: atMs }
       }
 
-      /** Whether Scene's process is armed by a DataSource(alert) wired into its Start node — the process equivalent of isEventTrigger above. */
+      /**
+       * Whether Scene's process is armed — either by a DataSource(alert)
+       * wired into its Start node (the process equivalent of isEventTrigger
+       * above — `alertTypes`, matched against a real 'alert' broadcast in
+       * handleAlert), or by an Audio Player wired into Start (`audioArmed`
+       * — a DIFFERENT trigger condition: not a type match, just "the track
+       * changed", checked in the 'now-playing' WS handler below). Either
+       * one alone is enough to make `active` true — see render()'s own
+       * `proc.active` branch, which needs to know the scene starts hidden
+       * regardless of WHICH kind of trigger is armed.
+       */
       function processTrigger(overlay) {
         const nodes = overlay?.nodes || []
         const edges = overlay?.edges || []
         const map = nodeMap(nodes)
         const start = nodes.find((n) => n.type === 'start')
-        if (!start) return { active: false, alertTypes: new Set() }
+        if (!start) return { active: false, alertTypes: new Set(), audioArmed: false }
+        const members = incoming(start.id, edges, map)
         const alertTypes = new Set(
-          incoming(start.id, edges, map)
+          members
             .filter((n) => n.type === 'event')
             .map((n) => n.data.alertType)
             .filter(Boolean)
         )
-        return { active: alertTypes.size > 0, alertTypes }
+        const audioArmed = members.some((n) => n.type === 'audioPlayer')
+        return { active: alertTypes.size > 0 || audioArmed, alertTypes, audioArmed }
       }
 
       /**
@@ -486,12 +512,66 @@
         return map
       }
 
-      // Nodes wired directly INTO nodeId — mirrors ScenePreview in SceneBuilderPage.tsx.
+      // Nodes wired directly INTO nodeId — mirrors ScenePreview in
+      // SceneBuilderPage.tsx, sort included: lower data.priority renders
+      // first (see usePriorityInfo's cyclePriority in components/nodes/
+      // index.tsx, the little numbered badge on a node with siblings
+      // feeding the same target) — this MUST match SceneBuilderPage.tsx's
+      // own incoming() exactly, or a scene would order its content
+      // differently in the editor preview than in the real OBS overlay.
       function incoming(nodeId, edges, map) {
         return edges
           .filter((e) => e.target === nodeId)
           .map((e) => map[e.source])
           .filter(Boolean)
+          .sort((a, b) => ((a.data && a.data.priority) || 0) - ((b.data && b.data.priority) || 0))
+      }
+
+      // { artist, title } sourced straight from `latestNowPlaying` (the
+      // always-current global, NOT this render's own `vars` — see its own
+      // doc comment) for whichever of Audio Player's Author/Title outputs
+      // feed this Text's Content socket (see TEXT_SOCKETS/
+      // AUDIO_PLAYER_OUTPUTS in components/nodes/index.tsx), or null when
+      // neither is wired in — in which case buildText's {title}/{artist}
+      // placeholders resolve from `vars` alone, unchanged. Reading the
+      // global rather than `vars` is what lets this work with NO Scene
+      // wiring at all (see hasAudioContentDeps below) — `vars` only ever
+      // carries title/artist when the SCENE itself is Audio-Player-driven
+      // (showAudioContent), which this deliberately doesn't require.
+      function audioContentValues(nodeId, edges, map) {
+        const audioEdges = edges.filter((e) => e.target === nodeId && e.targetHandle === 'content' && map[e.source] && map[e.source].type === 'audioPlayer')
+        if (audioEdges.length === 0) return null
+        const values = {}
+        for (const e of audioEdges) {
+          if (e.sourceHandle === 'author') values.artist = latestNowPlaying.artist || ''
+          if (e.sourceHandle === 'title') values.title = latestNowPlaying.title || ''
+        }
+        return values
+      }
+
+      // Whether this Image's `imageContent` socket is wired to Audio
+      // Player's Cover output — forces the live album art unconditionally
+      // (from the same always-current `latestNowPlaying` global
+      // audioContentValues reads above), taking priority over a set
+      // URL/uploaded image the same way leaving the URL empty already does
+      // on its own (see buildImage).
+      function hasAudioCover(nodeId, edges, map) {
+        return edges.some((e) => e.target === nodeId && e.targetHandle === 'imageContent' && map[e.source] && map[e.source].type === 'audioPlayer')
+      }
+
+      // Whether ANY node in the graph has a Content-socket wire to Audio
+      // Player (see audioContentValues/hasAudioCover above) — doesn't
+      // bother checking reachability from Scene, since a wire on a node
+      // that isn't actually rendered is harmless to (uselessly) refresh
+      // for. Used only to decide whether a plain, non-Audio-Player-
+      // triggered scene needs a silent re-render on every 'now-playing'
+      // tick to keep those live values current — see the WebSocket
+      // handler's own 'now-playing' branch below.
+      function hasAudioContentDeps(overlay) {
+        const edges = overlay?.edges || []
+        const nodes = overlay?.nodes || []
+        const map = nodeMap(nodes)
+        return edges.some((e) => (e.targetHandle === 'content' || e.targetHandle === 'imageContent') && map[e.source] && map[e.source].type === 'audioPlayer')
       }
 
       // Ordering modifier wired into a target (Box or Scene) — mirrors
@@ -671,11 +751,18 @@
       // pixel-identical to before this existed. Skipped when the caller
       // never wired an Ordering-bearing parent (`crossAxis` omitted — the
       // legacy pre-Scene fallback below).
-      function buildText(node, mods, animate, vars, registry, crossAxis) {
+      function buildText(node, mods, animate, vars, registry, crossAxis, audioValues) {
         const d = node.data || {}
         const el = document.createElement('div')
         el.className = 'text-node'
-        el.textContent = interpolate(d.text ?? '', vars)
+        // Content still interpolates the SAME placeholder template it
+        // always has — audioValues (from audioContentValues, an Author/
+        // Title wire into this node's Content socket) just adds {artist}/
+        // {title} to whatever vars this render already carries, so
+        // Content's own "{artist} — {title}" keeps working whether that
+        // data comes from an Audio-Player-triggered Scene's vars, a direct
+        // Content wire, or (typically) not at all.
+        el.textContent = interpolate(d.text ?? '', audioValues ? { ...vars, ...audioValues } : vars)
         el.style.color = d.color || '#ffffff'
         const align = d.align || 'left'
         const verticalAlign = d.verticalAlign || 'top'
@@ -730,7 +817,7 @@
         }
       }
 
-      function buildImage(node, mods, animate, vars, registry) {
+      function buildImage(node, mods, animate, vars, registry, forceAudioCover) {
         const d = node.data || {}
         const wrap = document.createElement('div')
         wrap.className = 'image-node'
@@ -741,16 +828,26 @@
         wrap.style.height = '96px'
         wrap.style.borderRadius = `${d.borderRadius ?? 8}px`
         applyBorder(wrap, d)
-        // An uploaded custom-images file takes priority over the URL field
-        // (see ImageNode's own doc comment in components/nodes/index.tsx) —
-        // a relative path resolves correctly since this page is itself
-        // served from /overlays/, unlike the React preview (ImageView),
-        // which needs the full http://host:port URL instead. Neither set:
-        // fall back to the live now-playing album art, if this render has
-        // one (only true for an Audio-Player-driven scene — see
-        // showAudioContent) — mirrors "Leave empty for album art" on
-        // ImageNode's own URL field.
-        const imageSrc = d.customImageName ? `custom-images/${encodeURIComponent(d.customImageName)}` : d.src || (vars && vars.albumArt) || null
+        // An explicit Cover wire (forceAudioCover, from Audio Player's own
+        // output into this node's Content socket — see hasAudioCover/
+        // AUDIO_PLAYER_OUTPUTS in components/nodes/index.tsx) takes priority
+        // over a set custom image/URL, unlike the passive empty-URL fallback
+        // below — and, like audioContentValues, reads the always-current
+        // `latestNowPlaying` global rather than `vars`, so it stays live with
+        // no Scene wiring needed (see hasAudioContentDeps). Otherwise: an
+        // uploaded custom-images file takes priority over the URL field (see
+        // ImageNode's own doc comment in components/nodes/index.tsx) — a
+        // relative path resolves correctly since this page is itself served
+        // from /overlays/, unlike the React preview (ImageView), which needs
+        // the full http://host:port URL instead. Neither set: fall back to
+        // the live now-playing album art, if this render has one (only true
+        // for an Audio-Player-driven scene — see showAudioContent) — mirrors
+        // "Leave empty for album art" on ImageNode's own URL field.
+        const imageSrc = forceAudioCover
+          ? latestNowPlaying.albumArt || null
+          : d.customImageName
+            ? `custom-images/${encodeURIComponent(d.customImageName)}`
+            : d.src || (vars && vars.albumArt) || null
         if (imageSrc) {
           const img = document.createElement('img')
           img.src = imageSrc
@@ -811,8 +908,8 @@
       // OWN children below.
       function buildContent(node, edges, map, animate, vars, registry, depth = 0, crossAxis) {
         const mods = incoming(node.id, edges, map)
-        if (node.type === 'text') return buildText(node, mods, animate, vars, registry, crossAxis)
-        if (node.type === 'image') return buildImage(node, mods, animate, vars, registry)
+        if (node.type === 'text') return buildText(node, mods, animate, vars, registry, crossAxis, audioContentValues(node.id, edges, map))
+        if (node.type === 'image') return buildImage(node, mods, animate, vars, registry, hasAudioCover(node.id, edges, map))
         if (node.type === 'video') return buildVideo(node, mods, animate, registry)
         // A nested Box (see BOX_SOCKETS' own doc comment in
         // components/nodes/index.tsx) — buildBox is defined below but
@@ -1172,6 +1269,21 @@
        * current one tears itself down — see processNextAlert, called from
        * both hideTriggeredContent and showProcessContent's own hideTimer.
        */
+      // AlertPayload only SOMETIMES declares amount/message (see
+      // mapNotificationToAlert in twitch.ts — a follow event has neither key
+      // at all, not even set to undefined) — normalized here so every known
+      // Event placeholder key is always present, even if its value ends up
+      // undefined. Matches interpolate()'s own "key in vars" availability
+      // check: without this, a follow alert's genuinely-missing `amount` key
+      // would make an unrelated Text's "{amount}" render as literal text
+      // instead of blank, purely because THIS alert type happens not to
+      // carry one — a difference that has nothing to do with whether Event
+      // vars are available at all (they are) and shouldn't leak into how
+      // the placeholder renders.
+      function normalizeAlertVars(payload) {
+        return { type: payload.type, user: payload.user, amount: payload.amount, message: payload.message, source: payload.source }
+      }
+
       function handleAlert(payload) {
         const proc = processTrigger(latestOverlay)
         const matchesProcess = proc.active && proc.alertTypes.has(payload.type)
@@ -1185,14 +1297,15 @@
         }
 
         alertActive = true
+        const vars = normalizeAlertVars(payload)
         if (matchesProcess) {
           const built = buildProcessSchedule(latestOverlay.nodes || [], latestOverlay.edges || [])
           if (built) {
-            showProcessContent(latestOverlay, payload, built.schedule, built.totalMs)
+            showProcessContent(latestOverlay, vars, built.schedule, built.totalMs)
             return
           }
         } else {
-          showTriggeredContent(latestOverlay, payload, trigger.durationMs)
+          showTriggeredContent(latestOverlay, vars, trigger.durationMs)
           return
         }
         alertActive = false
@@ -1235,8 +1348,18 @@
           missingEl.style.display = 'none'
           if (simulateTest) {
             const built = buildProcessSchedule(overlay.nodes || [], overlay.edges || [])
-            const sampleType = [...proc.alertTypes][0] || 'subscription'
-            const vars = { type: sampleType, user: 'Viewer', amount: 25, message: 'Пример сообщения', source: 'twitch' }
+            // Sample data shaped to whichever trigger is actually armed —
+            // an alert-shaped vars object would leave a Task's own
+            // {title}/{artist} placeholders literal (nothing wrong with
+            // that, just not a useful Test preview) on a process armed
+            // purely by Audio Player (see processTrigger's audioArmed), so
+            // that case gets Now-Playing-shaped sample vars instead,
+            // mirroring the non-process isAudioTrigger simulateTest branch
+            // below. alertTypes wins when both are wired to the same Start.
+            const vars =
+              proc.alertTypes.size > 0
+                ? { type: [...proc.alertTypes][0], user: 'Viewer', amount: 25, message: 'Пример сообщения', source: 'twitch' }
+                : { source: 'spotify', title: 'Sample Track', artist: 'Sample Artist', albumArt: '', isPlaying: true }
             if (built) showProcessContent(overlay, vars, built.schedule, built.totalMs)
             return
           }
@@ -1290,9 +1413,25 @@
       if (!key) {
         render(null)
       } else {
-        fetch(`/overlays/config/custom.json?key=${encodeURIComponent(key)}`)
-          .then((res) => res.json())
-          .then((overlay) => render(overlay, true))
+        // Fetched alongside the overlay's own config so the FIRST render
+        // already reflects whatever's currently playing (if anything),
+        // instead of the `{ isPlaying: false }` default latestNowPlaying
+        // starts as — pollers only broadcast 'now-playing' on an actual
+        // change (see NowPlayingCache's own doc comment), so a page
+        // opened/reloaded mid-track would otherwise show nothing (or a
+        // Content-wired Text/Image would show blank) until the NEXT track.
+        // A failed fetch here just keeps that default rather than failing
+        // the whole page load — see the now-playing.json .catch below.
+        Promise.all([
+          fetch(`/overlays/config/custom.json?key=${encodeURIComponent(key)}`).then((res) => res.json()),
+          fetch('/overlays/config/now-playing.json')
+            .then((res) => res.json())
+            .catch(() => null)
+        ])
+          .then(([overlay, nowPlaying]) => {
+            if (nowPlaying) latestNowPlaying = nowPlaying
+            render(overlay, true)
+          })
           .catch(() => render(null))
 
         function connect() {
@@ -1306,15 +1445,51 @@
             } else if (type === 'alert') {
               handleAlert(payload)
             } else if (type === 'now-playing') {
-              if (isAudioTrigger(latestOverlay)) {
+              const audioTriggered = isAudioTrigger(latestOverlay)
+              // Computed BEFORE latestNowPlaying is overwritten below —
+              // reused both for showAudioContent's own animate arg (same
+              // track re-polled vs. a real new one) and to fire a
+              // Start-wired Audio Player's own Process trigger (see
+              // processTrigger's audioArmed, just below) only on an ACTUAL
+              // track change, not every poll tick.
+              const trackChanged = payload.isPlaying && (payload.title !== latestNowPlaying.title || payload.artist !== latestNowPlaying.artist)
+              if (audioTriggered) {
                 if (payload.isPlaying) {
-                  const trackChanged = !audioVisible || payload.title !== latestNowPlaying.title || payload.artist !== latestNowPlaying.artist
-                  showAudioContent(latestOverlay, payload, trackChanged)
+                  showAudioContent(latestOverlay, payload, !audioVisible || trackChanged)
                 } else if (audioVisible) {
                   hideAudioContent()
                 }
               }
               latestNowPlaying = payload
+              // Fires the SAME Start->Task->...->End sequence a real alert
+              // would (see handleAlert's own matchesProcess branch) whenever
+              // Start is wired to Audio Player (processTrigger's audioArmed)
+              // — an alternative arming condition to Event's alertType
+              // matching, for a process that should play some
+              // animation/sound/update each time a new track starts. NOT
+              // queued behind alertActive like a real alert (see
+              // MAX_QUEUED_ALERTS/alertQueue) — missing one track change
+              // while something else is already showing isn't worth queuing
+              // up behind it.
+              if (trackChanged && !alertActive) {
+                const proc = processTrigger(latestOverlay)
+                if (proc.audioArmed) {
+                  const built = buildProcessSchedule(latestOverlay.nodes || [], latestOverlay.edges || [])
+                  if (built) {
+                    alertActive = true
+                    showProcessContent(latestOverlay, payload, built.schedule, built.totalMs)
+                  }
+                }
+              }
+              // A plain scene (no Audio-Player→Scene wiring, so untouched by
+              // showAudioContent/hideAudioContent above) may still have a
+              // Text/Image wired straight into Audio Player's Content socket
+              // (see hasAudioContentDeps) — silently refresh it so those
+              // values keep tracking the live track too. animate=false: this
+              // fires on every poll tick, not just a real track change,
+              // replaying entrance animations here would be constant and
+              // wrong (same reasoning as showAudioContent's own animate arg).
+              if (!audioTriggered && hasAudioContentDeps(latestOverlay)) render(latestOverlay, false)
             }
           }
           ws.onclose = () => setTimeout(connect, 1000)
