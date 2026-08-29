@@ -26,7 +26,7 @@ import { CopyableUrl } from '@/components/CopyableUrl'
 import { slugify, uniqueUrlKey } from '@/lib/custom-overlays'
 import { cn } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Workflow, Trash2, Check, X, Image as ImageIcon, Video as VideoIcon, ChevronRight, Play, FlaskConical, Sparkles, HelpCircle } from 'lucide-react'
+import { Workflow, Trash2, Check, X, Image as ImageIcon, Video as VideoIcon, ChevronRight, Play, FlaskConical, Sparkles, HelpCircle, PanelLeft, PanelRight } from 'lucide-react'
 import type { NavKey } from '@/lib/nav'
 import type { OverlayUrls } from '@shared/types'
 import { CanvasConfig, DEFAULT_CANVAS_CONFIG } from '@shared/canvasConfig'
@@ -880,6 +880,13 @@ function boxShapeStyle(node: Node): { borderRadius: string; clipPath?: string } 
  */
 const MAX_BOX_DEPTH = 12
 
+/** Drag-to-resize bounds (px) for the live preview panel — see handlePreviewResizeStart. */
+const MIN_PREVIEW_WIDTH = 160
+const MAX_PREVIEW_WIDTH = 720
+const DEFAULT_PREVIEW_WIDTH = 320
+/** localStorage key for the preview's remembered width — same 'maddoner:*' convention as ThemeProvider/I18nProvider's own persisted preferences. */
+const PREVIEW_WIDTH_STORAGE_KEY = 'maddoner:sceneBuilderPreviewWidth'
+
 function BoxView({
   node,
   edges,
@@ -1333,6 +1340,105 @@ export function SceneBuilderPage({
   /** Captured via onInit below — SceneBuilderPage renders <ReactFlow> itself rather than being a descendant of it, so useReactFlow() isn't available here directly; this ref is the standard workaround for reaching imperative methods (fitView, see handlePrettify) from outside the flow tree. */
   const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null)
 
+  /**
+   * Width (px) of the canvas wrapper itself — NOT window.innerWidth, since
+   * this page sits next to the app's own sidebar/titlebar chrome and the
+   * three floating toolbar/palette/preview <Panel>s are positioned relative
+   * to this element, not the viewport. The three panels have no knowledge of
+   * each other's size (React Flow's Panel does plain corner positioning, no
+   * collision avoidance), so at narrow widths the centered toolbar's own
+   * min-width runs into the pinned side panels and gets painted over by
+   * whichever renders later in the DOM — see isCompact/isNarrow below for
+   * the fix. null until the first ResizeObserver callback fires, in which
+   * case every panel renders at its normal (wide-window) layout rather than
+   * flashing hidden for one frame.
+   */
+  const [containerWidth, setContainerWidth] = useState<number | null>(null)
+  const canvasWrapperRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const el = canvasWrapperRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width
+      if (width != null) setContainerWidth(width)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  /**
+   * Below this, the top-right live preview is hidden — it's a decorative
+   * mirror of the real overlay (Test/Play already exercise the real thing),
+   * the first thing worth giving up when space is tight. The centered
+   * toolbar is a fixed 27rem (432px, see its own className comment) so it
+   * clears BOTH side panels at once (Add Node ~200px + preview ~336px)
+   * only once the canvas is roughly 432 + 2*216 + margins ≈ 1120px —
+   * that's where this threshold comes from, not an arbitrary guess.
+   */
+  const isCompact = containerWidth !== null && containerWidth < 1120
+  /**
+   * Below this, even the Add Node palette (already the narrowest of the
+   * three panels) collapses into a toggle button — see the paletteOpen
+   * state below. Toolbar (fixed 432px) + Add Node alone still need
+   * roughly 432 + 2*200 ≈ 830px to clear each other; the app's own
+   * default window (960px, minus the sidebar) lands right in this range,
+   * which is exactly the overlap this was written to fix — this isn't
+   * just a "very narrow window" edge case.
+   */
+  const isNarrow = containerWidth !== null && containerWidth < 850
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+
+  /**
+   * Width (px) of the live preview box — height follows automatically via
+   * its own `aspectRatio` CSS (see the preview canvas div below), so
+   * dragging the resize handle can't get the proportions wrong. Persisted
+   * across sessions the same way theme/locale are (see ThemeProvider/
+   * I18nProvider's own 'maddoner:*' localStorage keys) since it's a pure
+   * per-user display preference, not scene content.
+   */
+  const [previewWidth, setPreviewWidth] = useState<number>(() => {
+    try {
+      const stored = Number(localStorage.getItem(PREVIEW_WIDTH_STORAGE_KEY))
+      return Number.isFinite(stored) && stored >= MIN_PREVIEW_WIDTH && stored <= MAX_PREVIEW_WIDTH ? stored : DEFAULT_PREVIEW_WIDTH
+    } catch {
+      return DEFAULT_PREVIEW_WIDTH
+    }
+  })
+  const previewResizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
+  /**
+   * The preview panel is anchored top-right (position="top-right"), so its
+   * top and right edges never move — only a drag on its BOTTOM-LEFT corner
+   * reads naturally as "resize" here, growing/shrinking by moving the left
+   * edge left/right while width (and, via aspect-ratio, height) follow.
+   * Tracked via window-level listeners rather than the handle's own
+   * onMouseMove, since the pointer easily outruns a 14px grip mid-drag.
+   */
+  const handlePreviewResizeStart = (event: React.MouseEvent): void => {
+    event.preventDefault()
+    previewResizeRef.current = { startX: event.clientX, startWidth: previewWidth }
+    const onMove = (moveEvent: MouseEvent): void => {
+      const drag = previewResizeRef.current
+      if (!drag) return
+      const next = drag.startWidth + (drag.startX - moveEvent.clientX)
+      setPreviewWidth(Math.min(MAX_PREVIEW_WIDTH, Math.max(MIN_PREVIEW_WIDTH, next)))
+    }
+    const onUp = (): void => {
+      previewResizeRef.current = null
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      setPreviewWidth((width) => {
+        try {
+          localStorage.setItem(PREVIEW_WIDTH_STORAGE_KEY, String(width))
+        } catch {
+          // Preview size just won't persist across restarts in this environment.
+        }
+        return width
+      })
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
   /** Current playhead (ms) of a simulated Process run (see buildProcessSchedule) — advanced via rAF by handlePlay, consumed by ScenePreview/BoxView/ContentView through computeTaskState. Only meaningful while eventPhase is 'showing' for a Scene with a Start node. The process itself lives directly in nodes/edges (Start/Task/Wait/End are graph nodes) — no separate state to load/save. */
   const [processClockMs, setProcessClockMs] = useState(0)
   const processRafRef = useRef<number | null>(null)
@@ -1749,6 +1855,7 @@ export function SceneBuilderPage({
 
   return (
     <div
+      ref={canvasWrapperRef}
       className="w-full h-full relative bg-background"
       data-tour="scene-builder-canvas"
       onDragOver={onCanvasDragOver}
@@ -1780,7 +1887,24 @@ export function SceneBuilderPage({
             className="!bg-card !border !border-border"
           />
           {/* Floating toolbar — name, URL key, and the save/prettify/test/help/delete actions — centered above the canvas instead of a full-width bar above it, now that the canvas itself fills the whole page. Delete sits apart from the rest (top-right, next to the name) since it's destructive and shouldn't be one click away from Save/Prettify/Test/Help, which live together in a footer row instead. */}
-          <Panel position="top-center" className="mt-3 min-w-[22rem] bg-card border rounded-xl shadow-md px-4 py-3.5 flex flex-col gap-3">
+          {/*
+            w-[27rem], not min-w: a shrink-to-fit (auto) width here made the
+            URL-key row's own flex-wrap useless — an auto-width flex-col
+            parent sizes itself off row 1/3's shorter content, then row 2
+            (label + url-key input + the CopyableUrl address, which needs
+            ~27rem to lay out on one line) gets stretched to that narrower
+            auto-computed width and simply overflows past this panel's own
+            edge instead of wrapping, since flex-wrap only wraps against a
+            container's REAL resolved width, not one still being
+            auto-computed from shorter sibling rows. An explicit width
+            removes that ambiguity — 27rem is row 2's own natural width, so
+            normally nothing wraps and the URL shows in full; max-w clamps
+            it smaller on a narrow canvas, and THEN flex-wrap correctly
+            drops the URL box to its own line within that resolved width
+            (see isNarrow/isCompact's own doc comment for how the two
+            side panels' collapse thresholds account for this width).
+          */}
+          <Panel position="top-center" className="mt-3 w-[27rem] max-w-[calc(100%-2rem)] bg-card border rounded-xl shadow-md px-4 py-3.5 flex flex-col gap-3">
             <div className="flex items-start gap-3">
               <input
                 value={nameInput}
@@ -1811,7 +1935,7 @@ export function SceneBuilderPage({
             </div>
 
             <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <label className="text-xs text-muted-foreground shrink-0" htmlFor="scene-url-key" title="URL key">
                   URL key:
                 </label>
@@ -1886,65 +2010,89 @@ export function SceneBuilderPage({
               </button>
             </div>
           </Panel>
-          {/* max-h leaves real clearance at the bottom for <Controls> (also bottom-left, ~9rem tall including its own margin) — a smaller, reliably-scrollable panel instead of one that stretches to nearly the full canvas height and overlaps it. */}
-          <Panel
-            position="top-left"
-            data-tour="scene-builder-add-node"
-            className="bg-card border rounded-lg shadow-sm flex flex-col m-4 min-w-[170px] max-h-[min(28rem,calc(100%_-_9rem))] overflow-hidden"
-          >
-            <div className="p-2.5 border-b bg-card shrink-0">
-              <h3 className="font-semibold text-sm text-center">Add Node</h3>
-            </div>
-            <ScrollArea className="flex-1 min-h-0 my-3">
-              <div className="flex flex-col gap-1 px-3">
-                {PALETTE_GROUPS.map((group) => {
-                  const entries = NODE_PALETTE.filter((entry) => entry.group === group)
-                  const isOpen = !collapsedGroups[group]
-                  // Every entry in a palette group shares one NodeCategory
-                  // (e.g. "Transform" is entirely 'style', "Data" entirely
-                  // 'data') — see NODE_CATEGORY's own doc comment — so one
-                  // lookup colors both the group header and every button in
-                  // it, matching the exact tint/accent that node gets once
-                  // it's actually placed on the canvas (BaseNode's own
-                  // header styling, CATEGORY_STYLES in components/nodes).
-                  const categoryStyle = CATEGORY_STYLES[NODE_CATEGORY[entries[0].type]]
-                  return (
-                    <div key={group} className="flex flex-col gap-1">
-                      <button
-                        onClick={() => setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }))}
-                        className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground cursor-pointer py-0.5"
-                      >
-                        <ChevronRight className={cn('size-3 transition-transform', isOpen && 'rotate-90')} />
-                        <span className={cn('size-1.5 rounded-full shrink-0', categoryStyle.dot)} />
-                        {group}
-                      </button>
-                      {isOpen &&
-                        entries.map((entry) => (
+          {/* max-h leaves real clearance at the bottom for <Controls> (also bottom-left, ~9rem tall including its own margin) — a smaller, reliably-scrollable panel instead of one that stretches to nearly the full canvas height and overlaps it.
+              Below isNarrow, the panel itself collapses to just a toggle button (paletteOpen) instead of staying permanently pinned — freeing up the width the centered toolbar above needs so the two stop painting over each other on a narrow window (see containerWidth's own doc comment). */}
+          <Panel position="top-left" data-tour="scene-builder-add-node" className="m-4 flex flex-col items-start gap-2">
+            {isNarrow && (
+              <button
+                type="button"
+                onClick={() => setPaletteOpen((open) => !open)}
+                title={paletteOpen ? 'Hide node palette' : 'Show node palette'}
+                className="flex items-center justify-center p-2.5 rounded-lg border bg-card shadow-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              >
+                <PanelLeft className="size-4" />
+              </button>
+            )}
+            {(!isNarrow || paletteOpen) && (
+              <div className="bg-card border rounded-lg shadow-sm flex flex-col min-w-[170px] max-h-[min(28rem,calc(100%_-_9rem))] overflow-hidden">
+                <div className="p-2.5 border-b bg-card shrink-0">
+                  <h3 className="font-semibold text-sm text-center">Add Node</h3>
+                </div>
+                <ScrollArea className="flex-1 min-h-0 my-3">
+                  <div className="flex flex-col gap-1 px-3">
+                    {PALETTE_GROUPS.map((group) => {
+                      const entries = NODE_PALETTE.filter((entry) => entry.group === group)
+                      const isOpen = !collapsedGroups[group]
+                      // Every entry in a palette group shares one NodeCategory
+                      // (e.g. "Transform" is entirely 'style', "Data" entirely
+                      // 'data') — see NODE_CATEGORY's own doc comment — so one
+                      // lookup colors both the group header and every button in
+                      // it, matching the exact tint/accent that node gets once
+                      // it's actually placed on the canvas (BaseNode's own
+                      // header styling, CATEGORY_STYLES in components/nodes).
+                      const categoryStyle = CATEGORY_STYLES[NODE_CATEGORY[entries[0].type]]
+                      return (
+                        <div key={group} className="flex flex-col gap-1">
                           <button
-                            key={entry.type}
-                            type="button"
-                            draggable
-                            onDragStart={(e) => onPaletteDragStart(e, entry.type)}
-                            title="Drag onto the canvas to add"
-                            className={cn(
-                              'text-xs py-2 px-3 rounded border-l-4 transition-all text-left border border-transparent hover:border-border hover:brightness-110 cursor-grab active:cursor-grabbing',
-                              categoryStyle.header,
-                              categoryStyle.border
-                            )}
+                            onClick={() => setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }))}
+                            className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground cursor-pointer py-0.5"
                           >
-                            {entry.label}
+                            <ChevronRight className={cn('size-3 transition-transform', isOpen && 'rotate-90')} />
+                            <span className={cn('size-1.5 rounded-full shrink-0', categoryStyle.dot)} />
+                            {group}
                           </button>
-                        ))}
-                    </div>
-                  )
-                })}
+                          {isOpen &&
+                            entries.map((entry) => (
+                              <button
+                                key={entry.type}
+                                type="button"
+                                draggable
+                                onDragStart={(e) => onPaletteDragStart(e, entry.type)}
+                                title="Drag onto the canvas to add"
+                                className={cn(
+                                  'text-xs py-2 px-3 rounded border-l-4 transition-all text-left border border-transparent hover:border-border hover:brightness-110 cursor-grab active:cursor-grabbing',
+                                  categoryStyle.header,
+                                  categoryStyle.border
+                                )}
+                              >
+                                {entry.label}
+                              </button>
+                            ))}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </ScrollArea>
               </div>
-            </ScrollArea>
+            )}
           </Panel>
-          <Panel position="top-right" data-tour="scene-builder-preview" className="m-4 pointer-events-none opacity-90">
+          {/* Below isCompact, this collapses to just a toggle button (previewOpen) instead of vanishing outright — same pattern as the Add Node palette above, so there's always a visible way to bring it back rather than it just disappearing. */}
+          <Panel position="top-right" data-tour="scene-builder-preview" className="m-4 flex flex-col items-end gap-2">
+            {isCompact && (
+              <button
+                type="button"
+                onClick={() => setPreviewOpen((open) => !open)}
+                title={previewOpen ? 'Hide preview' : 'Show preview'}
+                className="flex items-center justify-center p-2.5 rounded-lg border bg-card shadow-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              >
+                <PanelRight className="size-4" />
+              </button>
+            )}
+            {(!isCompact || previewOpen) && (
             <div
-              className="scene-preview-canvas isolate border border-border rounded-lg overflow-hidden w-[320px] relative flex items-center justify-center"
+              className="scene-preview-canvas isolate border border-border rounded-lg overflow-hidden relative flex items-center justify-center pointer-events-none opacity-90"
               style={{
+                width: previewWidth,
                 aspectRatio: canvasConfig.aspectRatio === 'custom'
                   ? `${canvasConfig.width}/${canvasConfig.height}`
                   : canvasConfig.aspectRatio.replace(':', '/')
@@ -1961,27 +2109,36 @@ export function SceneBuilderPage({
                   <Play className="size-3 fill-current" />
                 </button>
               </div>
+              {/* Bottom-left corner: the one corner that actually moves as this top-right-anchored box grows/shrinks — see handlePreviewResizeStart's own doc comment. */}
+              <div
+                onMouseDown={handlePreviewResizeStart}
+                title="Drag to resize preview"
+                className="pointer-events-auto absolute z-10 bottom-0 left-0 size-4 cursor-sw-resize flex items-end justify-start p-0.5 opacity-60 hover:opacity-100 transition-opacity"
+              >
+                <div className="size-2 border-b-2 border-l-2 border-white/80 rounded-bl-sm" />
+              </div>
               <div
                 // shrink-0 is the actual fix (see the diagnostic session
                 // that found this): this div is a flex ITEM of the
-                // .scene-preview-canvas flex container above (w-[320px]).
+                // .scene-preview-canvas flex container above (width:
+                // previewWidth, user-resizable — see handlePreviewResizeStart).
                 // Without shrink-0, flexbox's default flex-shrink:1
-                // compresses this box's WIDTH down to fit that 320px
-                // container BEFORE the scale() transform below even runs —
-                // squashing it to ~318px instead of the real 1920px, while
-                // height stays correct (cross-axis, unaffected by
-                // flex-shrink under items-center). Content that just
-                // centers within whatever width it gets (the alert box)
-                // tolerated this well enough to look "mostly fine"; a
-                // percentage-sized background (background-size: 200% 200%,
-                // the 'gradient' Background FX type) is far more sensitive
-                // to the exact width and rendered as a narrow off-proportion
-                // band instead of a full-canvas sweep.
+                // compresses this box's WIDTH down to fit that container
+                // BEFORE the scale() transform below even runs — squashing
+                // it down from the real 1920px, while height stays correct
+                // (cross-axis, unaffected by flex-shrink under
+                // items-center). Content that just centers within whatever
+                // width it gets (the alert box) tolerated this well enough
+                // to look "mostly fine"; a percentage-sized background
+                // (background-size: 200% 200%, the 'gradient' Background FX
+                // type) is far more sensitive to the exact width and
+                // rendered as a narrow off-proportion band instead of a
+                // full-canvas sweep.
                 className="relative origin-center overflow-hidden shrink-0"
                 style={{
                   width: canvasConfig.width,
                   height: canvasConfig.height,
-                  transform: `scale(${320 / canvasConfig.width})`
+                  transform: `scale(${previewWidth / canvasConfig.width})`
                 }}
               >
                 <BackgroundFxLayer
@@ -2002,6 +2159,7 @@ export function SceneBuilderPage({
                 />
               </div>
             </div>
+            )}
           </Panel>
         </ReactFlow>
     </div>
