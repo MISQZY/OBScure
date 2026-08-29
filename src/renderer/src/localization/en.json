@@ -1,0 +1,299 @@
+{
+  "sidebar": {
+    "dashboard": "Dashboard",
+    "overlays": "Overlays",
+    "tools": "Tools",
+    "integrations": "Integrations",
+    "settings": "Settings"
+  },
+  "profiles": {
+    "menuLabel": "Profiles",
+    "manage": "Manage profiles...",
+    "active": "Active",
+    "switchAction": "Switch",
+    "addProfile": "Add profile",
+    "maxReached": "Reached the limit of {max} profiles",
+    "deleteConfirm": "Delete profile \"{name}\"? All of its settings will be permanently deleted.",
+    "deleteTooltip": "Delete profile",
+    "namePlaceholder": "Profile name",
+    "dialogTitle": "Manage profiles",
+    "dialogDescription": "Up to {max} profiles — each with its own settings, integrations, and overlays.",
+    "changeAvatarColor": "Change avatar color"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "switchTooltip": "Color theme"
+  },
+  "locale": {
+    "switchTooltip": "Interface language"
+  },
+  "status": {
+    "connected": "Connected",
+    "connecting": "Connecting...",
+    "disconnected": "Not connected",
+    "error": "Error"
+  },
+  "common": {
+    "save": "Save",
+    "saved": "Saved",
+    "loading": "Loading...",
+    "host": "Host",
+    "port": "Port",
+    "copy": "Copy",
+    "copied": "Copied",
+    "show": "Show",
+    "hide": "Hide"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "description": "Overview of your overlays and integrations.",
+    "footerNote": "Connection setup lives under \"Integrations\", overlay addresses and their customization under \"Overlays\".",
+    "nowPlaying": {
+      "title": "Now playing",
+      "nothingPlaying": "Nothing playing",
+      "unknownTitle": "Untitled",
+      "playing": "Playing",
+      "paused": "Paused"
+    },
+    "twitchStats": {
+      "title": "Twitch stats",
+      "live": "Live",
+      "offline": "Offline",
+      "viewers": "Viewers",
+      "followers": "Followers",
+      "subscribers": "Subscribers",
+      "category": "Category",
+      "uptime": "Live since",
+      "unavailable": "No data",
+      "noCategory": "No category"
+    }
+  },
+  "connect": {
+    "connect": "Connect via OAuth",
+    "connecting": "Opening browser...",
+    "disconnect": "Disconnect",
+    "genericError": "Failed to connect"
+  },
+  "overlayAddress": {
+    "note": "Host and port are shared by all overlays and are changed in \"Settings\".",
+    "lanWarning": "The server will listen beyond this machine — overlays become reachable on the local network with no authentication. To reach them from another PC, use this machine's real IP in OBS instead of {host}.",
+    "restartError": "Failed to restart the overlay server — the port might already be in use",
+    "portError": "Port must be a number between 1 and 65535",
+    "restarting": "Restarting..."
+  },
+  "integrations": {
+    "spotify": {
+      "description": "Tracks your current Spotify play state.",
+      "clientIdLabel": "Client ID",
+      "clientIdPlaceholder": "From the Spotify Developer Dashboard",
+      "clientIdDescription": "developer.spotify.com/dashboard → create an app → Redirect URI: http://127.0.0.1:47891/callback/spotify"
+    },
+    "twitch": {
+      "description": "Detects subscriptions, raids, and follows on your channel.",
+      "clientIdLabel": "Client ID",
+      "clientIdPlaceholder": "From the Twitch Developer Console",
+      "clientIdDescription": "Optional: your own Client ID overrides the built-in one. dev.twitch.tv/console/apps → register an application → Redirect URI: http://localhost:47891/callback/twitch"
+    },
+    "windowsMedia": {
+      "title": "Windows Media",
+      "description": "Shows the current track from whatever player is running on your PC — Spotify, a browser tab, VLC, and more. No auth needed. Windows only.",
+      "enableLabel": "Enable integration",
+      "enableDescription": "Polls the system media session every few seconds while enabled"
+    },
+    "youtube": {
+      "description": "Detects memberships and Super Chats on your stream.",
+      "clientIdLabel": "Client ID",
+      "clientIdPlaceholder": "From Google Cloud Console",
+      "clientIdDescription": "console.cloud.google.com → OAuth client (Desktop app type)",
+      "clientSecretLabel": "Client Secret",
+      "clientSecretPlaceholder": "From Google Cloud Console",
+      "clientSecretDescription": "Google issues a secret for Desktop apps too — it's needed to exchange the code for a token"
+    }
+  },
+  "sound": {
+    "label": "Sound",
+    "none": "No sound",
+    "presets": {
+      "chime": "Chime",
+      "coin": "Coin",
+      "pop": "Pop",
+      "notify": "Notify"
+    },
+    "customLabel": "Custom file",
+    "playPreview": "Preview",
+    "stopPreview": "Stop",
+    "upload": "Upload custom",
+    "uploading": "Uploading...",
+    "removeCustom": "Remove custom file",
+    "volume": "Volume"
+  },
+  "events": {
+    "random": {
+      "title": "Random",
+      "description": "A random number generator with a hash shown below it — viewers can verify the result wasn't changed after it was announced.",
+      "rangeLabel": "Range",
+      "minLabel": "From",
+      "maxLabel": "To",
+      "countLabel": "Count",
+      "roll": "Roll",
+      "reveal": "Reveal result",
+      "hashLabel": "Hash",
+      "seedLabel": "Seed",
+      "notCalculated": "result not calculated",
+      "verifyHint": "The hash is published right away. Number = min + (first 4 bytes of SHA-256(seed + \":\" + index)) % (max − min + 1), index starting from 0. Once the seed is revealed, anyone can verify fairness.",
+      "waitingReveal": "Hash published. Click \"Reveal result\" when you're ready.",
+      "newRound": "New round"
+    },
+    "roulette": {
+      "title": "Roulette",
+      "description": "A wheel with a countdown — viewers join it with a chat command or by redeeming a channel points reward.",
+      "commandLabel": "Chat command",
+      "commandPlaceholder": "!roulette",
+      "commandHint": "A viewer's message matching this text (case-insensitive) enters them into the current round.",
+      "pointsRewardLabel": "Points reward",
+      "pointsRewardNone": "Disabled",
+      "pointsRewardHint": "The reward list is pulled from Twitch — connect the Twitch integration and create a reward in your creator dashboard.",
+      "pointsStackHint": "Each repeat redemption of the reward gives that viewer one more ticket — their odds of winning grow proportionally with how many times they redeem.",
+      "durationLabel": "Entry window",
+      "durationUnitSeconds": "seconds",
+      "durationUnitMinutes": "minutes",
+      "durationUnitHours": "hours",
+      "durationUnitDays": "days",
+      "durationUnitWeeks": "weeks",
+      "entryModeLabel": "Who can enter",
+      "entryModeAll": "Everyone",
+      "entryModeFollowers": "Followers only",
+      "entryModeSubscribers": "Subscribers only",
+      "entryModeHintFollowers": "Both the chat command and the points reward will only accept entries from channel followers.",
+      "entryModeHintSubscribers": "Both the chat command and the points reward will only accept entries from channel subscribers.",
+      "start": "Start round",
+      "finishEarly": "Start round now",
+      "cancel": "Cancel round",
+      "addManual": "Add manually",
+      "namePlaceholder": "Viewer name",
+      "entrants": "Entrants",
+      "noEntrants": "No one has entered yet",
+      "removeEntrant": "Remove entrant",
+      "phaseIdle": "No round running",
+      "phaseCollecting": "Accepting entries",
+      "phaseSpinning": "Spinning...",
+      "choosingWinner": "Choosing a winner",
+      "phaseResult": "Winner",
+      "entrySourceChat": "chat",
+      "entrySourcePoints": "points",
+      "entrySourceManual": "manual",
+      "hashLabel": "Hash",
+      "seedLabel": "Seed",
+      "helpTitle": "How this works",
+      "helpDescription": "SHA-256(seed) is published the moment the round starts — before anyone could enter. The seed is revealed as soon as entries close, so anyone can recompute the hash and re-run the draw themselves.",
+      "helpFormula": "roll = parseInt(SHA-256(seed).slice(0, 8), 16) % totalWeight\nwinner = first entrant (in join order) whose running weight total > roll"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "General application settings.",
+    "overlayAddressTitle": "Overlay server address",
+    "overlayAddressDescription": "Host and port of the local server that serves overlay pages for the OBS Browser Source. Applies to every overlay at once.",
+    "appearance": {
+      "title": "Appearance & language",
+      "description": "Color theme and interface language. Download an example config file to see the format, edit it, then upload it back to add your own custom theme or language.",
+      "themeLabel": "Color theme",
+      "localeLabel": "Interface language",
+      "downloadExample": "Download example",
+      "upload": "Upload config",
+      "uploading": "Uploading...",
+      "customThemesTitle": "Custom themes",
+      "customLocalesTitle": "Custom languages",
+      "deleteCustom": "Delete",
+      "deleteConfirm": "Delete \"{name}\"? This can't be undone.",
+      "invalidThemeFile": "That file doesn't look like a valid theme — it needs a \"mode\" and/or \"colors\" field.",
+      "invalidLocaleFile": "That file doesn't look like a valid language — it needs a \"dictionary\" field."
+    },
+    "canvas": {
+      "title": "Canvas",
+      "description": "The stream canvas' resolution and aspect ratio — only used to size the overlay previews so their proportions match what OBS will actually show. The Browser Source's own size/position in OBS is configured separately.",
+      "aspectRatioLabel": "Aspect ratio",
+      "widthLabel": "Width, px",
+      "heightLabel": "Height, px",
+      "customRatio": "Custom",
+      "invalidSize": "Enter positive width and height values"
+    },
+    "help": {
+      "title": "Help",
+      "description": "A step-by-step walkthrough of the app's main sections.",
+      "restartTour": "Show the walkthrough again",
+      "sceneBuilderTourHint": "A detailed Scene Builder walkthrough — open any scene and click \"Tutorial\" in its editor."
+    }
+  },
+  "onboarding": {
+    "stepCounter": "Step {current} of {total}",
+    "back": "Back",
+    "next": "Next",
+    "finish": "Done",
+    "close": "Close walkthrough",
+    "steps": {
+      "welcome": {
+        "title": "Welcome to OBScure",
+        "description": "This is your control panel for OBS overlays, on-stream tools like Random and Roulette, and service integrations. Let's walk through the main sections — it'll take less than a minute."
+      },
+      "sidebarNav": {
+        "title": "Navigation",
+        "description": "This is where you switch between sections: Dashboard, Overlays, Tools, Integrations, and Settings."
+      },
+      "dashboardIntegrations": {
+        "title": "Integration status",
+        "description": "The dashboard shows which services are connected — active ones are highlighted in green."
+      },
+      "integrationsConnect": {
+        "title": "Connecting a service",
+        "description": "The integration pages connect Spotify, Twitch, and YouTube — usually just one button and a browser confirmation."
+      },
+      "settingsOverlayAddress": {
+        "title": "Overlay server address",
+        "description": "Host and port of the local server that serves overlays for OBS. Shared by every overlay."
+      },
+      "settingsCanvas": {
+        "title": "Canvas",
+        "description": "The stream's resolution and aspect ratio — only affects how the overlay previews look here in the app."
+      },
+      "restartTour": {
+        "title": "The walkthrough is always here",
+        "description": "Want to go through it again? This button restarts it from the beginning. That's it — happy streaming!"
+      },
+      "sceneBuilderWelcome": {
+        "title": "Scene Builder",
+        "description": "Every scene here is one node graph that becomes one Browser Source page for OBS. Let's walk through the core mechanics in detail — a couple of minutes."
+      },
+      "sceneBuilderAddNode": {
+        "title": "Adding nodes",
+        "description": "Click a group to expand it, then a node to drop it on the canvas. A group's color matches the node's own color once it's placed."
+      },
+      "sceneBuilderWiring": {
+        "title": "Wiring nodes together",
+        "description": "Drag from the dot on a node's right to a socket on another node's left. The socket's color shows its type: green — content (Text/Image/Video/Shape), amber — a style modifier, violet — data, indigo — process sequence. Something only renders once it reaches the Scene node."
+      },
+      "sceneBuilderModifiers": {
+        "title": "Modifiers",
+        "description": "Position, Size, Opacity, Shadow and others are separate nodes wired INTO whatever they affect, not the other way around. Many nodes have a \"?\" next to their title — that's where the extra detail lives when the node's own fields aren't enough."
+      },
+      "sceneBuilderPreview": {
+        "title": "Preview",
+        "description": "Shows how the scene will look in OBS, matching the real canvas resolution. The ▶ button plays animations and sound locally — no real event needed."
+      },
+      "sceneBuilderSaveTest": {
+        "title": "Save vs. Test",
+        "description": "Save persists silently — no replayed animations or Background FX. Test pushes the current (even unsaved) graph to a real Browser Source and replays the entrance — handy for checking before you commit to Save."
+      },
+      "sceneBuilderUrl": {
+        "title": "The OBS link",
+        "description": "This address is the Browser Source itself — copy it into OBS. It updates the moment the URL key changes."
+      },
+      "sceneBuilderPatterns": {
+        "title": "Three scene modes",
+        "description": "Static — always on screen. Event-triggered (Event + Timer → Scene) — shows for a fixed duration when an alert fires. Process (Start → Task → Wait → End) — a step-by-step sequence with precise timing and its own animation per step. That's it — happy building!"
+      }
+    }
+  }
+}

@@ -1,0 +1,299 @@
+{
+  "sidebar": {
+    "dashboard": "Дашборд",
+    "overlays": "Оверлеи",
+    "tools": "Инструменты",
+    "integrations": "Интеграции",
+    "settings": "Настройки"
+  },
+  "profiles": {
+    "menuLabel": "Профили",
+    "manage": "Управление профилями...",
+    "active": "Активен",
+    "switchAction": "Переключить",
+    "addProfile": "Добавить профиль",
+    "maxReached": "Достигнут лимит в {max} профилей",
+    "deleteConfirm": "Удалить профиль «{name}»? Все его настройки будут удалены безвозвратно.",
+    "deleteTooltip": "Удалить профиль",
+    "namePlaceholder": "Имя профиля",
+    "dialogTitle": "Управление профилями",
+    "dialogDescription": "До {max} профилей — у каждого свои настройки, интеграции и оверлеи.",
+    "changeAvatarColor": "Сменить цвет аватара"
+  },
+  "theme": {
+    "light": "Светлая",
+    "dark": "Тёмная",
+    "system": "Системная",
+    "switchTooltip": "Тема оформления"
+  },
+  "locale": {
+    "switchTooltip": "Язык интерфейса"
+  },
+  "status": {
+    "connected": "Подключено",
+    "connecting": "Подключение...",
+    "disconnected": "Не подключено",
+    "error": "Ошибка"
+  },
+  "common": {
+    "save": "Сохранить",
+    "saved": "Сохранено",
+    "loading": "Загрузка...",
+    "host": "Host",
+    "port": "Порт",
+    "copy": "Скопировать",
+    "copied": "Скопировано",
+    "show": "Показать",
+    "hide": "Скрыть"
+  },
+  "dashboard": {
+    "title": "Дашборд",
+    "description": "Обзор оверлеев и интеграций.",
+    "footerNote": "Настройка подключений — в разделе «Интеграции», overlay-адреса и их кастомизация — в «Оверлеи».",
+    "nowPlaying": {
+      "title": "Сейчас играет",
+      "nothingPlaying": "Ничего не играет",
+      "unknownTitle": "Без названия",
+      "playing": "Играет",
+      "paused": "Пауза"
+    },
+    "twitchStats": {
+      "title": "Статистика Twitch",
+      "live": "В эфире",
+      "offline": "Не в эфире",
+      "viewers": "Зрителей",
+      "followers": "Фолловеров",
+      "subscribers": "Подписчиков",
+      "category": "Категория",
+      "uptime": "В эфире с",
+      "unavailable": "Нет данных",
+      "noCategory": "Без категории"
+    }
+  },
+  "connect": {
+    "connect": "Подключить через OAuth",
+    "connecting": "Открываю браузер...",
+    "disconnect": "Отключить",
+    "genericError": "Не удалось подключиться"
+  },
+  "overlayAddress": {
+    "note": "Host и порт сервера — общие для всех оверлеев, меняются в «Настройках».",
+    "lanWarning": "Сервер будет слушать не только эту машину — оверлеи станут доступны в локальной сети без авторизации. Для доступа с другого ПК используй в OBS реальный IP этой машины вместо {host}.",
+    "restartError": "Не удалось перезапустить overlay-сервер — возможно, порт уже занят",
+    "portError": "Порт должен быть числом от 1 до 65535",
+    "restarting": "Перезапуск..."
+  },
+  "integrations": {
+    "spotify": {
+      "description": "Отслеживает текущий трек в Spotify.",
+      "clientIdLabel": "Client ID",
+      "clientIdPlaceholder": "Из Spotify Developer Dashboard",
+      "clientIdDescription": "developer.spotify.com/dashboard → создать приложение → Redirect URI: http://127.0.0.1:47891/callback/spotify"
+    },
+    "twitch": {
+      "description": "Отслеживает подписки, рейды и фолловы на твоём канале.",
+      "clientIdLabel": "Client ID",
+      "clientIdPlaceholder": "Из Twitch Developer Console",
+      "clientIdDescription": "Необязательно: свой Client ID переопределяет встроенный. dev.twitch.tv/console/apps → зарегистрировать приложение → Redirect URI: http://localhost:47891/callback/twitch"
+    },
+    "windowsMedia": {
+      "title": "Проигрыватель Windows",
+      "description": "Показывает текущий трек из любого плеера на компьютере — Spotify, браузер, VLC и т.д. Авторизация не нужна, доступно только на Windows.",
+      "enableLabel": "Включить интеграцию",
+      "enableDescription": "Опрашивает системную медиа-сессию каждые несколько секунд, пока включено"
+    },
+    "youtube": {
+      "description": "Отслеживает членства и Super Chat на твоей трансляции.",
+      "clientIdLabel": "Client ID",
+      "clientIdPlaceholder": "Из Google Cloud Console",
+      "clientIdDescription": "console.cloud.google.com → OAuth client (тип Desktop app)",
+      "clientSecretLabel": "Client Secret",
+      "clientSecretPlaceholder": "Из Google Cloud Console",
+      "clientSecretDescription": "Google выдаёт секрет и для Desktop-приложений — он нужен для обмена кода на токен"
+    }
+  },
+  "sound": {
+    "label": "Звук",
+    "none": "Без звука",
+    "presets": {
+      "chime": "Колокольчик",
+      "coin": "Монетка",
+      "pop": "Хлопок",
+      "notify": "Уведомление"
+    },
+    "customLabel": "Свой файл",
+    "playPreview": "Прослушать",
+    "stopPreview": "Остановить",
+    "upload": "Загрузить свой",
+    "uploading": "Загрузка...",
+    "removeCustom": "Удалить свой файл",
+    "volume": "Громкость"
+  },
+  "events": {
+    "random": {
+      "title": "Рандом",
+      "description": "Генератор случайного числа с хэшем внизу — зрители могут проверить, что результат не подменили после того, как он был объявлен.",
+      "rangeLabel": "Диапазон",
+      "minLabel": "От",
+      "maxLabel": "До",
+      "countLabel": "Количество",
+      "roll": "Сгенерировать",
+      "reveal": "Показать результат",
+      "hashLabel": "Хэш",
+      "seedLabel": "Seed",
+      "notCalculated": "результат не рассчитан",
+      "verifyHint": "Хэш публикуется сразу. Число = min + (первые 4 байта SHA-256(seed + \":\" + индекс)) % (max − min + 1), где индекс от 0. После раскрытия seed любой может пересчитать хэш и убедиться в честности.",
+      "waitingReveal": "Хэш опубликован. Жми «Показать результат», когда будешь готов.",
+      "newRound": "Новый раунд"
+    },
+    "roulette": {
+      "title": "Рулетка",
+      "description": "Колесо с таймером — зрители попадают в него по команде в чате или по награде за баллы канала.",
+      "commandLabel": "Команда в чате",
+      "commandPlaceholder": "!рулетка",
+      "commandHint": "Сообщение зрителя, совпадающее с этим текстом (без учёта регистра), добавляет его в текущий раунд.",
+      "pointsRewardLabel": "Награда за баллы",
+      "pointsRewardNone": "Отключено",
+      "pointsRewardHint": "Список наград подтягивается из Twitch — подключи интеграцию Twitch и создай награду в панели трансляции.",
+      "pointsStackHint": "Каждый повторный редимп награды добавляет зрителю ещё один билет — шанс на победу растёт пропорционально количеству редимпов.",
+      "durationLabel": "Приём участников",
+      "durationUnitSeconds": "секунды",
+      "durationUnitMinutes": "минуты",
+      "durationUnitHours": "часы",
+      "durationUnitDays": "дни",
+      "durationUnitWeeks": "недели",
+      "entryModeLabel": "Кто может участвовать",
+      "entryModeAll": "Все",
+      "entryModeFollowers": "Только фолловеры",
+      "entryModeSubscribers": "Только сабскрайберы",
+      "entryModeHintFollowers": "И команда в чате, и награда за баллы будут принимать только фолловеров канала.",
+      "entryModeHintSubscribers": "И команда в чате, и награда за баллы будут принимать только подписчиков канала.",
+      "start": "Начать раунд",
+      "finishEarly": "Начать досрочно",
+      "cancel": "Отменить раунд",
+      "addManual": "Добавить вручную",
+      "namePlaceholder": "Имя зрителя",
+      "entrants": "Участники",
+      "noEntrants": "Пока никто не участвует",
+      "removeEntrant": "Убрать участника",
+      "phaseIdle": "Раунд не запущен",
+      "phaseCollecting": "Приём участников",
+      "phaseSpinning": "Крутим колесо…",
+      "choosingWinner": "Выбираем победителя",
+      "phaseResult": "Победитель",
+      "entrySourceChat": "чат",
+      "entrySourcePoints": "баллы",
+      "entrySourceManual": "вручную",
+      "hashLabel": "Хэш",
+      "seedLabel": "Seed",
+      "helpTitle": "Как это работает",
+      "helpDescription": "Хэш SHA-256(seed) публикуется в момент старта раунда — до того как кто-либо успел войти. Seed раскрывается сразу, как приём участников завершится, — любой может пересчитать хэш и повторить розыгрыш сам.",
+      "helpFormula": "roll = parseInt(SHA-256(seed).slice(0, 8), 16) % totalWeight\nпобедитель = первый участник (в порядке входа), у кого сумма весов > roll"
+    }
+  },
+  "settings": {
+    "title": "Настройки",
+    "description": "Общие настройки приложения.",
+    "overlayAddressTitle": "Адрес overlay-сервера",
+    "overlayAddressDescription": "Host и порт локального сервера, который раздаёт overlay-страницы для OBS Browser Source. Применяется сразу ко всем оверлеям.",
+    "appearance": {
+      "title": "Оформление и язык",
+      "description": "Цветовая тема и язык интерфейса. Скачай пример конфигурационного файла, чтобы увидеть формат, отредактируй его и загрузи обратно — так добавится своя тема или язык.",
+      "themeLabel": "Цветовая тема",
+      "localeLabel": "Язык интерфейса",
+      "downloadExample": "Скачать пример",
+      "upload": "Загрузить конфиг",
+      "uploading": "Загрузка...",
+      "customThemesTitle": "Свои темы",
+      "customLocalesTitle": "Свои языки",
+      "deleteCustom": "Удалить",
+      "deleteConfirm": "Удалить «{name}»? Это действие нельзя отменить.",
+      "invalidThemeFile": "Это не похоже на корректный файл темы — в нём должно быть поле «mode» и/или «colors».",
+      "invalidLocaleFile": "Это не похоже на корректный файл языка — в нём должно быть поле «dictionary»."
+    },
+    "canvas": {
+      "title": "Холст",
+      "description": "Разрешение и соотношение сторон холста трансляции — используется только для превью оверлеев, чтобы пропорции совпадали с тем, что покажет OBS. Размер и позиция самого Browser Source в OBS настраиваются отдельно.",
+      "aspectRatioLabel": "Соотношение сторон",
+      "widthLabel": "Ширина, px",
+      "heightLabel": "Высота, px",
+      "customRatio": "Произвольное",
+      "invalidSize": "Укажите положительные значения ширины и высоты"
+    },
+    "help": {
+      "title": "Справка",
+      "description": "Пошаговый инструктаж по основным разделам приложения.",
+      "restartTour": "Показать инструктаж заново",
+      "sceneBuilderTourHint": "Подробный инструктаж по Scene Builder — открой любую сцену и нажми «Инструктаж» в её редакторе."
+    }
+  },
+  "onboarding": {
+    "stepCounter": "Шаг {current} из {total}",
+    "back": "Назад",
+    "next": "Далее",
+    "finish": "Готово",
+    "close": "Закрыть инструктаж",
+    "steps": {
+      "welcome": {
+        "title": "Добро пожаловать в OBScure",
+        "description": "Это панель управления оверлеями для OBS, внутренними инструментами вроде Рандома и Рулетки, и интеграциями с сервисами. Пройдёмся по основным разделам — это займёт меньше минуты."
+      },
+      "sidebarNav": {
+        "title": "Навигация",
+        "description": "Здесь ты переключаешься между разделами: Дашборд, Оверлеи, Инструменты, Интеграции и Настройки."
+      },
+      "dashboardIntegrations": {
+        "title": "Статус интеграций",
+        "description": "На дашборде видно, какие сервисы подключены — зелёным подсвечены активные."
+      },
+      "integrationsConnect": {
+        "title": "Подключение сервиса",
+        "description": "На страницах интеграций подключаются Spotify, Twitch и YouTube — обычно достаточно одной кнопки и подтверждения в браузере."
+      },
+      "settingsOverlayAddress": {
+        "title": "Адрес overlay-сервера",
+        "description": "Host и порт локального сервера, который раздаёт оверлеи для OBS. Общие для всех оверлеев."
+      },
+      "settingsCanvas": {
+        "title": "Холст",
+        "description": "Разрешение и соотношение сторон трансляции — влияет только на то, как выглядит превью оверлеев здесь, в приложении."
+      },
+      "restartTour": {
+        "title": "Инструктаж всегда под рукой",
+        "description": "Если захочешь пройти его снова — эта кнопка запустит инструктаж с самого начала. На этом всё, удачных стримов!"
+      },
+      "sceneBuilderWelcome": {
+        "title": "Конструктор сцен",
+        "description": "Каждая сцена здесь — это один граф нод, который превращается в одну страницу Browser Source для OBS. Пройдёмся по основным механикам подробно — займёт пару минут."
+      },
+      "sceneBuilderAddNode": {
+        "title": "Добавление нод",
+        "description": "Кликай по группе, чтобы развернуть её, и по ноде — чтобы добавить на холст. Цвет группы совпадает с цветом самой ноды после добавления."
+      },
+      "sceneBuilderWiring": {
+        "title": "Связи между нодами",
+        "description": "Тяни провод от точки справа у одной ноды к сокету слева у другой. Цвет сокета показывает тип: зелёный — контент (Text/Image/Video/Shape), жёлтый — стиль-модификатор, фиолетовый — данные, индиго — последовательность процесса. Чтобы что-то отрисовалось, оно должно дойти до ноды Scene."
+      },
+      "sceneBuilderModifiers": {
+        "title": "Модификаторы",
+        "description": "Position, Size, Opacity, Shadow и другие — отдельные ноды, которые подключаются В то, что меняют, а не наоборот. У многих нод есть значок «?» рядом с названием — там подробности, если полей самой ноды не хватает."
+      },
+      "sceneBuilderPreview": {
+        "title": "Превью",
+        "description": "Показывает, как сцена будет выглядеть в OBS, с учётом реального разрешения холста. Кнопка ▶ проигрывает анимации и звук локально — без реального события."
+      },
+      "sceneBuilderSaveTest": {
+        "title": "Save и Test — не одно и то же",
+        "description": "Save сохраняет молча — без повтора анимаций и Background FX. Test отправляет текущий (даже несохранённый) граф в реальный Browser Source и проигрывает вход заново — удобно проверить перед сохранением."
+      },
+      "sceneBuilderUrl": {
+        "title": "Ссылка для OBS",
+        "description": "Этот адрес и есть Browser Source — скопируй и вставь в OBS. Обновляется сразу при смене URL key."
+      },
+      "sceneBuilderPatterns": {
+        "title": "Три режима сцены",
+        "description": "Статичная — просто всегда на экране. Event-триггер (Event + Timer → Scene) — показывается на фиксированное время по алерту. Process (Start → Task → Wait → End) — пошаговая последовательность с точным таймингом и своими анимациями на каждом шаге. На этом всё — удачи в сборке!"
+      }
+    }
+  }
+}
