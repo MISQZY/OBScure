@@ -44,6 +44,7 @@ export const nodeTypes = {
   timer: TimerNode,
   animation: AnimationNode,
   box: BoxNode,
+  group: GroupNode,
   image: ImageNode,
   video: VideoNode,
   backgroundAnimation: BackgroundAnimationNode,
@@ -168,19 +169,25 @@ const TEXT_SOCKETS: InputSocket[] = [{ id: 'content', label: 'Content', accepts:
 const IMAGE_SOCKETS: InputSocket[] = [{ id: 'imageContent', label: 'Content', accepts: ['audioPlayer'], kind: 'content' }, ...MODIFIER_SOCKETS]
 const VIDEO_SOCKETS: InputSocket[] = MODIFIER_SOCKETS
 
+/**
+ * Shared by Box AND Group (see GroupNode's own doc comment for how the two
+ * differ) — accepts 'box'/'group' too, either one nesting either one (see
+ * buildBox's recursion in overlays/custom.html / BoxView's in
+ * SceneBuilderPage.tsx, both of which handle Box/Group identically except
+ * for the decorative background/padding/border/shape fields Group simply
+ * doesn't have), so a card can hold, say, a horizontal row of two
+ * sub-containers instead of only flat Text/Image children. A container's
+ * own Ordering/Position/Transform/Animation still apply to it normally once
+ * nested, same as at the top level.
+ */
 const BOX_SOCKETS: InputSocket[] = [
-  // Accepts 'box' too — a Box can nest another Box (see buildBox's recursion
-  // in overlays/custom.html / BoxView's in SceneBuilderPage.tsx), so a card
-  // can hold, say, a horizontal row of two sub-boxes instead of only flat
-  // Text/Image children. A Box's own Ordering/Position/Transform/Animation
-  // still apply to it normally once nested, same as at the top level.
-  { id: 'children', label: 'Children', accepts: ['text', 'image', 'video', 'box'], kind: 'content', multi: true },
+  { id: 'children', label: 'Children', accepts: ['text', 'image', 'video', 'box', 'group'], kind: 'content', multi: true },
   ...MODIFIER_SOCKETS,
   { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' }
 ]
 
 const SCENE_SOCKETS: InputSocket[] = [
-  { id: 'content', label: 'Content', accepts: ['box', 'text', 'image', 'video'], kind: 'content', multi: true },
+  { id: 'content', label: 'Content', accepts: ['box', 'group', 'text', 'image', 'video'], kind: 'content', multi: true },
   // kind 'data', not 'style' — Background FX is category 'data' (see its own
   // doc comment below), so this socket's dot/wire should match ITS color,
   // not the per-component style modifiers (Position/Animation/...) it has
@@ -217,7 +224,7 @@ const START_SOCKETS: InputSocket[] = [
 ]
 
 const TASK_SOCKETS: InputSocket[] = [
-  { id: 'target', label: 'Target', accepts: ['text', 'image', 'box', 'video'], kind: 'content' },
+  { id: 'target', label: 'Target', accepts: ['text', 'image', 'box', 'group', 'video'], kind: 'content' },
   // Same Transform/Style grouping as MODIFIER_SOCKETS, minus Hide (a Task's
   // visibility is already its own show/hide Action field, not a separate
   // modifier) — these are what THIS step changes, layered on top of the
@@ -239,6 +246,7 @@ export const NODE_SOCKETS: Record<string, InputSocket[]> = {
   image: IMAGE_SOCKETS,
   video: VIDEO_SOCKETS,
   box: BOX_SOCKETS,
+  group: BOX_SOCKETS,
   scene: SCENE_SOCKETS,
   backgroundAnimation: BACKGROUND_FX_SOCKETS,
   start: START_SOCKETS,
@@ -276,7 +284,7 @@ const STRUCTURAL_OUTPUT: OutputSocket = {
   label: 'Structural',
   kind: 'content',
   feeds: ['children', 'content'],
-  help: "Makes this part of what's actually rendered — wire it into a Box's Children socket to nest it, or straight into Scene's own Content socket to place it at the top level."
+  help: "Makes this part of what's actually rendered — wire it into a Box or Group's Children socket to nest it, or straight into Scene's own Content socket to place it at the top level."
 }
 const TARGET_OUTPUT: OutputSocket = {
   id: 'target',
@@ -352,6 +360,7 @@ export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
   image: IMAGE_OUTPUTS,
   video: VIDEO_OUTPUTS,
   box: BOX_OUTPUTS,
+  group: BOX_OUTPUTS,
   audioPlayer: AUDIO_PLAYER_OUTPUTS
 }
 
@@ -395,6 +404,7 @@ export const NODE_CATEGORY: Record<string, NodeCategory> = {
   image: 'content',
   video: 'content',
   box: 'content',
+  group: 'content',
   start: 'process',
   task: 'process',
   wait: 'process',
@@ -701,7 +711,7 @@ function BaseNode({
    * "output" id.
    */
   sequenceIn?: boolean
-  /** This node's labeled OUTPUT sockets — see OutputSocket/NODE_OUTPUTS above. Only Text/Image/Box set this today; every other node ignores it and keeps the single generic "output" handle (gated by `outputs` above). */
+  /** This node's labeled OUTPUT sockets — see OutputSocket/NODE_OUTPUTS above. Only Text/Image/Box/Group set this today; every other node ignores it and keeps the single generic "output" handle (gated by `outputs` above). */
   outputSockets?: OutputSocket[]
 }) {
   const { deleteElements, updateNodeData, getEdges, getNodes, getNode, addNodes } = useReactFlow()
@@ -1891,7 +1901,33 @@ export function BoxNode({ id, data }: NodeProps) {
   )
 }
 
-/** A static image or (left blank) the live now-playing album art — see showAlbumArt. Connect into a Box or straight into Scene. */
+/**
+ * A plain grouping container — same Children/Layout/Transform/Style sockets
+ * and the same flex arrangement as a Shape (Box), just with none of its
+ * decorative fields (no background, padding, corner shape, or border): an
+ * invisible wrapper purely for arranging a cluster of Text/Image/Video/
+ * Box/Group as one unit (position it, animate it, or hand it to a Task as
+ * one Target) without adding a visible card behind them, the way Box would.
+ * See BOX_SOCKETS' own doc comment for how Box and Group nest into each
+ * other, and BoxView/buildBox for the shared rendering (branching only on
+ * `node.type === 'box'` for the decorative styling this node skips).
+ */
+export function GroupNode({ id, data }: NodeProps) {
+  return (
+    <BaseNode
+      id={id}
+      data={data}
+      title="Group"
+      labelable
+      category="content"
+      sockets={BOX_SOCKETS}
+      outputSockets={BOX_OUTPUTS}
+      help="An invisible wrapper — no background, padding, or border. Wire Text/Image/Video/Box/Group into it to arrange or move them as one unit."
+    />
+  )
+}
+
+/** A static image or (left blank) the live now-playing album art — see showAlbumArt. Connect into a Box/Group or straight into Scene. */
 export function ImageNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
   const saved = useSavedNodeData(id)
@@ -1976,7 +2012,7 @@ export function ImageNode({ id, data }: NodeProps) {
  * cover. Muted by default: browsers block unmuted autoplay outright, and
  * OBS's embedded Browser Source is no exception — a Sound node wired
  * alongside it is the reliable way to get audio out of an alert anyway (see
- * SoundNode). Connect into a Box or straight into Scene, same as Image.
+ * SoundNode). Connect into a Box/Group or straight into Scene, same as Image.
  */
 export function VideoNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
@@ -2315,7 +2351,7 @@ export function AudioPlayerNode({ id, data }: NodeProps) {
 }
 
 
-/** Layout modifier: changes flex direction of a Box or Scene. Connect into Box or Scene. */
+/** Layout modifier: changes flex direction of a Box/Group or Scene. Connect into Box, Group, or Scene. */
 export function OrderingNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
   const saved = useSavedNodeData(id)

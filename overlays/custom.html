@@ -26,7 +26,8 @@
         justify-content: center;
         gap: 8px;
       }
-      #scene .box {
+      #scene .box,
+      #scene .group {
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -258,7 +259,7 @@
             atMs += current.data.delay || 1000
           } else if (current.type === 'task') {
             const incomingNodes = incoming(current.id, edges, map)
-            const target = incomingNodes.find((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box')
+            const target = incomingNodes.find((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group')
             if (target) {
               schedule.push({
                 atMs,
@@ -923,27 +924,37 @@
         if (node.type === 'text') return buildText(node, mods, animate, vars, registry, crossAxis, audioContentValues(node.id, edges, map))
         if (node.type === 'image') return buildImage(node, mods, animate, vars, registry, hasAudioCover(node.id, edges, map))
         if (node.type === 'video') return buildVideo(node, mods, animate, registry)
-        // A nested Box (see BOX_SOCKETS' own doc comment in
+        // A nested Box or Group (see BOX_SOCKETS' own doc comment in
         // components/nodes/index.tsx) — buildBox is defined below but
         // function declarations are hoisted, so this forward reference
         // resolves fine; buildBox calls back into buildContent for ITS OWN
-        // children, so this recurses to whatever depth the graph nests.
-        if (node.type === 'box') return buildBox(node, edges, map, animate, vars, registry, depth + 1)
+        // children, so this recurses to whatever depth the graph nests. It
+        // handles both node types identically except for Box's own
+        // decorative styling.
+        if (node.type === 'box' || node.type === 'group') return buildBox(node, edges, map, animate, vars, registry, depth + 1)
         return null
       }
 
       function buildBox(node, edges, map, animate, vars, registry, depth = 0) {
+        const isBox = node.type === 'box'
         const incomingNodes = incoming(node.id, edges, map)
         const children =
-          depth >= MAX_BOX_DEPTH ? [] : incomingNodes.filter((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box')
+          depth >= MAX_BOX_DEPTH
+            ? []
+            : incomingNodes.filter((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group')
         const childCrossAxis = crossAxisFor(incomingNodes)
         const d = node.data || {}
         const container = document.createElement('div')
-        container.className = 'box'
-        container.style.background = d.background || '#18181b'
-        container.style.padding = `${d.paddingY ?? 12}px ${d.paddingX ?? 16}px`
-        applyBoxShape(container, d)
-        applyBorder(container, d)
+        container.className = isBox ? 'box' : 'group'
+        // Group (see GroupNode's own doc comment in components/nodes/
+        // index.tsx) skips all of these — it's an invisible wrapper, not a
+        // card.
+        if (isBox) {
+          container.style.background = d.background || '#18181b'
+          container.style.padding = `${d.paddingY ?? 12}px ${d.paddingX ?? 16}px`
+          applyBoxShape(container, d)
+          applyBorder(container, d)
+        }
         container.style.position = 'relative'
         container.style.flexDirection = orderingFlexDirection(incomingNodes)
         container.style.gap = `${orderingGap(incomingNodes)}px`
@@ -1034,11 +1045,11 @@
         applyBackgroundFx(bgFxNode, animate, backgroundFxLabel(bgFxNode, edges, map))
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
-        const renderable = members.filter((n) => n.type === 'box' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+        const renderable = members.filter((n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video')
         const crossAxis = crossAxisFor(members)
 
         for (const n of renderable) {
-          const el = n.type === 'box' ? buildBox(n, edges, map, animate) : buildContent(n, edges, map, animate, undefined, undefined, 0, crossAxis)
+          const el = n.type === 'box' || n.type === 'group' ? buildBox(n, edges, map, animate) : buildContent(n, edges, map, animate, undefined, undefined, 0, crossAxis)
           if (el) sceneEl.appendChild(el)
         }
       }
@@ -1067,10 +1078,10 @@
         applyBackgroundFx(bgFxNode, true, backgroundFxLabel(bgFxNode, edges, map, vars))
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
-        const renderable = members.filter((n) => n.type === 'box' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+        const renderable = members.filter((n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video')
         const crossAxis = crossAxisFor(members)
         for (const n of renderable) {
-          const el = n.type === 'box' ? buildBox(n, edges, map, true, vars) : buildContent(n, edges, map, true, vars, undefined, 0, crossAxis)
+          const el = n.type === 'box' || n.type === 'group' ? buildBox(n, edges, map, true, vars) : buildContent(n, edges, map, true, vars, undefined, 0, crossAxis)
           if (el) sceneEl.appendChild(el)
         }
         playSceneSound(scene, edges, map)
@@ -1114,7 +1125,7 @@
         const members = scene ? incoming(scene.id, edges, map) : []
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
-        const renderable = members.filter((n) => n.type === 'box' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+        const renderable = members.filter((n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video')
         const crossAxis = crossAxisFor(members)
         const registry = {}
         // animate=true: a component with no Task ever targeting it should
@@ -1126,7 +1137,7 @@
         // applyAt(0) below re-applies its real t=0 state immediately after,
         // in the same tick, before anything paints.
         for (const n of renderable) {
-          const el = n.type === 'box' ? buildBox(n, edges, map, true, vars, registry) : buildContent(n, edges, map, true, vars, registry, 0, crossAxis)
+          const el = n.type === 'box' || n.type === 'group' ? buildBox(n, edges, map, true, vars, registry) : buildContent(n, edges, map, true, vars, registry, 0, crossAxis)
           if (el) sceneEl.appendChild(el)
         }
 
@@ -1247,10 +1258,10 @@
         applyBackgroundFx(bgFxNode, animate, backgroundFxLabel(bgFxNode, edges, map, vars))
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
-        const renderable = members.filter((n) => n.type === 'box' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+        const renderable = members.filter((n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video')
         const crossAxis = crossAxisFor(members)
         for (const n of renderable) {
-          const el = n.type === 'box' ? buildBox(n, edges, map, animate, vars) : buildContent(n, edges, map, animate, vars, undefined, 0, crossAxis)
+          const el = n.type === 'box' || n.type === 'group' ? buildBox(n, edges, map, animate, vars) : buildContent(n, edges, map, animate, vars, undefined, 0, crossAxis)
           if (el) sceneEl.appendChild(el)
         }
       }

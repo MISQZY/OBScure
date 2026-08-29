@@ -64,6 +64,7 @@ const NODE_PALETTE: { type: string; label: string; group: string }[] = [
   { type: 'image', label: 'Image', group: 'Content' },
   { type: 'video', label: 'Video', group: 'Content' },
   { type: 'box', label: 'Shape', group: 'Content' },
+  { type: 'group', label: 'Group', group: 'Content' },
   // Matches the Transform socket's own `accepts` list (see MODIFIER_SOCKETS
   // in components/nodes/index.tsx) — these three are exactly what a Text/
   // Image/Video/Box/Task's single Transform input now takes.
@@ -334,13 +335,13 @@ function maxExitDurationMs(nodes: Node[], edges: Edge[]): number {
   const visit = (n: Node): void => {
     const mods = incoming(n.id, edges, map)
     consider(mods)
-    if (n.type === 'box') {
-      for (const child of mods.filter((m) => m.type === 'text' || m.type === 'image' || m.type === 'video' || m.type === 'box')) {
+    if (n.type === 'box' || n.type === 'group') {
+      for (const child of mods.filter((m) => m.type === 'text' || m.type === 'image' || m.type === 'video' || m.type === 'box' || m.type === 'group')) {
         visit(child)
       }
     }
   }
-  const renderable = incoming(scene.id, edges, map).filter((n) => n.type === 'box' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+  const renderable = incoming(scene.id, edges, map).filter((n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video')
   for (const n of renderable) visit(n)
   return max || 250
 }
@@ -543,7 +544,9 @@ function nextProcessNode(nodeId: string, edges: Edge[], map: NodeMap): Node | nu
   return edge ? map[edge.target] : null
 }
 
-const CONTENT_TYPES = new Set(['text', 'image', 'video', 'box'])
+const CONTENT_TYPES = new Set(['text', 'image', 'video', 'box', 'group'])
+/** Box and Group — the two node types that can nest one another via their shared `children` socket (see BOX_SOCKETS' own doc comment in components/nodes/index.tsx), and so are the only ones isValidConnection's cycle guard needs to walk. */
+const CONTAINER_TYPES = new Set(['box', 'group'])
 /** Same as CONTENT_TYPES plus 'scene' — used for the MiniMap's node coloring below, where Scene (never an edge SOURCE, so absent from CONTENT_TYPES) still needs to read as "content" like Text/Image/Box. */
 const CONTENT_TYPES_WITH_SCENE = new Set([...CONTENT_TYPES, 'scene'])
 /** Position/Size/Transform/Animation/Hide/Display/Ordering — see NodeCategory's 'style' bucket in components/nodes/index.tsx. */
@@ -735,7 +738,7 @@ function buildProcessSchedule(nodes: Node[], edges: Edge[]): { schedule: Schedul
       atMs += (current.data.delay as number) || 1000
     } else if (current.type === 'task') {
       const incomingNodes = incoming(current.id, edges, map)
-      const target = incomingNodes.find((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box')
+      const target = incomingNodes.find((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group')
       if (target) {
         schedule.push({
           atMs,
@@ -1264,11 +1267,12 @@ function ContentView({
   /** The CROSS axis of whichever Box/Scene `node` is a direct child of — see TextView's own doc comment. Only consumed for a `text` node; a nested Box computes a FRESH one off its own Ordering for ITS OWN children. */
   crossAxis: 'horizontal' | 'vertical'
 }) {
-  // A nested Box (see BOX_SOCKETS' own doc comment in components/nodes/
-  // index.tsx) — BoxView resolves its OWN schedule/style/vars, same as a
-  // top-level one; ContentView/BoxView are mutually recursive to whatever
-  // depth the graph nests.
-  if (node.type === 'box') {
+  // A nested Box or Group (see BOX_SOCKETS' own doc comment in
+  // components/nodes/index.tsx) — BoxView resolves its OWN schedule/style/
+  // vars, same as a top-level one, and handles both node types identically
+  // except for Box's own decorative styling; ContentView/BoxView are
+  // mutually recursive to whatever depth the graph nests.
+  if (node.type === 'box' || node.type === 'group') {
     return (
       <BoxView node={node} edges={edges} map={map} playToken={playToken} played={played} hiding={hiding} vars={vars} schedule={schedule} clockMs={clockMs} urls={urls} depth={depth} />
     )
@@ -1373,9 +1377,10 @@ function BoxView({
   urls: OverlayUrls | null
   depth?: number
 }) {
+  const isBox = node.type === 'box'
   const incomingNodes = incoming(node.id, edges, map)
   const children =
-    depth >= MAX_BOX_DEPTH ? [] : incomingNodes.filter((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box')
+    depth >= MAX_BOX_DEPTH ? [] : incomingNodes.filter((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group')
   const orderClass = orderingClass(incomingNodes)
   const childCrossAxis = crossAxisFor(incomingNodes)
 
@@ -1397,23 +1402,30 @@ function BoxView({
           ...modStyle,
           position: modStyle.position ?? 'relative',
           gap: `${orderingGap(incomingNodes)}px`,
-          background: (node.data.background as string) || '#18181b',
-          padding: `${(node.data.paddingY as number) ?? 12}px ${(node.data.paddingX as number) ?? 16}px`,
-          border: borderStyle(node),
-          ...boxShapeStyle(node),
+          // Group (see GroupNode's own doc comment) skips all of these —
+          // it's an invisible wrapper, not a card.
+          ...(isBox
+            ? {
+                background: (node.data.background as string) || '#18181b',
+                padding: `${(node.data.paddingY as number) ?? 12}px ${(node.data.paddingX as number) ?? 16}px`,
+                border: borderStyle(node),
+                ...boxShapeStyle(node)
+              }
+            : {}),
           ...(anim?.duration ? { '--anim-duration': `${anim.duration}ms` } : {})
         } as React.CSSProperties
       }
     >
       {children.length === 0 && (
-        // Editor-only affordance: without this, an unwired Box collapses to
-        // just its own padding (a near-invisible dot once the canvas is
-        // scaled down for the preview panel) — see BackgroundFxLayer's own
-        // preview-vs-real-overlay distinction for the same pattern. Sized in
-        // the same ~canvas-px range as real Text content (see TextView) so
-        // it survives the same scale-down instead of vanishing at 10px.
+        // Editor-only affordance: without this, an unwired Box/Group
+        // collapses to just its own padding (a near-invisible dot once the
+        // canvas is scaled down for the preview panel) — see
+        // BackgroundFxLayer's own preview-vs-real-overlay distinction for
+        // the same pattern. Sized in the same ~canvas-px range as real Text
+        // content (see TextView) so it survives the same scale-down instead
+        // of vanishing at 10px.
         <span className="text-white/30 italic whitespace-nowrap" style={{ fontSize: 20 }}>
-          Empty shape — wire a Text, Image, Video or Shape into it
+          {isBox ? 'Empty shape' : 'Empty group'} — wire a Text, Image, Video, Shape or Group into it
         </span>
       )}
       {children.map((child) => (
@@ -1705,10 +1717,10 @@ function ScenePreview({
     )
   }
 
-  const renderable = incoming(scene.id, edges, map).filter((n) => n.type === 'box' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+  const renderable = incoming(scene.id, edges, map).filter((n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video')
   const orderMods = incoming(scene.id, edges, map)
   if (renderable.length === 0) {
-    return <span className="text-white/40 text-xs text-center px-4">Nothing connected to Scene yet — wire a Text, Image, Video or Shape into it.</span>
+    return <span className="text-white/40 text-xs text-center px-4">Nothing connected to Scene yet — wire a Text, Image, Video, Shape or Group into it.</span>
   }
 
   const played = eventState.active || playToken > 0
@@ -1721,7 +1733,7 @@ function ScenePreview({
       style={{ gap: `${orderingGap(orderMods)}px` }}
     >
       {renderable.map((n) =>
-        n.type === 'box' ? (
+        n.type === 'box' || n.type === 'group' ? (
           <BoxView
             key={`${n.id}-${playToken}`}
             node={n}
@@ -2238,15 +2250,15 @@ export function SceneBuilderPage({
         const outSocket = outputSockets.find((o) => o.id === connection.sourceHandle)
         if (!outSocket || !outSocket.feeds.includes(connection.targetHandle!)) return false
       }
-      // Box can now nest Box (see BOX_SOCKETS' own doc comment in
-      // components/nodes/index.tsx) — the one connection shape in this
-      // whole graph that CAN form a cycle (Box A contains Box B contains
-      // Box A), which would recurse forever in BoxView/buildBox. Reject a
-      // Box→Box `children` connection if the target is already a
-      // descendant of the source — i.e. the source already (transitively)
+      // Box and Group can each nest either one (see BOX_SOCKETS' own doc
+      // comment in components/nodes/index.tsx) — the one connection shape in
+      // this whole graph that CAN form a cycle (A contains B contains A),
+      // which would recurse forever in BoxView/buildBox. Reject a
+      // container→container `children` connection if the target is already
+      // a descendant of the source — i.e. the source already (transitively)
       // contains the target, so wiring the target to also contain the
       // source would close the loop.
-      if (sourceNode.type === 'box' && targetNode.type === 'box' && connection.targetHandle === 'children') {
+      if (CONTAINER_TYPES.has(sourceNode.type!) && CONTAINER_TYPES.has(targetNode.type!) && connection.targetHandle === 'children') {
         const stack = [sourceNode.id]
         const seen = new Set<string>()
         while (stack.length) {
@@ -2255,7 +2267,7 @@ export function SceneBuilderPage({
           if (seen.has(id)) continue
           seen.add(id)
           for (const e of edges) {
-            if (e.target === id && e.targetHandle === 'children' && nodes.find((n) => n.id === e.source)?.type === 'box') {
+            if (e.target === id && e.targetHandle === 'children' && CONTAINER_TYPES.has(nodes.find((n) => n.id === e.source)?.type ?? '')) {
               stack.push(e.source)
             }
           }
