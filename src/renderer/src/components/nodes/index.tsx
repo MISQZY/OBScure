@@ -851,8 +851,8 @@ const selectClass = 'nodrag select-text flex-1 min-w-0 bg-muted px-1 py-0.5 roun
 
 const textInputClass = 'nodrag select-text w-full h-6 bg-muted px-1 rounded outline-none'
 
-/** Multi-line sibling of textInputClass, for Text's own Content field — resize-y lets a longer caption grow past its 3-row default instead of scrolling inside a fixed box. */
-const textAreaClass = 'nodrag select-text w-full min-h-[4.5rem] bg-muted px-1 py-1 rounded outline-none resize-y'
+/** Multi-line sibling of textInputClass, for Text's own Content field — starts at `rows={3}` (set on the element itself) and resize-y lets a longer caption grow past that instead of scrolling inside a fixed box. */
+const textAreaClass = 'nodrag select-text w-full bg-muted px-1 py-1 rounded outline-none resize-y'
 
 const TEXT_PLACEHOLDERS = ['user', 'amount', 'message', 'source', 'title', 'artist'] as const
 
@@ -1459,6 +1459,7 @@ export function TextNode({ id, data }: NodeProps) {
         <div className="flex items-start gap-1">
           <textarea
             ref={inputRef}
+            rows={3}
             value={text}
             onChange={(e) => updateNodeData(id, { text: e.target.value })}
             className={textAreaClass}
