@@ -19,7 +19,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import './scene-preview-animations.css'
 import dagre from 'dagre'
-import { nodeTypes, NODE_SOCKETS, NODE_OUTPUTS, CATEGORY_STYLES, NODE_CATEGORY, NODE_DEFAULTS } from '@/components/nodes'
+import { nodeTypes, NODE_SOCKETS, NODE_OUTPUTS, CATEGORY_STYLES, NODE_CATEGORY, NODE_DEFAULTS, SavedNodeDataProvider } from '@/components/nodes'
 import { useTheme } from '@/providers/ThemeProvider'
 import { useCustomOverlays } from '@/providers/CustomOverlaysProvider'
 import { CopyableUrl } from '@/components/CopyableUrl'
@@ -1864,6 +1864,7 @@ export function SceneBuilderPage({
       onDragOver={onCanvasDragOver}
       onDrop={onCanvasDrop}
     >
+      <SavedNodeDataProvider savedNodes={overlay.nodes}>
       <ReactFlow
           nodes={nodes}
           edges={displayEdges(nodes, edges)}
@@ -2165,6 +2166,7 @@ export function SceneBuilderPage({
             )}
           </Panel>
         </ReactFlow>
+      </SavedNodeDataProvider>
     </div>
   )
 }

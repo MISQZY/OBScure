@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Handle, Position, NodeProps, useReactFlow, useStore } from '@xyflow/react'
 import {
@@ -853,6 +853,40 @@ const textInputClass = 'nodrag select-text w-full h-6 bg-muted px-1 rounded outl
 
 const TEXT_PLACEHOLDERS = ['user', 'amount', 'message', 'source', 'title', 'artist'] as const
 
+type SavedNodeMap = Record<string, Record<string, unknown>>
+
+const SavedNodeDataContext = createContext<SavedNodeMap>({})
+
+/**
+ * Wraps the `<ReactFlow>` tree in SceneBuilderPage with each node's data AS
+ * OF THE LAST SAVE — a separate snapshot from the `nodes` state ReactFlow
+ * actually renders (which holds live, possibly-unsaved edits). Exists so
+ * NumberInput can fall back to what's genuinely persisted when a field is
+ * cleared (see useSavedNodeData/NumberInput's `savedValue`) instead of
+ * either the type's generic default or an edit that was never Saved.
+ * `savedNodes` is `overlay?.nodes` — undefined before the scene has ever
+ * been loaded/saved, same as no saved value existing yet for any field.
+ */
+export function SavedNodeDataProvider({
+  savedNodes,
+  children
+}: {
+  savedNodes: { id: string; data?: Record<string, unknown> }[] | undefined
+  children: React.ReactNode
+}) {
+  const map = useMemo(() => {
+    const result: SavedNodeMap = {}
+    for (const node of savedNodes ?? []) result[node.id] = node.data ?? {}
+    return result
+  }, [savedNodes])
+  return <SavedNodeDataContext.Provider value={map}>{children}</SavedNodeDataContext.Provider>
+}
+
+/** This node's data as of the last Save, or `{}` before anything's been saved — see SavedNodeDataProvider above. */
+function useSavedNodeData(id: string): Record<string, unknown> {
+  return useContext(SavedNodeDataContext)[id] ?? {}
+}
+
 /**
  * Text-backed replacement for `<input type="number">`. A controlled native
  * number input snaps its DOM value back to `Number(x) || fallback` on every
@@ -864,6 +898,11 @@ const TEXT_PLACEHOLDERS = ['user', 'amount', 'message', 'source', 'title', 'arti
  * to min/max) live so the canvas preview stays in sync while typing, and
  * blur/Enter always resolves the field to a concrete number (or `null` when
  * `allowEmpty`, e.g. Size's "auto") — never leaves it stuck on garbage.
+ * Clearing the field and blurring restores `savedValue` — this field's value
+ * as of the last Save (see useSavedNodeData below), not merely the live
+ * in-editor `value`, so undoing an in-progress edit by clearing it doesn't
+ * quietly keep an unsaved number around either. `fallback` only kicks in
+ * when nothing's ever been saved for this field.
  */
 // A node's `data` should already hold this field's default the moment it's
 // placed (see NODE_DEFAULTS in addNode, SceneBuilderPage.tsx), but this
@@ -885,7 +924,8 @@ function NumberInput({
   placeholder,
   className,
   allowEmpty = false,
-  fallback = 0
+  fallback = 0,
+  savedValue
 }: {
   value: number | null | undefined
   onChange: (v: number | null) => void
@@ -895,8 +935,10 @@ function NumberInput({
   className?: string
   /** Empty commits `null` instead of snapping back to `fallback` — for optional fields like Size's width/height ("auto"). */
   allowEmpty?: boolean
-  /** What an empty/unparsable field resolves to on blur when `allowEmpty` is false. */
+  /** What an empty/unparsable field resolves to on blur when `allowEmpty` is false AND there's no saved value to restore instead (see NumberInput's doc comment). */
   fallback?: number
+  /** This field's value as of the last Save (from useSavedNodeData) — what clearing the field restores, since `value` alone is just the live, possibly-never-saved edit. `undefined` before anything's ever been saved. */
+  savedValue?: number | null
 }) {
   const [text, setText] = useState(displayValue(value, allowEmpty, fallback))
   const isFocused = useRef(false)
@@ -935,17 +977,23 @@ function NumberInput({
       }}
       onBlur={() => {
         isFocused.current = false
+        // Restore to what was actually Saved for this field, not the
+        // generic per-field `fallback` — so clearing a field you'd already
+        // saved puts back what you had, not the type's blank-slate default.
+        // Only when nothing's ever been saved (a brand-new node/field) does
+        // this fall through to `fallback`.
+        const restoreTo = savedValue !== null && savedValue !== undefined ? savedValue : fallback
         if (text.trim() === '') {
           if (allowEmpty) {
             onChange(null)
           } else {
-            onChange(fallback)
-            setText(String(fallback))
+            onChange(restoreTo)
+            setText(String(restoreTo))
           }
           return
         }
         const parsed = Number(text)
-        const resolved = Number.isNaN(parsed) ? fallback : clamp(parsed)
+        const resolved = Number.isNaN(parsed) ? restoreTo : clamp(parsed)
         onChange(resolved)
         setText(String(resolved))
       }}
@@ -1161,16 +1209,17 @@ export function SceneNode({ id, data }: NodeProps) {
 
 export function TransformNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const saved = useSavedNodeData(id)
   return (
     <BaseNode id={id} data={data} title="Transform" category="style">
       <Field label="Scale X">
-        <NumberInput value={data.scaleX as number} onChange={(v) => updateNodeData(id, { scaleX: v })} fallback={1} className={numberInputClass} />
+        <NumberInput value={data.scaleX as number} onChange={(v) => updateNodeData(id, { scaleX: v })} fallback={1} savedValue={saved.scaleX as number} className={numberInputClass} />
       </Field>
       <Field label="Scale Y">
-        <NumberInput value={data.scaleY as number} onChange={(v) => updateNodeData(id, { scaleY: v })} fallback={1} className={numberInputClass} />
+        <NumberInput value={data.scaleY as number} onChange={(v) => updateNodeData(id, { scaleY: v })} fallback={1} savedValue={saved.scaleY as number} className={numberInputClass} />
       </Field>
       <Field label="Rotation">
-        <NumberInput value={data.rotation as number} onChange={(v) => updateNodeData(id, { rotation: v })} fallback={0} className={numberInputClass} />
+        <NumberInput value={data.rotation as number} onChange={(v) => updateNodeData(id, { rotation: v })} fallback={0} savedValue={saved.rotation as number} className={numberInputClass} />
       </Field>
     </BaseNode>
   )
@@ -1178,6 +1227,7 @@ export function TransformNode({ id, data }: NodeProps) {
 
 export function PositionNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const saved = useSavedNodeData(id)
   const mode = (data.mode as string) || 'absolute'
   const anchor = (data.anchor as string) || 'top-left'
 
@@ -1204,10 +1254,10 @@ export function PositionNode({ id, data }: NodeProps) {
         </Field>
       )}
       <Field label={mode === 'absolute' ? 'Offset X' : 'Shift X'}>
-        <NumberInput value={data.x as number} onChange={(v) => updateNodeData(id, { x: v })} fallback={0} className={numberInputClass} />
+        <NumberInput value={data.x as number} onChange={(v) => updateNodeData(id, { x: v })} fallback={0} savedValue={saved.x as number} className={numberInputClass} />
       </Field>
       <Field label={mode === 'absolute' ? 'Offset Y' : 'Shift Y'}>
-        <NumberInput value={data.y as number} onChange={(v) => updateNodeData(id, { y: v })} fallback={0} className={numberInputClass} />
+        <NumberInput value={data.y as number} onChange={(v) => updateNodeData(id, { y: v })} fallback={0} savedValue={saved.y as number} className={numberInputClass} />
       </Field>
     </BaseNode>
   )
@@ -1254,6 +1304,7 @@ export function OpacityNode({ id, data }: NodeProps) {
  */
 export function ShadowNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const saved = useSavedNodeData(id)
   return (
     <BaseNode id={id} data={data} title="Shadow" category="style">
       <Field label="Color">
@@ -1264,13 +1315,13 @@ export function ShadowNode({ id, data }: NodeProps) {
         <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">{(data.opacity as number) ?? 60}%</span>
       </Field>
       <Field label="Blur">
-        <NumberInput value={data.blur as number} onChange={(v) => updateNodeData(id, { blur: v })} min={0} fallback={6} className={numberInputClass} />
+        <NumberInput value={data.blur as number} onChange={(v) => updateNodeData(id, { blur: v })} min={0} fallback={6} savedValue={saved.blur as number} className={numberInputClass} />
       </Field>
       <Field label="Offset X">
-        <NumberInput value={data.offsetX as number} onChange={(v) => updateNodeData(id, { offsetX: v })} fallback={0} className={numberInputClass} />
+        <NumberInput value={data.offsetX as number} onChange={(v) => updateNodeData(id, { offsetX: v })} fallback={0} savedValue={saved.offsetX as number} className={numberInputClass} />
       </Field>
       <Field label="Offset Y">
-        <NumberInput value={data.offsetY as number} onChange={(v) => updateNodeData(id, { offsetY: v })} fallback={2} className={numberInputClass} />
+        <NumberInput value={data.offsetY as number} onChange={(v) => updateNodeData(id, { offsetY: v })} fallback={2} savedValue={saved.offsetY as number} className={numberInputClass} />
       </Field>
     </BaseNode>
   )
@@ -1371,6 +1422,7 @@ function UploadRow({
 
 export function TextNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const saved = useSavedNodeData(id)
   const inputRef = useRef<HTMLInputElement>(null)
   const text = (data.text as string) ?? ''
   const fonts = useSystemFonts()
@@ -1437,6 +1489,7 @@ export function TextNode({ id, data }: NodeProps) {
           onChange={(v) => updateNodeData(id, { fontSize: v })}
           min={1}
           fallback={32}
+          savedValue={saved.fontSize as number}
           className={numberInputClass}
         />
       </Field>
@@ -1445,6 +1498,7 @@ export function TextNode({ id, data }: NodeProps) {
           value={data.letterSpacing as number}
           onChange={(v) => updateNodeData(id, { letterSpacing: v })}
           fallback={0}
+          savedValue={saved.letterSpacing as number}
           className={numberInputClass}
         />
       </Field>
@@ -1508,10 +1562,11 @@ export function TextNode({ id, data }: NodeProps) {
  */
 export function TimerNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const saved = useSavedNodeData(id)
   return (
     <BaseNode id={id} data={data} title="Timer" category="data">
       <Field label="Delay (ms)">
-        <NumberInput value={data.delay as number} onChange={(v) => updateNodeData(id, { delay: v })} min={0} fallback={1000} className={numberInputClass} />
+        <NumberInput value={data.delay as number} onChange={(v) => updateNodeData(id, { delay: v })} min={0} fallback={1000} savedValue={saved.delay as number} className={numberInputClass} />
       </Field>
     </BaseNode>
   )
@@ -1522,6 +1577,7 @@ const ANIMATION_SUB_TYPES = ['auto', 'in', 'out'] as const
 
 export function AnimationNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const saved = useSavedNodeData(id)
   const type = (data.type as string) || 'fade'
   return (
     <BaseNode id={id} data={data} title="Animation" category="style">
@@ -1533,7 +1589,7 @@ export function AnimationNode({ id, data }: NodeProps) {
         />
       </Field>
       <Field label="Duration">
-        <NumberInput value={data.duration as number} onChange={(v) => updateNodeData(id, { duration: v })} min={0} fallback={500} className={numberInputClass} />
+        <NumberInput value={data.duration as number} onChange={(v) => updateNodeData(id, { duration: v })} min={0} fallback={500} savedValue={saved.duration as number} className={numberInputClass} />
       </Field>
       {type !== 'none' && (
         <Field label="Sub-type">
@@ -1563,6 +1619,7 @@ const BOX_SHAPE_IDS = ['rectangle', 'pill', 'circle', 'hexagon', 'diamond'] as c
 
 export function BoxNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const saved = useSavedNodeData(id)
   const borderEnabled = Boolean(data.borderEnabled)
   const shape = (data.shape as string) || 'rectangle'
   return (
@@ -1571,33 +1628,33 @@ export function BoxNode({ id, data }: NodeProps) {
         <ColorPicker value={(data.background as string) || '#18181b'} onChange={(val) => updateNodeData(id, { background: val })} />
       </Field>
       <Field label="Padding X">
-        <NumberInput value={data.paddingX as number} onChange={(v) => updateNodeData(id, { paddingX: v })} min={0} fallback={16} className={numberInputClass} />
+        <NumberInput value={data.paddingX as number} onChange={(v) => updateNodeData(id, { paddingX: v })} min={0} fallback={16} savedValue={saved.paddingX as number} className={numberInputClass} />
       </Field>
       <Field label="Padding Y">
-        <NumberInput value={data.paddingY as number} onChange={(v) => updateNodeData(id, { paddingY: v })} min={0} fallback={12} className={numberInputClass} />
+        <NumberInput value={data.paddingY as number} onChange={(v) => updateNodeData(id, { paddingY: v })} min={0} fallback={12} savedValue={saved.paddingY as number} className={numberInputClass} />
       </Field>
       <Field label="Shape">
         <NodeSelect value={shape} options={BOX_SHAPE_IDS} onChange={(next) => updateNodeData(id, { shape: next })} />
       </Field>
       {shape === 'rectangle' && (
         <Field label="Radius">
-          <NumberInput value={data.borderRadius as number} onChange={(v) => updateNodeData(id, { borderRadius: v })} min={0} fallback={10} className={numberInputClass} />
+          <NumberInput value={data.borderRadius as number} onChange={(v) => updateNodeData(id, { borderRadius: v })} min={0} fallback={10} savedValue={saved.borderRadius as number} className={numberInputClass} />
         </Field>
       )}
       {(shape === 'hexagon' || shape === 'diamond') && (
         <p className="text-[11px] text-muted-foreground leading-snug w-40">Border follows the original rectangle, not the clipped outline.</p>
       )}
       <Field label="Border">
-        <Checkbox 
-          checked={borderEnabled} 
-          onCheckedChange={(checked) => updateNodeData(id, { borderEnabled: !!checked })} 
-          className="nodrag" 
+        <Checkbox
+          checked={borderEnabled}
+          onCheckedChange={(checked) => updateNodeData(id, { borderEnabled: !!checked })}
+          className="nodrag"
         />
       </Field>
       {borderEnabled && (
         <>
           <Field label="Border width">
-            <NumberInput value={data.borderWidth as number} onChange={(v) => updateNodeData(id, { borderWidth: v })} min={0} fallback={2} className={numberInputClass} />
+            <NumberInput value={data.borderWidth as number} onChange={(v) => updateNodeData(id, { borderWidth: v })} min={0} fallback={2} savedValue={saved.borderWidth as number} className={numberInputClass} />
           </Field>
           <Field label="Border color">
             <ColorPicker value={(data.borderColor as string) || '#ffffff'} onChange={(val) => updateNodeData(id, { borderColor: val })} />
@@ -1611,6 +1668,7 @@ export function BoxNode({ id, data }: NodeProps) {
 /** A static image or (left blank) the live now-playing album art — see showAlbumArt. Connect into a Box or straight into Scene. */
 export function ImageNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const saved = useSavedNodeData(id)
   const [uploading, setUploading] = useState(false)
   const customImageName = (data.customImageName as string) || null
   const borderEnabled = Boolean(data.borderEnabled)
@@ -1661,7 +1719,7 @@ export function ImageNode({ id, data }: NodeProps) {
           this node/scene. */}
       <UploadRow uploading={uploading} hasCustom={Boolean(customImageName)} onUpload={() => void upload()} onRemove={() => void removeCustom()} label={customImageName ? 'Replace' : 'Upload'} />
       <Field label="Radius">
-        <NumberInput value={data.borderRadius as number} onChange={(v) => updateNodeData(id, { borderRadius: v })} min={0} fallback={8} className={numberInputClass} />
+        <NumberInput value={data.borderRadius as number} onChange={(v) => updateNodeData(id, { borderRadius: v })} min={0} fallback={8} savedValue={saved.borderRadius as number} className={numberInputClass} />
       </Field>
       <Field label="Border">
         <Checkbox checked={borderEnabled} onCheckedChange={(checked) => updateNodeData(id, { borderEnabled: !!checked })} className="nodrag" />
@@ -1669,7 +1727,7 @@ export function ImageNode({ id, data }: NodeProps) {
       {borderEnabled && (
         <>
           <Field label="Border width">
-            <NumberInput value={data.borderWidth as number} onChange={(v) => updateNodeData(id, { borderWidth: v })} min={0} fallback={2} className={numberInputClass} />
+            <NumberInput value={data.borderWidth as number} onChange={(v) => updateNodeData(id, { borderWidth: v })} min={0} fallback={2} savedValue={saved.borderWidth as number} className={numberInputClass} />
           </Field>
           <Field label="Border color">
             <ColorPicker value={(data.borderColor as string) || '#ffffff'} onChange={(val) => updateNodeData(id, { borderColor: val })} />
@@ -1691,6 +1749,7 @@ export function ImageNode({ id, data }: NodeProps) {
  */
 export function VideoNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const saved = useSavedNodeData(id)
   const muted = data.muted !== false
   const loop = data.loop !== false
   const borderEnabled = Boolean(data.borderEnabled)
@@ -1716,7 +1775,7 @@ export function VideoNode({ id, data }: NodeProps) {
         />
       </div>
       <Field label="Radius">
-        <NumberInput value={data.borderRadius as number} onChange={(v) => updateNodeData(id, { borderRadius: v })} min={0} fallback={8} className={numberInputClass} />
+        <NumberInput value={data.borderRadius as number} onChange={(v) => updateNodeData(id, { borderRadius: v })} min={0} fallback={8} savedValue={saved.borderRadius as number} className={numberInputClass} />
       </Field>
       <Field label="Loop">
         <Checkbox checked={loop} onCheckedChange={(checked) => updateNodeData(id, { loop: !!checked })} className="nodrag" />
@@ -1730,7 +1789,7 @@ export function VideoNode({ id, data }: NodeProps) {
       {borderEnabled && (
         <>
           <Field label="Border width">
-            <NumberInput value={data.borderWidth as number} onChange={(v) => updateNodeData(id, { borderWidth: v })} min={0} fallback={2} className={numberInputClass} />
+            <NumberInput value={data.borderWidth as number} onChange={(v) => updateNodeData(id, { borderWidth: v })} min={0} fallback={2} savedValue={saved.borderWidth as number} className={numberInputClass} />
           </Field>
           <Field label="Border color">
             <ColorPicker value={(data.borderColor as string) || '#ffffff'} onChange={(val) => updateNodeData(id, { borderColor: val })} />
@@ -1762,6 +1821,7 @@ export function VideoNode({ id, data }: NodeProps) {
  */
 export function BackgroundAnimationNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const saved = useSavedNodeData(id)
   const type = (data.type as string) || 'none'
   const isDropEffect = type === 'paratrooper' || type === 'airdrop'
 
@@ -1784,7 +1844,7 @@ export function BackgroundAnimationNode({ id, data }: NodeProps) {
         <ColorPicker value={(data.color as string) || '#18181b'} onChange={(val) => updateNodeData(id, { color: val })} />
       </Field>
       <Field label="Speed">
-        <NumberInput value={data.speed as number} onChange={(v) => updateNodeData(id, { speed: v })} min={0.5} max={2.5} fallback={1} className={numberInputClass} />
+        <NumberInput value={data.speed as number} onChange={(v) => updateNodeData(id, { speed: v })} min={0.5} max={2.5} fallback={1} savedValue={saved.speed as number} className={numberInputClass} />
       </Field>
       {isDropEffect && (
         <>
@@ -1962,6 +2022,7 @@ export function AudioPlayerNode({ id, data }: NodeProps) {
 /** Layout modifier: changes flex direction of a Box or Scene. Connect into Box or Scene. */
 export function OrderingNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const saved = useSavedNodeData(id)
   return (
     <BaseNode id={id} data={data} title="Ordering" category="style">
       <Field label="Layout">
@@ -1979,7 +2040,7 @@ export function OrderingNode({ id, data }: NodeProps) {
         />
       </Field>
       <Field label="Gap">
-        <NumberInput value={data.gap as number} onChange={(v) => updateNodeData(id, { gap: v })} min={0} fallback={8} className={numberInputClass} />
+        <NumberInput value={data.gap as number} onChange={(v) => updateNodeData(id, { gap: v })} min={0} fallback={8} savedValue={saved.gap as number} className={numberInputClass} />
       </Field>
     </BaseNode>
   )
@@ -2080,10 +2141,11 @@ export function TaskNode({ id, data }: NodeProps) {
  */
 export function WaitNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const saved = useSavedNodeData(id)
   return (
     <BaseNode id={id} data={data} title="Wait" category="process" sequenceIn>
       <Field label="Delay (ms)">
-        <NumberInput value={data.delay as number} onChange={(v) => updateNodeData(id, { delay: v })} min={0} fallback={1000} className={numberInputClass} />
+        <NumberInput value={data.delay as number} onChange={(v) => updateNodeData(id, { delay: v })} min={0} fallback={1000} savedValue={saved.delay as number} className={numberInputClass} />
       </Field>
     </BaseNode>
   )
