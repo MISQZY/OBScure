@@ -1,0 +1,248 @@
+/*
+  Entrance/exit animations for the Scene Builder's in-editor preview (the
+  Play button in SceneBuilderPage.tsx) — mirrors overlays/animations.css,
+  the real OBS overlay's copy, EXACTLY (including the .hiding rules and
+  :not(.hiding) qualifier below) so Play looks the same as what viewers
+  actually see. Duplicated rather than imported: this file ships through
+  the Vite/React bundle, animations.css ships as a static asset straight to
+  overlays/custom.html, with no build step connecting the two. Keep both in
+  sync by hand.
+
+  Previously this file only had the entrance half (no .hiding rules, no
+  :not(.hiding) qualifier) on the theory that "the editor preview never
+  plays an exit animation" — false: both the plain event-trigger model
+  (ScenePreview's eventState.hiding) and the Process model (computeTaskState's
+  own `hiding`) DO apply a .hiding class in TextView/ImageView/BoxView, same
+  as the real overlay. Without a matching CSS rule, that class did nothing —
+  the exit transition just never played, and worse, the entrance rule (no
+  :not(.hiding) guard) kept matching regardless, since nothing here ever
+  excluded it.
+*/
+
+[data-animation='fade'].visible:not(.hiding) {
+  animation: ov-fade-in var(--anim-duration, 250ms) ease-out;
+}
+[data-animation='fade'].hiding {
+  animation: ov-fade-out var(--anim-duration, 250ms) ease-in forwards;
+}
+
+[data-animation='slide'].visible:not(.hiding) {
+  animation: ov-slide-in var(--anim-duration, 300ms) ease-out;
+}
+[data-animation='slide'].hiding {
+  animation: ov-slide-out var(--anim-duration, 300ms) ease-in forwards;
+}
+
+[data-animation='zoom'].visible:not(.hiding) {
+  animation: ov-zoom-in var(--anim-duration, 250ms) ease-out;
+}
+[data-animation='zoom'].hiding {
+  animation: ov-zoom-out var(--anim-duration, 250ms) ease-in forwards;
+}
+
+[data-animation='bounce'].visible:not(.hiding) {
+  animation: ov-bounce-in var(--anim-duration, 500ms) cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+[data-animation='bounce'].hiding {
+  animation: ov-fade-out var(--anim-duration, 250ms) ease-in forwards;
+}
+
+@keyframes ov-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ov-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes ov-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes ov-slide-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+@keyframes ov-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes ov-zoom-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+@keyframes ov-bounce-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  70% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/*
+  Checkerboard "transparent background" indicator for the preview panel
+  (SceneBuilderPage.tsx) — the same convention image editors use for a .png
+  with alpha. Not real transparency: the real Browser Source is transparent
+  (overlays/custom.html has `background: transparent`), this just shows
+  where that transparency will be so scene contents stay legible against the
+  editor's own (possibly dark) canvas behind the panel.
+*/
+.scene-preview-canvas {
+  background-color: #cccccc;
+  background-image: repeating-conic-gradient(#ffffff 0% 25%, #cccccc 0% 50%);
+  background-size: 20px 20px;
+}
+
+/*
+  Background FX (Background FX node / backgroundAnimation) ambient layer for
+  the in-editor preview. gradient/pulse/stars/vignette below are plain CSS,
+  duplicated from overlays/background-animations.css for the same reason as
+  the entrance animations above (this ships through Vite, that ships as a
+  static asset) — `position: absolute` + `isolate` on the preview panel
+  stands in for `position: fixed` + the real page's root stacking context,
+  so this stays behind the panel's own content without escaping it.
+
+  paratrooper/airdrop are NOT reimplemented here — SceneBuilderPage.tsx's
+  BackgroundFxLayer instead loads and drives the real
+  overlays/paratrooper.js|airdrop.js (from the local overlay server) on this
+  same element, so what you see in the preview is the actual sprite, not an
+  approximation. This class still supplies their positioning (those scripts
+  only add classes/children, they don't position their own container).
+*/
+.scene-preview-bg {
+  position: absolute;
+  inset: 0;
+  /* inset alone should already do this, but pin it explicitly too — see the
+     matching comment on .overlay-bg in overlays/background-animations.css.
+     Missing here was the actual bug: without it, a percentage-sized
+     background (background-size: 200% 200%, the 'gradient' type) could
+     resolve against something other than this element's own intended
+     1920x1080-ish box, rendering as a narrow off-proportion band instead of
+     a full-canvas sweep. */
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.scene-preview-bg.visible {
+  opacity: 1;
+}
+
+.scene-preview-bg[data-bg='gradient'] {
+  background: linear-gradient(
+    120deg,
+    var(--bg-animation-color, #6441a5),
+    transparent,
+    var(--bg-animation-color, #6441a5)
+  );
+  background-size: 200% 200%;
+  animation: ov-bg-gradient calc(8s / var(--bg-animation-speed, 1)) ease-in-out infinite;
+}
+
+.scene-preview-bg[data-bg='pulse'] {
+  background: radial-gradient(
+    ellipse closest-side at center,
+    color-mix(in oklch, var(--bg-animation-color, #6441a5) 55%, transparent) 0%,
+    transparent 70%
+  );
+  animation: ov-bg-pulse calc(3s / var(--bg-animation-speed, 1)) ease-in-out infinite;
+}
+
+.scene-preview-bg[data-bg='stars'] {
+  --ov-star-color: color-mix(in oklch, var(--bg-animation-color, white) 60%, transparent);
+  background-image:
+    radial-gradient(2px 2px at 20% 30%, var(--ov-star-color), transparent),
+    radial-gradient(2px 2px at 60% 70%, var(--ov-star-color), transparent),
+    radial-gradient(1.5px 1.5px at 80% 20%, var(--ov-star-color), transparent),
+    radial-gradient(1.5px 1.5px at 40% 85%, var(--ov-star-color), transparent),
+    radial-gradient(1px 1px at 90% 50%, var(--ov-star-color), transparent),
+    radial-gradient(1px 1px at 15% 60%, var(--ov-star-color), transparent);
+  background-repeat: repeat;
+  background-size: 220px 220px;
+  animation: ov-bg-stars calc(8s / var(--bg-animation-speed, 1)) linear infinite;
+}
+
+.scene-preview-bg[data-bg='vignette'] {
+  background: radial-gradient(
+    ellipse at center,
+    transparent 55%,
+    color-mix(in oklch, var(--bg-animation-color, #6441a5) 30%, transparent) 100%
+  );
+}
+
+@keyframes ov-bg-gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes ov-bg-pulse {
+  0%,
+  100% {
+    transform: scale(0.85);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+@keyframes ov-bg-stars {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 220px 220px;
+  }
+}

@@ -1,0 +1,1259 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Custom Scene</title>
+    <link rel="stylesheet" href="animations.css" />
+    <link rel="stylesheet" href="background-animations.css" />
+    <link rel="stylesheet" href="paratrooper.css" />
+    <link rel="stylesheet" href="airdrop.css" />
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+        font-family: system-ui, sans-serif;
+      }
+      #scene {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+      #scene .box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+      }
+      #scene .image-node {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.08);
+        flex-shrink: 0;
+      }
+      #scene .image-node img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      #scene .text-node {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        font-size: 32px;
+        font-weight: 700;
+        color: #ffffff;
+        width: 100%;
+      }
+      #missing {
+        display: none;
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="overlay-bg" id="bg"></div>
+    <div id="scene"></div>
+    <div id="missing">Scene not found — check the URL key.</div>
+    <script src="paratrooper.js"></script>
+    <script src="airdrop.js"></script>
+    <script>
+      // The URL itself is /overlays/<urlKey>.html — the server always serves this
+      // same file for any such path (see OverlayServer.handleRequest), so which
+      // scene to render is read off our own location, not a query string.
+      const key = decodeURIComponent((location.pathname.match(/\/overlays\/([^/]+)\.html$/) || [])[1] || '')
+      const sceneEl = document.getElementById('scene')
+      const missingEl = document.getElementById('missing')
+      const bg = document.getElementById('bg')
+      const paratrooperEffect = window.OverlayParatrooperEffect.setup(bg)
+      const airdropEffect = window.OverlayAirdropEffect.setup(bg)
+      // The last overlay config seen (from fetch or 'custom-overlay-config') —
+      // kept at this scope so the 'alert' handler (a real event, arriving any
+      // time) always has the current graph to render against, and so render()
+      // itself can re-check it. See render()/showTriggeredContent() below.
+      let latestOverlay = null
+      // setTimeout id for the current event-triggered show's auto-hide — also
+      // doubles as "is something currently showing" (see render()'s idle branch).
+      let hideTimer = null
+      // setTimeout ids for a currently-playing Process's per-task-moment callbacks — see showProcessContent.
+      let processTimers = []
+      // True while an alert (plain-trigger or Process) is on screen — see
+      // handleAlert/processNextAlert. A second alert arriving while this is
+      // true no longer clobbers the first mid-animation; it queues instead.
+      let alertActive = false
+      // FIFO of alert payloads waiting for the current one to finish — see
+      // handleAlert. Capped so a flood of events (a raid + a pile of subs at
+      // once) can't grow this unboundedly; the oldest still-unplayed ones
+      // matter more than a long tail, so newer overflow is what's dropped.
+      let alertQueue = []
+      const MAX_QUEUED_ALERTS = 5
+      // Last payload seen on the 'now-playing' channel — see isAudioTrigger/
+      // showAudioContent. Defaults to not-playing so a scene with an Audio
+      // Player wired in starts hidden until the feed says otherwise.
+      let latestNowPlaying = { isPlaying: false }
+      // Whether an Audio-Player-driven scene is currently on screen — see
+      // showAudioContent/hideAudioContent. Separate from hideTimer, which is
+      // alert-specific (a fixed durationMs); Now Playing has no such timer,
+      // it stays up for as long as isPlaying does.
+      let audioVisible = false
+
+      /**
+       * `animate` distinguishes a silent content update (a scene save —
+       * text/color/position/... should update live, but nothing should
+       * replay) from an actual play (initial page load, or a
+       * 'custom-overlay-trigger' broadcast from the Scene Builder's Test
+       * button): only then do paratrooper/airdrop get an explicit trigger()
+       * — see render(overlay, animate) below, and setRepeat/trigger on
+       * paratrooper.js/airdrop.js for why a plain dataset.bg/visible write
+       * alone isn't enough to safely replay a non-repeating effect.
+       */
+      function applyBackgroundFx(node, animate, label) {
+        const data = node?.data || {}
+        const type = data.type || 'none'
+        document.documentElement.style.setProperty('--bg-animation-color', data.color || '#18181b')
+        document.documentElement.style.setProperty('--bg-animation-speed', String(data.speed || 1))
+        paratrooperEffect.setSpeed(data.speed || 1)
+        airdropEffect.setSpeed(data.speed || 1)
+        paratrooperEffect.setRepeat(Boolean(data.repeat))
+        airdropEffect.setRepeat(Boolean(data.repeat))
+        paratrooperEffect.setNickname(label || '')
+        airdropEffect.setLabel(label || '')
+        bg.dataset.bg = type
+        bg.classList.toggle('visible', type !== 'none')
+        if (animate) {
+          paratrooperEffect.trigger()
+          airdropEffect.trigger()
+        }
+      }
+
+      // A Text node wired INTO a Background FX node captions paratrooper's
+      // nickname tag / airdrop's crate label with its content — mirrors
+      // findBackgroundFxLabel in SceneBuilderPage.tsx.
+      function backgroundFxLabel(node, edges, map, vars) {
+        if (!node) return ''
+        const textNode = incoming(node.id, edges, map).find((n) => n.type === 'text')
+        return interpolate((textNode && textNode.data && textNode.data.text) || '', vars)
+      }
+
+      // Fills {user}/{amount}/{message}/{source}-style placeholders from an
+      // event's vars — mirrors interpolate() in SceneBuilderPage.tsx. `vars`
+      // is null/undefined outside an event-triggered show (a plain scene),
+      // in which case placeholders are left as literal text.
+      function interpolate(template, vars) {
+        if (!vars) return template
+        return String(template ?? '').replace(/\{(\w+)\}/g, (match, key) => {
+          const value = vars[key]
+          return value === undefined || value === null ? '' : String(value)
+        })
+      }
+
+      /**
+       * Whether Scene is wired to a DataSource(alert) node — if so, the
+       * scene is hidden until a matching alert fires (for real, or Test
+       * simulating one), shows for durationMs, then hides again. Mirrors
+       * sceneTrigger in SceneBuilderPage.tsx.
+       */
+      function isEventTrigger(overlay) {
+        const nodes = overlay?.nodes || []
+        const edges = overlay?.edges || []
+        const map = nodeMap(nodes)
+        const scene = nodes.find((n) => n.type === 'scene')
+        if (!scene) return { active: false, alertTypes: new Set(), durationMs: 6000 }
+        const members = incoming(scene.id, edges, map)
+        const alertTypes = new Set(
+          members
+            .filter((n) => n.type === 'event')
+            .map((n) => n.data.alertType)
+            .filter(Boolean)
+        )
+        if (alertTypes.size === 0) return { active: false, alertTypes, durationMs: 6000 }
+        const timer = members.find((n) => n.type === 'timer')
+        const durationMs = (timer && timer.data.delay) || 6000
+        return { active: true, alertTypes, durationMs }
+      }
+
+      /**
+       * Whether Scene is wired to an Audio Player node — a continuously
+       * data-driven scene (see AudioPlayerNode's own doc comment in
+       * components/nodes/index.tsx) instead of a one-shot alert: no
+       * durationMs, shows for as long as the Now Playing feed says
+       * isPlaying. Checked independently of isEventTrigger/processTrigger —
+       * see render()'s own priority order among the three.
+       */
+      function isAudioTrigger(overlay) {
+        const nodes = overlay?.nodes || []
+        const edges = overlay?.edges || []
+        const map = nodeMap(nodes)
+        const scene = nodes.find((n) => n.type === 'scene')
+        if (!scene) return false
+        return incoming(scene.id, edges, map).some((n) => n.type === 'audioPlayer')
+      }
+
+      // --- Process (Start -> Task -> Wait -> ... -> End) --------------------
+      // A richer alternative to the plain DataSource(alert)+Timer->Scene
+      // model above: a Scene with a Start node (see nodes/index.tsx
+      // StartNode/TaskNode/WaitNode/EndNode) sequences individual Task
+      // actions (show/hide/update one component, with Animation/Position/
+      // Size/Transform modifiers wired into the Task itself) over time,
+      // walked via sequence-flow edges — separate from and layered on top
+      // of the SAME structural graph (Text/Image/Box -> Scene) that already
+      // decides what exists and how it's nested/laid out. A Scene with no
+      // Start node ignores all of this and renders exactly as it always
+      // has (isEventTrigger/renderStatic above). Mirrors
+      // buildProcessSchedule/processTrigger/computeTaskState in
+      // SceneBuilderPage.tsx exactly.
+
+      const PROCESS_TYPES = new Set(['start', 'task', 'wait', 'end'])
+
+      function nextProcessNode(nodeId, edges, map) {
+        const edge = edges.find((e) => e.source === nodeId && map[e.target] && PROCESS_TYPES.has(map[e.target].type))
+        return edge ? map[edge.target] : null
+      }
+
+      /**
+       * Walks the linear Start -> Task -> Wait -> ... -> End sequence-flow
+       * chain into a flat, time-resolved schedule: one entry per Task,
+       * `atMs` accumulated from every Wait node's delay passed so far. A
+       * Task with no component wired into it (via a plain data edge, same
+       * as a Box's own children) is skipped — nothing to act on.
+       */
+      function buildProcessSchedule(nodes, edges) {
+        const map = nodeMap(nodes)
+        const start = nodes.find((n) => n.type === 'start')
+        if (!start) return null
+        const schedule = []
+        let atMs = 0
+        let current = nextProcessNode(start.id, edges, map)
+        while (current) {
+          if (current.type === 'wait') {
+            atMs += current.data.delay || 1000
+          } else if (current.type === 'task') {
+            const incomingNodes = incoming(current.id, edges, map)
+            const target = incomingNodes.find((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box')
+            if (target) {
+              schedule.push({
+                atMs,
+                targetId: target.id,
+                action: current.data.action || 'show',
+                // 'sound' rides along in mods same as animation/position/...
+                // — computeTaskState ignores it (only .find()s the types it
+                // knows), it's picked back out by atMs in showProcessContent
+                // to fire once when this step's moment arrives.
+                mods: incomingNodes.filter(
+                  (n) => n.type === 'animation' || n.type === 'position' || n.type === 'size' || n.type === 'transform' || n.type === 'opacity' || n.type === 'shadow' || n.type === 'sound'
+                )
+              })
+            }
+          } else if (current.type === 'end') {
+            break
+          }
+          current = nextProcessNode(current.id, edges, map)
+        }
+        return { schedule, totalMs: atMs }
+      }
+
+      /** Whether Scene's process is armed by a DataSource(alert) wired into its Start node — the process equivalent of isEventTrigger above. */
+      function processTrigger(overlay) {
+        const nodes = overlay?.nodes || []
+        const edges = overlay?.edges || []
+        const map = nodeMap(nodes)
+        const start = nodes.find((n) => n.type === 'start')
+        if (!start) return { active: false, alertTypes: new Set() }
+        const alertTypes = new Set(
+          incoming(start.id, edges, map)
+            .filter((n) => n.type === 'event')
+            .map((n) => n.data.alertType)
+            .filter(Boolean)
+        )
+        return { active: alertTypes.size > 0, alertTypes }
+      }
+
+      /**
+       * One component's resolved state at time `atMs`, from every Task in
+       * `schedule` targeting it — "last Task wins" for visibility, style
+       * accumulates across all of them (most recent field wins, via
+       * Array.find on mods ordered newest-first).
+       */
+      function computeTaskState(schedule, targetId, atMs, baseMods = []) {
+        const mine = schedule.filter((s) => s.targetId === targetId && s.atMs <= atMs)
+        const orderedMods = [...mine].sort((a, b) => b.atMs - a.atMs).flatMap((s) => s.mods)
+        const style = {}
+
+        const size = orderedMods.find((m) => m.type === 'size')
+        const baseSize = baseMods.find((m) => m.type === 'size')
+        if (size || baseSize) {
+          const targetSize = size || baseSize
+          if (targetSize.data.width != null) style.width = targetSize.data.width
+          if (targetSize.data.height != null) style.height = targetSize.data.height
+        }
+        
+        let transformStr = ''
+        const transform = orderedMods.find((m) => m.type === 'transform')
+        const baseTransform = baseMods.find((m) => m.type === 'transform')
+        if (transform || baseTransform) {
+          const bsx = baseTransform?.data?.scaleX ?? 1
+          const bsy = baseTransform?.data?.scaleY ?? 1
+          const brot = baseTransform?.data?.rotation ?? 0
+          if (transform) {
+            const tsx = transform.data.scaleX ?? 1
+            const tsy = transform.data.scaleY ?? 1
+            const trot = transform.data.rotation ?? 0
+            transformStr += `scale(${bsx * tsx}, ${bsy * tsy}) rotate(${brot + trot}deg) `
+          } else {
+            transformStr += `scale(${bsx}, ${bsy}) rotate(${brot}deg) `
+          }
+        }
+
+        const position = orderedMods.find((m) => m.type === 'position')
+        const basePosition = baseMods.find((m) => m.type === 'position')
+        if (position || basePosition) {
+          const bx = basePosition?.data?.x ?? 0
+          const by = basePosition?.data?.y ?? 0
+          let x = bx
+          let y = by
+          if (position) {
+            if (position.data.x != null || basePosition) x = bx + (position.data.x ?? 0)
+            if (position.data.y != null || basePosition) y = by + (position.data.y ?? 0)
+          }
+          
+          const targetPos = position || basePosition
+          const mode = targetPos?.data?.mode || 'absolute'
+          const anchor = targetPos?.data?.anchor || 'top-left'
+
+          if (mode === 'absolute') {
+            style.position = 'absolute'
+            if (anchor.includes('top')) style.top = `${y}px`
+            if (anchor.includes('bottom')) style.bottom = `${y}px`
+            if (anchor.includes('left')) style.left = `${x}px`
+            if (anchor.includes('right')) style.right = `${x}px`
+            
+            if (anchor === 'center' || anchor === 'top-center' || anchor === 'bottom-center') {
+              style.left = '50%'
+              style.marginLeft = `${x}px`
+              transformStr += 'translateX(-50%) '
+            }
+            if (anchor === 'center' || anchor === 'center-left' || anchor === 'center-right') {
+              style.top = '50%'
+              style.marginTop = `${y}px`
+              transformStr += 'translateY(-50%) '
+            }
+          } else if (mode === 'relative') {
+            transformStr += `translate(${x}px, ${y}px) `
+          }
+        }
+        
+        if (transformStr) {
+          style.transform = transformStr.trim()
+        }
+        
+        const opacity = orderedMods.find((m) => m.type === 'opacity')
+        const baseOpacity = baseMods.find((m) => m.type === 'opacity')
+        if (opacity || baseOpacity) {
+          const bOp = baseOpacity?.data?.value ?? 100
+          if (opacity) {
+            const tOp = opacity.data.value ?? 100
+            style.opacity = (bOp / 100) * (tOp / 100)
+          } else {
+            style.opacity = bOp / 100
+          }
+        }
+        
+        const shadow = orderedMods.find((m) => m.type === 'shadow')
+        if (shadow) {
+          const d = shadow.data || {}
+          const color = hexToRgba(d.color || '#000000', d.opacity ?? 60)
+          style.filter = `drop-shadow(${d.offsetX ?? 0}px ${d.offsetY ?? 2}px ${d.blur ?? 6}px ${color})`
+        } else {
+          const baseShadow = baseMods.find((m) => m.type === 'shadow')
+          if (baseShadow) {
+            const d = baseShadow.data || {}
+            const color = hexToRgba(d.color || '#000000', d.opacity ?? 60)
+            style.filter = `drop-shadow(${d.offsetX ?? 0}px ${d.offsetY ?? 2}px ${d.blur ?? 6}px ${color})`
+          }
+        }
+
+        const showHide = [...mine].filter((s) => s.action === 'show' || s.action === 'hide').sort((a, b) => b.atMs - a.atMs)[0]
+        let visible = false
+        let anim = null
+        let hiding = false
+        if (showHide) {
+          const animMod = showHide.mods.find((m) => m.type === 'animation')
+          const animType = animMod ? animMod.data.type || 'fade' : 'none'
+          const duration = animMod ? animMod.data.duration || (animType === 'slide' ? 300 : animType === 'bounce' ? 500 : 250) : 0
+          const withinAnim = animType !== 'none' && atMs - showHide.atMs < duration
+          visible = showHide.action === 'show' || withinAnim
+          if (withinAnim) {
+            anim = { type: animType, duration }
+            // Sub-type field on the Animation node ('in'/'out'/'auto') — 'auto'
+            // (or unset, pre-existing scenes) falls back to the Task's own
+            // show/hide action, same as before this field existed.
+            const subType = animMod && (animMod.data.subType === 'in' || animMod.data.subType === 'out') ? animMod.data.subType : null
+            hiding = subType ? subType === 'out' : showHide.action === 'hide'
+          }
+        }
+
+        return { visible, style, anim, hiding }
+      }
+
+      /**
+       * How much EXTRA time (ms) beyond totalMs is needed before it's safe
+       * to actually tear the scene down — the process equivalent of
+       * maxExitDurationMs/playExitAnimations in SceneBuilderPage.tsx/this
+       * file. Without this, the LAST wave of Tasks (whichever fire at
+       * exactly totalMs, the schedule's own final moment) has its
+       * animation cut off before a single frame plays: showProcessContent
+       * used to tear the DOM down at totalMs itself, the SAME instant those
+       * Tasks' entrance/exit animation would just be starting. Only the
+       * final wave needs this — anything earlier already has the time
+       * until the NEXT scheduled moment to play out naturally.
+       */
+      function processExitBufferMs(schedule, totalMs) {
+        let max = 0
+        for (const s of schedule) {
+          if (s.atMs !== totalMs) continue
+          const anim = s.mods.find((m) => m.type === 'animation')
+          if (!anim) continue
+          const type = anim.data.type || 'fade'
+          if (type === 'none') continue
+          const duration = anim.data.duration || (type === 'slide' ? 300 : type === 'bounce' ? 500 : 250)
+          if (duration > max) max = duration
+        }
+        return max
+      }
+
+      // Applies one computeTaskState result to an already-built element —
+      // the process equivalent of applyModifierStyle+applyAnimation, which
+      // only ever run once at build time and can't be re-invoked later.
+      function applyTaskStateToEl(el, state, baseMods) {
+        el.style.display = state.visible ? '' : 'none'
+        el.style.position = ''
+        el.style.left = ''
+        el.style.right = ''
+        el.style.top = ''
+        el.style.bottom = ''
+        el.style.marginLeft = ''
+        el.style.marginTop = ''
+        el.style.width = ''
+        el.style.height = ''
+        el.style.transform = ''
+        el.style.opacity = ''
+        el.style.filter = ''
+        
+        if (baseMods) applyModifierStyle(el, baseMods)
+        
+        if (!state.visible) return
+        if (state.style.position) el.style.position = state.style.position
+        if (state.style.left != null) el.style.left = state.style.left
+        if (state.style.right != null) el.style.right = state.style.right
+        if (state.style.top != null) el.style.top = state.style.top
+        if (state.style.bottom != null) el.style.bottom = state.style.bottom
+        if (state.style.marginLeft != null) el.style.marginLeft = state.style.marginLeft
+        if (state.style.marginTop != null) el.style.marginTop = state.style.marginTop
+        if (state.style.width != null) el.style.width = `${state.style.width}px`
+        if (state.style.height != null) el.style.height = `${state.style.height}px`
+        if (state.style.transform) el.style.transform = state.style.transform
+        if (state.style.opacity != null) el.style.opacity = state.style.opacity
+        if (state.style.filter) el.style.filter = state.style.filter
+        if (state.anim) {
+          el.dataset.animation = state.anim.type
+          el.style.setProperty('--anim-duration', `${state.anim.duration}ms`)
+          el.classList.add('visible')
+          el.classList.toggle('hiding', state.hiding)
+        } else {
+          el.classList.remove('visible', 'hiding')
+        }
+      }
+
+      function nodeMap(nodes) {
+        const map = {}
+        for (const n of nodes) map[n.id] = n
+        return map
+      }
+
+      // Nodes wired directly INTO nodeId — mirrors ScenePreview in SceneBuilderPage.tsx.
+      function incoming(nodeId, edges, map) {
+        return edges
+          .filter((e) => e.target === nodeId)
+          .map((e) => map[e.source])
+          .filter(Boolean)
+      }
+
+      // Ordering modifier wired into a target (Box or Scene) — mirrors
+      // orderingClass in SceneBuilderPage.tsx, just returning a real
+      // flex-direction value instead of a Tailwind class name (applied as
+      // an inline style here, overriding the #scene/.box CSS's static
+      // "flex-direction: column" default).
+      function orderingFlexDirection(mods) {
+        const ordering = mods.find((m) => m.type === 'ordering')
+        if (!ordering) return 'column'
+        const d = ordering.data || {}
+        const layout = d.layout || 'vertical'
+        const direction = d.direction || 'direct'
+        if (layout === 'horizontal') return direction === 'revert' ? 'row-reverse' : 'row'
+        return direction === 'revert' ? 'column-reverse' : 'column'
+      }
+
+      // Spacing (px) between a Box/Scene's children, from the same Ordering
+      // modifier orderingFlexDirection reads — mirrors orderingGap in
+      // SceneBuilderPage.tsx. 8px (the old hardcoded CSS value) when no
+      // Ordering node is wired, so every scene predating this field keeps
+      // its exact old spacing.
+      function orderingGap(mods) {
+        const ordering = mods.find((m) => m.type === 'ordering')
+        return (ordering && ordering.data && ordering.data.gap) ?? 8
+      }
+
+      // `#rrggbb` + an opacity percent -> `rgba(...)` — mirrors hexToRgba in
+      // SceneBuilderPage.tsx. For the Shadow node's color+opacity fields,
+      // which need an alpha channel a hex string alone can't carry.
+      function hexToRgba(hex, opacityPercent) {
+        const clean = (hex || '#000000').replace('#', '')
+        const r = parseInt(clean.slice(0, 2), 16) || 0
+        const g = parseInt(clean.slice(2, 4), 16) || 0
+        const b = parseInt(clean.slice(4, 6), 16) || 0
+        return `rgba(${r}, ${g}, ${b}, ${opacityPercent / 100})`
+      }
+
+      function applyModifierStyle(el, mods) {
+        let transformStr = ''
+        const transform = mods.find((m) => m.type === 'transform')
+        if (transform) {
+          const d = transform.data || {}
+          transformStr += `scale(${d.scaleX ?? 1}, ${d.scaleY ?? 1}) rotate(${d.rotation ?? 0}deg) `
+        }
+        
+        const position = mods.find((m) => m.type === 'position')
+        if (position) {
+          const d = position.data || {}
+          const mode = d.mode || 'absolute'
+          const anchor = d.anchor || 'top-left'
+          const x = d.x ?? 0
+          const y = d.y ?? 0
+
+          if (mode === 'absolute') {
+            el.style.position = 'absolute'
+            if (anchor.includes('top')) el.style.top = `${y}px`
+            if (anchor.includes('bottom')) el.style.bottom = `${y}px`
+            if (anchor.includes('left')) el.style.left = `${x}px`
+            if (anchor.includes('right')) el.style.right = `${x}px`
+            
+            if (anchor === 'center' || anchor === 'top-center' || anchor === 'bottom-center') {
+              el.style.left = '50%'
+              el.style.marginLeft = `${x}px`
+              transformStr += 'translateX(-50%) '
+            }
+            if (anchor === 'center' || anchor === 'center-left' || anchor === 'center-right') {
+              el.style.top = '50%'
+              el.style.marginTop = `${y}px`
+              transformStr += 'translateY(-50%) '
+            }
+          } else if (mode === 'relative') {
+            transformStr += `translate(${x}px, ${y}px) `
+          }
+        }
+        
+        if (transformStr) {
+          el.style.transform = transformStr.trim()
+        }
+
+        const size = mods.find((m) => m.type === 'size')
+        if (size) {
+          const d = size.data || {}
+          if (d.width != null) el.style.width = `${d.width}px`
+          if (d.height != null) el.style.height = `${d.height}px`
+        }
+        
+        const opacity = mods.find((m) => m.type === 'opacity')
+        if (opacity) {
+          el.style.opacity = ((opacity.data && opacity.data.value) ?? 100) / 100
+        }
+        const shadow = mods.find((m) => m.type === 'shadow')
+        if (shadow) {
+          const d = shadow.data || {}
+          const color = hexToRgba(d.color || '#000000', d.opacity ?? 60)
+          el.style.filter = `drop-shadow(${d.offsetX ?? 0}px ${d.offsetY ?? 2}px ${d.blur ?? 6}px ${color})`
+        }
+        // Hide — a manual on/off switch, mirrors modifierStyle in
+        // SceneBuilderPage.tsx. Hidden (the default) unless its own Hidden
+        // checkbox is off; flipping that and Saving updates it live, no
+        // Play/Test needed — see HideNode's own doc comment in
+        // components/nodes/index.tsx for how this differs from a Task's
+        // show/hide.
+        const hide = mods.find((m) => m.type === 'hide')
+        if (hide && (!hide.data || hide.data.hidden !== false)) {
+          el.style.display = 'none'
+        }
+      }
+
+      // An Animation modifier wired into a node — see the Duration field on
+      // that node's own form (components/nodes/index.tsx AnimationNode).
+      // Elements are freshly created here on every render(), so just setting
+      // data-animation + .visible up front is enough for the CSS keyframe
+      // (animations.css) to play — no need for the toggle-after-a-tick dance
+      // now-playing.html/alert.html use to REPLAY an animation on an element
+      // that's already on screen. Skipped entirely when `animate` is false
+      // (a silent content update — see render(overlay, animate)): the
+      // element just appears with no entrance transition instead of
+      // replaying one every time an unrelated field is saved.
+      function applyAnimation(el, mods, animate) {
+        if (!animate) return
+        const anim = mods.find((m) => m.type === 'animation')
+        if (!anim) return
+        const d = anim.data || {}
+        const type = d.type || 'fade'
+        if (type === 'none') return
+        el.dataset.animation = type
+        if (d.duration) el.style.setProperty('--anim-duration', `${d.duration}ms`)
+        el.classList.add('visible')
+      }
+
+      // `registry`, when given, records every built element by its node id
+      // (registry[node.id] = el) — used by showTimelineContent to find each
+      // component's DOM element again later when a cue fires, since buildBox
+      // otherwise owns its children's elements with no external handle to them.
+      function buildText(node, mods, animate, vars, registry) {
+        const d = node.data || {}
+        const el = document.createElement('div')
+        el.className = 'text-node'
+        el.textContent = interpolate(d.text ?? '', vars)
+        el.style.color = d.color || '#ffffff'
+        el.style.textAlign = d.align || 'left'
+        if (d.fontFamily) el.style.fontFamily = `"${d.fontFamily}"`
+        // bold defaults true (d.bold !== false) — font-weight:700 used to be
+        // the class's own unconditional rule; every pre-existing Text node
+        // must keep rendering bold unless explicitly turned off now that
+        // it's a field. italic has no such history — false is both the
+        // default and what "never set" already meant.
+        el.style.fontWeight = d.bold === false ? '400' : '700'
+        el.style.fontStyle = d.italic ? 'italic' : 'normal'
+        el.style.letterSpacing = `${d.letterSpacing ?? 0}px`
+        if (d.lineHeight != null) el.style.lineHeight = d.lineHeight
+        if (d.fontSize) el.style.fontSize = `${d.fontSize}px`
+        if (d.verticalAlign === 'middle') el.style.justifyContent = 'center'
+        else if (d.verticalAlign === 'bottom') el.style.justifyContent = 'flex-end'
+        applyModifierStyle(el, mods)
+        applyAnimation(el, mods, animate)
+        if (registry) registry[node.id] = el
+        return el
+      }
+
+      // Same borderEnabled/borderWidth/borderColor shape as Box's own fields
+      // — shared by buildImage/buildVideo; buildBox sets its own border
+      // inline since it also needs the fields for other purposes.
+      function applyBorder(el, d) {
+        if (d.borderEnabled) el.style.border = `${d.borderWidth ?? 2}px solid ${d.borderColor || '#ffffff'}`
+      }
+
+      // A Box's corner treatment (see BOX_SHAPE_IDS' own doc comment in
+      // components/nodes/index.tsx) — mirrors boxShapeStyle in
+      // SceneBuilderPage.tsx.
+      function applyBoxShape(el, d) {
+        const shape = d.shape || 'rectangle'
+        if (shape === 'circle') {
+          el.style.borderRadius = '50%'
+        } else if (shape === 'pill') {
+          el.style.borderRadius = '9999px'
+        } else if (shape === 'hexagon') {
+          el.style.borderRadius = '0px'
+          el.style.clipPath = 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)'
+        } else if (shape === 'diamond') {
+          el.style.borderRadius = '0px'
+          el.style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)'
+        } else {
+          el.style.borderRadius = `${d.borderRadius ?? 10}px`
+        }
+      }
+
+      function buildImage(node, mods, animate, vars, registry) {
+        const d = node.data || {}
+        const wrap = document.createElement('div')
+        wrap.className = 'image-node'
+        // No own Width/Height field (see ImageNode's own doc comment in
+        // components/nodes/index.tsx) — 96x96 here is only the fallback;
+        // applyModifierStyle below overrides it when a Size node is wired.
+        wrap.style.width = '96px'
+        wrap.style.height = '96px'
+        wrap.style.borderRadius = `${d.borderRadius ?? 8}px`
+        applyBorder(wrap, d)
+        // An uploaded custom-images file takes priority over the URL field
+        // (see ImageNode's own doc comment in components/nodes/index.tsx) —
+        // a relative path resolves correctly since this page is itself
+        // served from /overlays/, unlike the React preview (ImageView),
+        // which needs the full http://host:port URL instead. Neither set:
+        // fall back to the live now-playing album art, if this render has
+        // one (only true for an Audio-Player-driven scene — see
+        // showAudioContent) — mirrors "Leave empty for album art" on
+        // ImageNode's own URL field.
+        const imageSrc = d.customImageName ? `custom-images/${encodeURIComponent(d.customImageName)}` : d.src || (vars && vars.albumArt) || null
+        if (imageSrc) {
+          const img = document.createElement('img')
+          img.src = imageSrc
+          wrap.appendChild(img)
+        }
+        applyModifierStyle(wrap, mods)
+        applyAnimation(wrap, mods, animate)
+        if (registry) registry[node.id] = wrap
+        return wrap
+      }
+
+      function buildVideo(node, mods, animate, registry) {
+        const d = node.data || {}
+        const wrap = document.createElement('div')
+        wrap.className = 'image-node'
+        // No own Width/Height field, same reasoning as buildImage above.
+        wrap.style.width = '320px'
+        wrap.style.height = '180px'
+        wrap.style.borderRadius = `${d.borderRadius ?? 8}px`
+        applyBorder(wrap, d)
+        if (d.src) {
+          const video = document.createElement('video')
+          video.src = d.src
+          video.autoplay = true
+          // Muted by default (d.muted !== false) — browsers, OBS's Browser
+          // Source included, block unmuted autoplay outright, so an
+          // unexpectedly-silent clip is the safer failure mode than one
+          // that never plays at all. See VideoNode's own doc comment in
+          // components/nodes/index.tsx — a Sound node alongside it is the
+          // reliable way to get audio out of a video-driven alert.
+          video.muted = d.muted !== false
+          video.loop = d.loop !== false
+          video.playsInline = true
+          video.style.width = '100%'
+          video.style.height = '100%'
+          video.style.objectFit = 'cover'
+          wrap.appendChild(video)
+        }
+        applyModifierStyle(wrap, mods)
+        applyAnimation(wrap, mods, animate)
+        if (registry) registry[node.id] = wrap
+        return wrap
+      }
+
+      // Nesting can go as deep as the graph wants (see BOX_SOCKETS' own doc
+      // comment in components/nodes/index.tsx) — this cap is only a safety
+      // net against a cycle slipping past isValidConnection's own guard in
+      // SceneBuilderPage.tsx (imported/hand-edited JSON, say) turning into
+      // an infinite recursion that hangs the Browser Source; no legitimate
+      // scene should ever come close to it.
+      const MAX_BOX_DEPTH = 12
+
+      function buildContent(node, edges, map, animate, vars, registry, depth = 0) {
+        const mods = incoming(node.id, edges, map)
+        if (node.type === 'text') return buildText(node, mods, animate, vars, registry)
+        if (node.type === 'image') return buildImage(node, mods, animate, vars, registry)
+        if (node.type === 'video') return buildVideo(node, mods, animate, registry)
+        // A nested Box (see BOX_SOCKETS' own doc comment in
+        // components/nodes/index.tsx) — buildBox is defined below but
+        // function declarations are hoisted, so this forward reference
+        // resolves fine; buildBox calls back into buildContent for ITS OWN
+        // children, so this recurses to whatever depth the graph nests.
+        if (node.type === 'box') return buildBox(node, edges, map, animate, vars, registry, depth + 1)
+        return null
+      }
+
+      function buildBox(node, edges, map, animate, vars, registry, depth = 0) {
+        const incomingNodes = incoming(node.id, edges, map)
+        const children =
+          depth >= MAX_BOX_DEPTH ? [] : incomingNodes.filter((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box')
+        const d = node.data || {}
+        const container = document.createElement('div')
+        container.className = 'box'
+        container.style.background = d.background || '#18181b'
+        container.style.padding = `${d.paddingY ?? 12}px ${d.paddingX ?? 16}px`
+        applyBoxShape(container, d)
+        applyBorder(container, d)
+        container.style.position = 'relative'
+        container.style.flexDirection = orderingFlexDirection(incomingNodes)
+        container.style.gap = `${orderingGap(incomingNodes)}px`
+        applyModifierStyle(container, incomingNodes)
+        applyAnimation(container, incomingNodes, animate)
+        if (registry) registry[node.id] = container
+        for (const child of children) {
+          const childEl = buildContent(child, edges, map, animate, vars, registry, depth)
+          if (childEl) container.appendChild(childEl)
+        }
+        return container
+      }
+
+      // Plays one Sound node's configured preset/custom file — mirrors the
+      // bundled-preset URL scheme AlertSoundPicker/alert.html's own
+      // soundUrlFor use (relative to this page, i.e. /overlays/sounds/<id>.wav).
+      // Shared by playSceneSound (Scene/Start's own Sound) and
+      // showProcessContent's per-Task sound (see TASK_SOCKETS' own doc
+      // comment in components/nodes/index.tsx).
+      function playSoundNode(soundNode) {
+        const soundId = (soundNode && soundNode.data && soundNode.data.soundId) || 'none'
+        if (soundId === 'none') return
+        const customSoundName = soundNode.data.customSoundName
+        if (soundId === 'custom' && !customSoundName) return
+        const soundUrl = soundId === 'custom' ? `custom-sounds/${encodeURIComponent(customSoundName)}` : `sounds/${soundId}.wav`
+        const audio = new Audio(soundUrl)
+        audio.volume = soundNode.data.volume ?? 1
+        audio.play().catch(() => {})
+      }
+
+      function playSceneSound(scene, edges, map) {
+        playSoundNode(incoming(scene.id, edges, map).find((n) => n.type === 'sound'))
+      }
+
+      /**
+       * Walks from the Scene node: whatever's wired into it (directly, or
+       * nested inside a Box) is what's rendered — mirrors ScenePreview in
+       * SceneBuilderPage.tsx. A scene saved before Scene existed has no such
+       * node; for those, fall back to the old flat scan (first Box, every
+       * Image, every Text, ignoring connections) so it keeps rendering as it
+       * always did. Only called for a NON-event-triggered overlay — see
+       * render()/isEventTrigger below for the always-visible vs
+       * hidden-until-triggered split.
+       *
+       * `animate` controls whether this pass is allowed to play anything:
+       * entrance Animation modifiers, and a fresh paratrooper/airdrop drop
+       * (see applyBackgroundFx/applyAnimation). True for the initial page
+       * load and for a 'custom-overlay-trigger' broadcast (the Scene
+       * Builder's Test button); false for an ordinary 'custom-overlay-config'
+       * broadcast (a Save) — content still updates live, nothing replays.
+       * See OverlayServer.setCustomOverlays vs .testCustomOverlay for the
+       * two broadcast paths.
+       */
+      function renderStatic(overlay, animate) {
+        sceneEl.style.display = 'flex'
+        missingEl.style.display = 'none'
+        sceneEl.innerHTML = ''
+
+        const nodes = overlay.nodes || []
+        const edges = overlay.edges || []
+        const map = nodeMap(nodes)
+        const scene = nodes.find((n) => n.type === 'scene')
+
+        if (!scene) {
+          const box = nodes.find((n) => n.type === 'box')
+          const images = nodes.filter((n) => n.type === 'image')
+          const texts = nodes.filter((n) => n.type === 'text')
+          const bgFxNode = nodes.find((n) => n.type === 'backgroundAnimation')
+          applyBackgroundFx(bgFxNode, animate, backgroundFxLabel(bgFxNode, edges, map))
+
+          const container = document.createElement('div')
+          container.className = 'box'
+          if (box) {
+            const d = box.data || {}
+            container.style.background = d.background || '#18181b'
+            container.style.padding = `${d.paddingY ?? 12}px ${d.paddingX ?? 16}px`
+            container.style.borderRadius = `${d.borderRadius ?? 10}px`
+            if (d.borderEnabled) container.style.border = `${d.borderWidth ?? 2}px solid ${d.borderColor || '#ffffff'}`
+          }
+          for (const n of images) container.appendChild(buildImage(n, [], animate, null))
+          for (const n of texts) container.appendChild(buildText(n, [], animate))
+          sceneEl.appendChild(container)
+          return
+        }
+
+        const members = incoming(scene.id, edges, map)
+        const bgFxNode = members.find((n) => n.type === 'backgroundAnimation')
+        applyBackgroundFx(bgFxNode, animate, backgroundFxLabel(bgFxNode, edges, map))
+        sceneEl.style.flexDirection = orderingFlexDirection(members)
+        sceneEl.style.gap = `${orderingGap(members)}px`
+        const renderable = members.filter((n) => n.type === 'box' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+
+        for (const n of renderable) {
+          const el = n.type === 'box' ? buildBox(n, edges, map, animate) : buildContent(n, edges, map, animate)
+          if (el) sceneEl.appendChild(el)
+        }
+      }
+
+      /**
+       * Shows an event-triggered scene for one event: fills placeholders
+       * from `vars` (the real alert payload, or Test/handlePlay's sample
+       * data), plays entrance Animation/Background FX/Sound, then auto-hides
+       * after `durationMs` — mirrors alert.html's showAlert()/hide(), and
+       * handlePlay's local simulation in SceneBuilderPage.tsx.
+       */
+      function showTriggeredContent(overlay, vars, durationMs) {
+        clearTimeout(hideTimer)
+        sceneEl.style.display = 'flex'
+        missingEl.style.display = 'none'
+        sceneEl.innerHTML = ''
+
+        const nodes = overlay.nodes || []
+        const edges = overlay.edges || []
+        const map = nodeMap(nodes)
+        const scene = nodes.find((n) => n.type === 'scene')
+        if (!scene) return
+
+        const members = incoming(scene.id, edges, map)
+        const bgFxNode = members.find((n) => n.type === 'backgroundAnimation')
+        applyBackgroundFx(bgFxNode, true, backgroundFxLabel(bgFxNode, edges, map, vars))
+        sceneEl.style.flexDirection = orderingFlexDirection(members)
+        sceneEl.style.gap = `${orderingGap(members)}px`
+        const renderable = members.filter((n) => n.type === 'box' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+        for (const n of renderable) {
+          const el = n.type === 'box' ? buildBox(n, edges, map, true, vars) : buildContent(n, edges, map, true, vars)
+          if (el) sceneEl.appendChild(el)
+        }
+        playSceneSound(scene, edges, map)
+
+        hideTimer = setTimeout(hideTriggeredContent, durationMs)
+      }
+
+      /**
+       * The Process-driven equivalent of showTriggeredContent, used whenever
+       * Scene has a Start node reachable via sequence-flow edges (see
+       * buildProcessSchedule above) — builds every Text/Image/Box wired into
+       * Scene up front, exactly like renderStatic does (so Box-nesting/
+       * layout stays intact regardless of which pieces a Task targets), then
+       * one setTimeout per distinct Task moment re-applies computeTaskState
+       * to the component(s) it affects. A component with no Task targeting
+       * it at all isn't touched here — it renders normally, unaffected by
+       * the process, same as any other content in a plain scene.
+       */
+      function showProcessContent(overlay, vars, schedule, totalMs) {
+        clearTimeout(hideTimer)
+        processTimers.forEach(clearTimeout)
+        processTimers = []
+        sceneEl.style.display = 'flex'
+        missingEl.style.display = 'none'
+        sceneEl.innerHTML = ''
+
+        const nodes = overlay.nodes || []
+        const edges = overlay.edges || []
+        const map = nodeMap(nodes)
+        const scene = nodes.find((n) => n.type === 'scene')
+        const start = nodes.find((n) => n.type === 'start')
+
+        // Background FX/Sound are wired into Start for a process-driven
+        // scene (the trigger point), the same way Event is — not Scene.
+        if (start) {
+          const bgFxNode = incoming(start.id, edges, map).find((n) => n.type === 'backgroundAnimation')
+          applyBackgroundFx(bgFxNode, true, backgroundFxLabel(bgFxNode, edges, map, vars))
+          playSceneSound(start, edges, map)
+        }
+
+        const members = scene ? incoming(scene.id, edges, map) : []
+        sceneEl.style.flexDirection = orderingFlexDirection(members)
+        sceneEl.style.gap = `${orderingGap(members)}px`
+        const renderable = members.filter((n) => n.type === 'box' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+        const registry = {}
+        // animate=true: a component with no Task ever targeting it should
+        // still play its own Animation modifier once on the process's
+        // initial build — "unaffected by the process, same as any other
+        // content in a plain scene" (see this function's own doc comment),
+        // and a plain scene DOES animate on load (renderStatic(overlay,
+        // true)). Redundant-but-harmless for a Task-targeted component:
+        // applyAt(0) below re-applies its real t=0 state immediately after,
+        // in the same tick, before anything paints.
+        for (const n of renderable) {
+          const el = n.type === 'box' ? buildBox(n, edges, map, true, vars, registry) : buildContent(n, edges, map, true, vars, registry)
+          if (el) sceneEl.appendChild(el)
+        }
+
+        const targetIds = [...new Set(schedule.map((s) => s.targetId))]
+        // Every Task's own Sound (see TASK_SOCKETS' own doc comment in
+        // components/nodes/index.tsx), grouped by the same atMs its Task
+        // fires at — played once per moment alongside applyAt below, not
+        // treated as target style (computeTaskState never looks at it).
+        const soundsByAtMs = {}
+        for (const s of schedule) {
+          const soundMod = s.mods.find((m) => m.type === 'sound')
+          if (!soundMod) continue
+          if (!soundsByAtMs[s.atMs]) soundsByAtMs[s.atMs] = []
+          soundsByAtMs[s.atMs].push(soundMod)
+        }
+        const playSoundsAt = (atMs) => (soundsByAtMs[atMs] || []).forEach(playSoundNode)
+        const applyAt = (atMs) => {
+          for (const id of targetIds) {
+            const el = registry[id]
+            if (el) {
+              const baseMods = incoming(id, edges, map)
+              applyTaskStateToEl(el, computeTaskState(schedule, id, atMs), baseMods)
+            }
+          }
+        }
+        applyAt(0)
+        playSoundsAt(0)
+        const atMsValues = [...new Set(schedule.map((s) => s.atMs).filter((t) => t > 0))].sort((a, b) => a - b)
+        for (const atMs of atMsValues) {
+          processTimers.push(
+            setTimeout(() => {
+              applyAt(atMs)
+              playSoundsAt(atMs)
+            }, atMs)
+          )
+        }
+
+        // See processExitBufferMs's own doc comment: without the buffer,
+        // whichever Task(s) fire at exactly totalMs (the schedule's last
+        // moment) get torn down before their animation plays a single
+        // frame.
+        hideTimer = setTimeout(() => {
+          applyBackgroundFx(undefined, false, '')
+          sceneEl.style.display = 'none'
+          sceneEl.innerHTML = ''
+          hideTimer = null
+          processNextAlert()
+        }, totalMs + processExitBufferMs(schedule, totalMs))
+      }
+
+      // Reverses each animated element's entrance: adding .hiding is enough,
+      // animations.css picks it up (the same [data-animation="X"] rule set
+      // used for the entrance, just the .hiding variant) at the SAME
+      // duration the entrance used (--anim-duration) — one Animation node
+      // governs both directions, there's no separate exit-only field.
+      // Elements with no Animation modifier never got data-animation set at
+      // all (see applyAnimation), so they're skipped — no animation to
+      // reverse. Returns how long (ms) to wait before it's safe to actually
+      // clear the DOM, 0 if nothing needs to play out.
+      function playExitAnimations(container) {
+        const animated = container.querySelectorAll('[data-animation]')
+        let maxMs = 0
+        animated.forEach((el) => {
+          el.classList.add('hiding')
+          // Read --anim-duration directly from the element's inline style
+          // (set by applyAnimation) instead of getComputedStyle(), which
+          // would force a layout recalc on every iteration (layout thrashing).
+          const raw = el.style.getPropertyValue('--anim-duration')
+          const ms = raw ? parseFloat(raw) : 300 // default animation duration fallback
+          if (Number.isFinite(ms) && ms > maxMs) maxMs = ms
+        })
+        return maxMs
+      }
+
+      /** Reverses showTriggeredContent — back to hidden-and-waiting for the next event. */
+      function hideTriggeredContent() {
+        clearTimeout(hideTimer)
+        hideTimer = null
+        applyBackgroundFx(undefined, false, '')
+        const exitMs = playExitAnimations(sceneEl)
+        if (exitMs <= 0) {
+          sceneEl.style.display = 'none'
+          sceneEl.innerHTML = ''
+          processNextAlert()
+          return
+        }
+        setTimeout(() => {
+          sceneEl.style.display = 'none'
+          sceneEl.innerHTML = ''
+          processNextAlert()
+        }, exitMs)
+      }
+
+      /**
+       * Shows/updates a continuously data-driven scene (an Audio Player node
+       * wired into Scene — see isAudioTrigger) with the latest Now Playing
+       * vars. Unlike showTriggeredContent/showProcessContent there's no
+       * durationMs/hideTimer here — hideAudioContent (below) is the only
+       * thing that tears it down, driven by the feed's own isPlaying flag
+       * rather than a fixed timer. `animate` is false for a same-track
+       * refresh (see the 'now-playing' branch below) so a routine poll tick
+       * doesn't replay the entrance every few seconds.
+       */
+      function showAudioContent(overlay, vars, animate) {
+        audioVisible = true
+        sceneEl.style.display = 'flex'
+        missingEl.style.display = 'none'
+        sceneEl.innerHTML = ''
+
+        const nodes = overlay.nodes || []
+        const edges = overlay.edges || []
+        const map = nodeMap(nodes)
+        const scene = nodes.find((n) => n.type === 'scene')
+        if (!scene) return
+
+        const members = incoming(scene.id, edges, map)
+        const bgFxNode = members.find((n) => n.type === 'backgroundAnimation')
+        applyBackgroundFx(bgFxNode, animate, backgroundFxLabel(bgFxNode, edges, map, vars))
+        sceneEl.style.flexDirection = orderingFlexDirection(members)
+        sceneEl.style.gap = `${orderingGap(members)}px`
+        const renderable = members.filter((n) => n.type === 'box' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+        for (const n of renderable) {
+          const el = n.type === 'box' ? buildBox(n, edges, map, animate, vars) : buildContent(n, edges, map, animate, vars)
+          if (el) sceneEl.appendChild(el)
+        }
+      }
+
+      /** Reverses showAudioContent when the feed reports isPlaying: false — mirrors hideTriggeredContent, just with no hideTimer/queue involved. */
+      function hideAudioContent() {
+        audioVisible = false
+        applyBackgroundFx(undefined, false, '')
+        const exitMs = playExitAnimations(sceneEl)
+        if (exitMs <= 0) {
+          sceneEl.style.display = 'none'
+          sceneEl.innerHTML = ''
+          return
+        }
+        setTimeout(() => {
+          sceneEl.style.display = 'none'
+          sceneEl.innerHTML = ''
+        }, exitMs)
+      }
+
+      /**
+       * Entry point for every REAL 'alert' broadcast (not Test/Play, which
+       * call showProcessContent/showTriggeredContent directly with sample
+       * data — see render()'s simulateTest branch). A second alert arriving
+       * while one is still on screen used to clobber it mid-animation
+       * (showProcessContent/showTriggeredContent both rebuild from scratch);
+       * now it queues (FIFO, capped at MAX_QUEUED_ALERTS) and plays once the
+       * current one tears itself down — see processNextAlert, called from
+       * both hideTriggeredContent and showProcessContent's own hideTimer.
+       */
+      function handleAlert(payload) {
+        const proc = processTrigger(latestOverlay)
+        const matchesProcess = proc.active && proc.alertTypes.has(payload.type)
+        const trigger = isEventTrigger(latestOverlay)
+        const matchesTrigger = !matchesProcess && trigger.active && trigger.alertTypes.has(payload.type)
+        if (!matchesProcess && !matchesTrigger) return
+
+        if (alertActive) {
+          if (alertQueue.length < MAX_QUEUED_ALERTS) alertQueue.push(payload)
+          return
+        }
+
+        alertActive = true
+        if (matchesProcess) {
+          const built = buildProcessSchedule(latestOverlay.nodes || [], latestOverlay.edges || [])
+          if (built) {
+            showProcessContent(latestOverlay, payload, built.schedule, built.totalMs)
+            return
+          }
+        } else {
+          showTriggeredContent(latestOverlay, payload, trigger.durationMs)
+          return
+        }
+        alertActive = false
+      }
+
+      /** Called once the currently-showing alert has fully torn itself down — plays the next queued one, if any (re-validated against the current graph via handleAlert, in case a Save changed what matches while it was waiting). */
+      function processNextAlert() {
+        alertActive = false
+        if (alertQueue.length === 0) return
+        handleAlert(alertQueue.shift())
+      }
+
+      /**
+       * Entry point for every config/trigger/initial-load path.
+       * `animate` — see renderStatic's own doc comment; only meaningful for
+       * a non-event-triggered (static) scene.
+       * `simulateTest` — true only for a 'custom-overlay-trigger' broadcast
+       * (Test button): for an event-triggered/process scene, simulates one
+       * event with sample data instead of waiting for a real one. A static
+       * scene ignores this and just replays via renderStatic(overlay, true),
+       * same as before.
+       *
+       * A Start node (processTrigger) takes priority over the plain
+       * DataSource(alert)+Timer->Scene model (isEventTrigger) — see the doc
+       * comment above buildProcessSchedule.
+       */
+      function render(overlay, animate = true, simulateTest = false) {
+        latestOverlay = overlay
+        if (!overlay) {
+          clearTimeout(hideTimer)
+          hideTimer = null
+          sceneEl.style.display = 'none'
+          missingEl.style.display = 'block'
+          bg.classList.remove('visible')
+          return
+        }
+
+        const proc = processTrigger(overlay)
+        if (proc.active) {
+          missingEl.style.display = 'none'
+          if (simulateTest) {
+            const built = buildProcessSchedule(overlay.nodes || [], overlay.edges || [])
+            const sampleType = [...proc.alertTypes][0] || 'subscription'
+            const vars = { type: sampleType, user: 'Viewer', amount: 25, message: 'Пример сообщения', source: 'twitch' }
+            if (built) showProcessContent(overlay, vars, built.schedule, built.totalMs)
+            return
+          }
+          if (!hideTimer) {
+            sceneEl.style.display = 'none'
+            sceneEl.innerHTML = ''
+          }
+          return
+        }
+
+        const trigger = isEventTrigger(overlay)
+        if (!trigger.active) {
+          missingEl.style.display = 'none'
+          if (isAudioTrigger(overlay)) {
+            if (simulateTest) {
+              showAudioContent(overlay, { source: 'spotify', title: 'Sample Track', artist: 'Sample Artist', albumArt: '', isPlaying: true }, true)
+              return
+            }
+            if (latestNowPlaying.isPlaying) {
+              showAudioContent(overlay, latestNowPlaying, animate)
+            } else if (audioVisible) {
+              hideAudioContent()
+            } else {
+              sceneEl.style.display = 'none'
+              sceneEl.innerHTML = ''
+            }
+            return
+          }
+          renderStatic(overlay, animate)
+          return
+        }
+
+        missingEl.style.display = 'none'
+        if (simulateTest) {
+          const sampleType = [...trigger.alertTypes][0] || 'subscription'
+          showTriggeredContent(
+            overlay,
+            { type: sampleType, user: 'Viewer', amount: 25, message: 'Пример сообщения', source: 'twitch' },
+            trigger.durationMs
+          )
+          return
+        }
+        // Idle: sit hidden and wait for a real alert (see the 'alert' branch
+        // below). Don't interrupt one that's already showing (hideTimer set).
+        if (!hideTimer) {
+          sceneEl.style.display = 'none'
+          sceneEl.innerHTML = ''
+        }
+      }
+
+      if (!key) {
+        render(null)
+      } else {
+        fetch(`/overlays/config/custom.json?key=${encodeURIComponent(key)}`)
+          .then((res) => res.json())
+          .then((overlay) => render(overlay, true))
+          .catch(() => render(null))
+
+        function connect() {
+          const ws = new WebSocket(`ws://${location.host}/ws`)
+          ws.onmessage = (event) => {
+            const { type, payload } = JSON.parse(event.data)
+            if (type === 'custom-overlay-config') {
+              render(payload.find((o) => o.urlKey === key) ?? null, false)
+            } else if (type === 'custom-overlay-trigger' && payload?.urlKey === key) {
+              render(latestOverlay, true, true)
+            } else if (type === 'alert') {
+              handleAlert(payload)
+            } else if (type === 'now-playing') {
+              if (isAudioTrigger(latestOverlay)) {
+                if (payload.isPlaying) {
+                  const trackChanged = !audioVisible || payload.title !== latestNowPlaying.title || payload.artist !== latestNowPlaying.artist
+                  showAudioContent(latestOverlay, payload, trackChanged)
+                } else if (audioVisible) {
+                  hideAudioContent()
+                }
+              }
+              latestNowPlaying = payload
+            }
+          }
+          ws.onclose = () => setTimeout(connect, 1000)
+        }
+        connect()
+      }
+    </script>
+  </body>
+</html>

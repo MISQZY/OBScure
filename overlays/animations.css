@@ -1,0 +1,121 @@
+/*
+  Shared entrance/exit animations for overlay widgets (now-playing.html,
+  alert.html) and custom Scene Builder graphs (custom.html, driven by an
+  Animation modifier node). Applied via an element carrying
+  data-animation="<id>" plus the .visible (shown) / .hiding (playing its exit
+  animation) state classes that each page's own script toggles — see the
+  ANIMATION_DURATIONS/showWithAnimation helpers in those files. Keep the JS
+  duration constants in sync with these.
+
+  Both entrance and exit durations read from --anim-duration when a caller
+  sets it (the Animation node's own Duration field, custom.html only) and
+  fall back to the original fixed value otherwise, so now-playing.html/
+  alert.html — which never set that var — are unaffected. custom.html's
+  event-triggered scenes (see isEventTrigger) use the SAME duration both
+  ways: one Animation node governs how it appears and, reversed, how it
+  disappears — there's no separate exit-only field.
+*/
+
+[data-animation="fade"].visible:not(.hiding) {
+  animation: ov-fade-in var(--anim-duration, 250ms) ease-out;
+}
+[data-animation="fade"].hiding {
+  animation: ov-fade-out var(--anim-duration, 250ms) ease-in forwards;
+}
+
+[data-animation="slide"].visible:not(.hiding) {
+  animation: ov-slide-in var(--anim-duration, 300ms) ease-out;
+}
+[data-animation="slide"].hiding {
+  animation: ov-slide-out var(--anim-duration, 300ms) ease-in forwards;
+}
+
+[data-animation="zoom"].visible:not(.hiding) {
+  animation: ov-zoom-in var(--anim-duration, 250ms) ease-out;
+}
+[data-animation="zoom"].hiding {
+  animation: ov-zoom-out var(--anim-duration, 250ms) ease-in forwards;
+}
+
+[data-animation="bounce"].visible:not(.hiding) {
+  animation: ov-bounce-in var(--anim-duration, 500ms) cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+[data-animation="bounce"].hiding {
+  animation: ov-fade-out var(--anim-duration, 250ms) ease-in forwards;
+}
+
+@keyframes ov-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ov-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes ov-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes ov-slide-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+@keyframes ov-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes ov-zoom-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+@keyframes ov-bounce-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  70% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
