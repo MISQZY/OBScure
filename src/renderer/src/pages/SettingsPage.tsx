@@ -1,0 +1,85 @@
+import { useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { CanvasSettingsForm } from '@/components/CanvasSettingsForm'
+import { CollapsibleSection } from '@/components/CollapsibleSection'
+import { OverlayAddressForm } from '@/components/OverlayAddressForm'
+import { AppearanceSettings } from '@/components/settings/AppearanceSettings'
+import { useI18n } from '@/providers/I18nProvider'
+import { useTour } from '@/providers/TourProvider'
+import type { CanvasConfig } from '@shared/canvasConfig'
+import type { OverlayUrls } from '@shared/types'
+
+export function SettingsPage() {
+  const { t } = useI18n()
+  const { start: startTour } = useTour()
+  const [overlayUrls, setOverlayUrls] = useState<OverlayUrls | null>(null)
+  const [canvasConfig, setCanvasConfig] = useState<CanvasConfig | null>(null)
+
+  useEffect(() => {
+    window.maddoner.getOverlayUrls().then(setOverlayUrls)
+    window.maddoner.getCanvasConfig().then(setCanvasConfig)
+  }, [])
+
+  return (
+    <div className="flex max-w-xl flex-col gap-6">
+      <div>
+        <h1 className="text-xl font-semibold">{t.settings.title}</h1>
+        <p className="text-sm text-muted-foreground">{t.settings.description}</p>
+      </div>
+
+      <CollapsibleSection
+        title={t.settings.appearance.title}
+        level="h2"
+        titleClassName="text-sm font-medium"
+        className="gap-2"
+      >
+        <p className="text-xs text-muted-foreground">{t.settings.appearance.description}</p>
+        <AppearanceSettings />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title={t.settings.overlayAddressTitle}
+        level="h2"
+        titleClassName="text-sm font-medium"
+        className="gap-2"
+        tourId="settings-overlay-address"
+      >
+        <p className="text-xs text-muted-foreground">{t.settings.overlayAddressDescription}</p>
+        {overlayUrls ? (
+          <OverlayAddressForm current={overlayUrls} onUpdated={setOverlayUrls} />
+        ) : (
+          <p className="text-sm text-muted-foreground">{t.common.loading}</p>
+        )}
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title={t.settings.canvas.title}
+        level="h2"
+        titleClassName="text-sm font-medium"
+        className="gap-2"
+        tourId="settings-canvas"
+      >
+        <p className="text-xs text-muted-foreground">{t.settings.canvas.description}</p>
+        {canvasConfig ? (
+          <CanvasSettingsForm current={canvasConfig} onUpdated={setCanvasConfig} />
+        ) : (
+          <p className="text-sm text-muted-foreground">{t.common.loading}</p>
+        )}
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title={t.settings.help.title}
+        level="h2"
+        titleClassName="text-sm font-medium"
+        className="gap-2"
+        tourId="restart-tour"
+      >
+        <p className="text-xs text-muted-foreground">{t.settings.help.description}</p>
+        <Button variant="outline" onClick={() => startTour()} className="w-fit">
+          {t.settings.help.restartTour}
+        </Button>
+        <p className="text-xs text-muted-foreground">{t.settings.help.sceneBuilderTourHint}</p>
+      </CollapsibleSection>
+    </div>
+  )
+}
