@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ReactFlow,
   Controls,
@@ -15,7 +16,8 @@ import {
   Connection,
   Panel,
   ReactFlowInstance,
-  useViewport,
+  getBezierPath,
+  Position,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import './scene-preview-animations.css'
@@ -734,23 +736,30 @@ function buildProcessSchedule(nodes: Node[], edges: Edge[]): { schedule: Schedul
   return { schedule, totalMs: atMs }
 }
 
-/** Rough default size for a process node before React Flow's first layout pass has reported a real `measured` width/height back via onNodesChange's dimension-change events — matches BaseNode's own `min-w-[150px]` and a single-row body, just close enough that ProcessToken doesn't visibly jump once the real measurement arrives a frame later. */
-const DEFAULT_PROCESS_NODE_SIZE = { width: 150, height: 46 }
-
 /**
- * The right or left edge of `node`'s own box, vertically centered on its
- * full height, in flow coordinates — matches where BaseNode's plain generic
- * output Handle (Position.Right, no style override) sits by default, and is
- * a close approximation for the sequence-flow "event-in" input Handle
- * (Position.Left) too. Only an approximation for a node like Task that has
- * OTHER input sockets stacked above "event-in" (nudging that specific
- * Handle down from true center) — ProcessToken is a visual progress
- * indicator, not meant to land pixel-exact on the dot.
+ * The real on-screen center (viewport pixels, like getBoundingClientRect
+ * itself) of one specific Handle — `data-nodeid`/`data-handleid` are
+ * attributes React Flow's own Handle component puts on every rendered
+ * handle precisely so code outside the library can look one up exactly
+ * like this. Used instead of approximating a position from the node's own
+ * position/measured size (an earlier version of this file did) because
+ * that couldn't account for WHERE within a node's own socket list a
+ * specific labeled row like "event-in" actually sits — a Task's sequence
+ * input, for instance, is several rows below its own vertical center, with
+ * other sockets (Target/Transform/Style/Sound) stacked above it. Querying
+ * the real DOM element is the only way to land exactly where React Flow
+ * itself draws the connecting edge from/to, and it stays correct through
+ * pan/zoom for free since getBoundingClientRect always reflects whatever
+ * transform is currently applied — no separate flow-to-screen conversion
+ * needed. `null` if the handle isn't in the DOM (shouldn't normally happen —
+ * every process node's Handles are always rendered here, never
+ * virtualized).
  */
-function processNodeAnchor(node: Node, side: 'left' | 'right'): { x: number; y: number } {
-  const width = node.measured?.width ?? DEFAULT_PROCESS_NODE_SIZE.width
-  const height = node.measured?.height ?? DEFAULT_PROCESS_NODE_SIZE.height
-  return { x: node.position.x + (side === 'right' ? width : 0), y: node.position.y + height / 2 }
+function handleScreenCenter(nodeId: string, handleId: string): { x: number; y: number } | null {
+  const el = document.querySelector(`.react-flow__handle[data-nodeid="${nodeId}"][data-handleid="${handleId}"]`)
+  if (!el) return null
+  const rect = el.getBoundingClientRect()
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
 }
 
 /**
@@ -783,27 +792,102 @@ function processChainNodes(nodes: Node[], edges: Edge[]): { node: Node; atMs: nu
 }
 
 /**
- * Where ProcessToken currently sits, in flow coordinates — the point along
- * the chain's path at `clockMs` into the run, clamped to Start's own
- * position before the run starts and to End's once it's past totalMs (see
- * handlePlay's own exit-buffer window, during which clockMs keeps advancing
- * past the last checkpoint's atMs). `null` only when there's no Start node
- * at all (see processChainNodes).
+ * One detached (never appended to the document) SVGPathElement, reused on
+ * every call — geometry queries like getTotalLength/getPointAtLength only
+ * need the element's own `d` attribute, not layout or a parent document, so
+ * there's no need to mount it anywhere. Module-level singleton purely to
+ * avoid allocating a fresh DOM node on every animation frame while
+ * ProcessToken is visible.
  */
-function processTokenPosition(nodes: Node[], edges: Edge[], clockMs: number): { x: number; y: number } | null {
+let bezierMeasurePath: SVGPathElement | null = null
+
+/**
+ * A point on the SAME bezier curve React Flow's own default edge would draw
+ * between `(sourceX, sourceY)` (Position.Right) and `(targetX, targetY)`
+ * (Position.Left), at arc-length fraction `t` (0 = source, 1 = target) —
+ * this is what makes ProcessToken visibly ride the actual rendered
+ * connection line instead of cutting a straight line through it whenever
+ * two chained nodes sit at different heights (the common case after a
+ * dagre auto-layout). getBezierPath is the exact function React Flow's
+ * BezierEdge itself calls (see createBezierEdge in @xyflow/react) with no
+ * `curvature` override here either, matching its own default. Coordinate
+ * space doesn't matter — the curve's shape only depends on the two
+ * endpoints, and scaling/translating them (exactly what pan/zoom does)
+ * scales/translates the resulting curve the same way — so processTokenPosition
+ * feeds this real on-screen pixel coordinates (see handleScreenCenter)
+ * straight through with no separate flow-to-screen conversion step, and the
+ * path string still matches byte-for-byte what's already on screen at the
+ * current zoom.
+ */
+function pointOnBezier(sourceX: number, sourceY: number, targetX: number, targetY: number, t: number): { x: number; y: number } {
+  if (!bezierMeasurePath) bezierMeasurePath = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  const [d] = getBezierPath({ sourceX, sourceY, sourcePosition: Position.Right, targetX, targetY, targetPosition: Position.Left })
+  bezierMeasurePath.setAttribute('d', d)
+  const length = bezierMeasurePath.getTotalLength()
+  const point = bezierMeasurePath.getPointAtLength(length * Math.min(1, Math.max(0, t)))
+  return { x: point.x, y: point.y }
+}
+
+/**
+ * Minimum visual travel time (ms) ProcessToken spends crossing any ONE
+ * segment of the chain — even one whose REAL atMs delta is 0, which is the
+ * common case: only a Wait node ever advances atMs (see
+ * buildProcessSchedule), so a process with several Tasks in a row and no
+ * Wait between them would otherwise have the token teleport straight past
+ * all of them the instant clockMs reaches that shared atMs, never visibly
+ * "passing through" most of the chain. Purely cosmetic — see
+ * processTokenChain, the only place this is used; the REAL event-timeline
+ * computeTaskState/buildProcessSchedule use to decide when a Task actually
+ * shows/hides is completely untouched by any of this.
+ */
+const PROCESS_TOKEN_MIN_SEGMENT_MS = 400
+
+/**
+ * `chain` (see processChainNodes) remapped onto a "virtual" clock where
+ * every segment gets AT LEAST PROCESS_TOKEN_MIN_SEGMENT_MS of travel time,
+ * so ProcessToken visibly glides across every hop from Start to End instead
+ * of skipping however many have zero real duration. A segment that already
+ * takes real time (a Wait's own delay, when it's at least the minimum)
+ * keeps that duration, so a long Wait still reads as proportionally slower
+ * than a short one or an instant hop.
+ */
+function processTokenChain(nodes: Node[], edges: Edge[]): { node: Node; vAtMs: number }[] {
   const chain = processChainNodes(nodes, edges)
+  if (chain.length === 0) return []
+  const virtual: { node: Node; vAtMs: number }[] = [{ node: chain[0].node, vAtMs: 0 }]
+  for (let i = 1; i < chain.length; i++) {
+    const realSpan = chain[i].atMs - chain[i - 1].atMs
+    virtual.push({ node: chain[i].node, vAtMs: virtual[i - 1].vAtMs + Math.max(realSpan, PROCESS_TOKEN_MIN_SEGMENT_MS) })
+  }
+  return virtual
+}
+
+/**
+ * Where ProcessToken currently sits, in real screen pixels (see
+ * handleScreenCenter) — `clockMs` (the real elapsed preview time,
+ * 0..`durationMs`) is first rescaled onto processTokenChain's own virtual
+ * timeline (proportionally, so the token still finishes crossing the WHOLE
+ * chain exactly as the real preview run ends) before interpolating between
+ * whichever two checkpoints bracket it. `null` when there's no Start node,
+ * or (transiently) if a handle isn't in the DOM yet.
+ */
+function processTokenPosition(nodes: Node[], edges: Edge[], clockMs: number, durationMs: number): { x: number; y: number } | null {
+  const chain = processTokenChain(nodes, edges)
   if (chain.length === 0) return null
-  if (chain.length === 1) return processNodeAnchor(chain[0].node, 'right')
-  let i = chain.findIndex((c) => c.atMs >= clockMs)
-  if (i === -1) i = chain.length - 1 // past the final checkpoint (handlePlay's exit-buffer window) — clamp to the last segment
-  if (i === 0) return processNodeAnchor(chain[0].node, 'right')
+  if (chain.length === 1) return handleScreenCenter(chain[0].node.id, 'output')
+  const virtualTotal = chain[chain.length - 1].vAtMs
+  const vClockMs = durationMs > 0 ? (Math.min(clockMs, durationMs) / durationMs) * virtualTotal : virtualTotal
+  let i = chain.findIndex((c) => c.vAtMs >= vClockMs)
+  if (i === -1) i = chain.length - 1 // past the final checkpoint — clamp to the last segment
+  if (i === 0) return handleScreenCenter(chain[0].node.id, 'output')
   const from = chain[i - 1]
   const to = chain[i]
-  const span = to.atMs - from.atMs
-  const t = span > 0 ? Math.min(1, Math.max(0, (clockMs - from.atMs) / span)) : 1
-  const a = processNodeAnchor(from.node, 'right')
-  const b = processNodeAnchor(to.node, 'left')
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
+  const span = to.vAtMs - from.vAtMs
+  const t = span > 0 ? (vClockMs - from.vAtMs) / span : 1
+  const a = handleScreenCenter(from.node.id, 'output')
+  const b = handleScreenCenter(to.node.id, 'event-in')
+  if (!a || !b) return null
+  return pointOnBezier(a.x, a.y, b.x, b.y, t)
 }
 
 /**
@@ -811,22 +895,41 @@ function processTokenPosition(nodes: Node[], edges: Edge[], clockMs: number): { 
  * during Play/Test, showing at a glance where the running
  * Start→Task→Wait→...→End chain currently is — purely a visual aid, no
  * effect on rendering or on ScenePreview's own separately-computed Task
- * states. Rendered as a plain overlay div (not a React Flow node, which
- * would mean writing its position into `nodes` state every animation
- * frame) positioned via useViewport's own pan/zoom — the same transform
- * React Flow applies to real nodes — since a plain child of `<ReactFlow>`
- * isn't auto-transformed the way its `nodes` prop is.
+ * states. Rendered as a `position: fixed` div portaled straight to
+ * `document.body` (same pattern NodePopover in components/nodes/index.tsx
+ * uses for its own dropdown, and for the same reason: guaranteed not to be
+ * clipped or mispositioned by anything in React Flow's own DOM structure)
+ * at real screen coordinates from processTokenPosition/handleScreenCenter —
+ * NOT a React Flow node, which would mean writing a position into `nodes`
+ * state every animation frame, and NOT flow-space coordinates converted via
+ * the current pan/zoom, since measuring the real Handle elements already
+ * accounts for whatever transform is currently applied. `durationMs` is the
+ * full real preview run length (totalMs + the exit buffer — see
+ * processExitBufferMs) clockMs is counted against, for processTokenPosition
+ * to rescale onto its own virtual timeline.
  */
-function ProcessToken({ nodes, edges, clockMs, active }: { nodes: Node[]; edges: Edge[]; clockMs: number; active: boolean }) {
-  const { x: vx, y: vy, zoom } = useViewport()
+function ProcessToken({
+  nodes,
+  edges,
+  clockMs,
+  durationMs,
+  active
+}: {
+  nodes: Node[]
+  edges: Edge[]
+  clockMs: number
+  durationMs: number
+  active: boolean
+}) {
   if (!active) return null
-  const point = processTokenPosition(nodes, edges, clockMs)
+  const point = processTokenPosition(nodes, edges, clockMs, durationMs)
   if (!point) return null
-  return (
+  return createPortal(
     <div
-      className="pointer-events-none absolute left-0 top-0 z-20 size-3 rounded-full bg-indigo-400 ring-2 ring-indigo-200 shadow-[0_0_8px_2px_rgba(99,102,241,0.7)]"
-      style={{ transform: `translate(${point.x * zoom + vx - 6}px, ${point.y * zoom + vy - 6}px)` }}
-    />
+      className="pointer-events-none fixed left-0 top-0 z-[9999] size-3 rounded-full bg-indigo-400 ring-2 ring-indigo-200 shadow-[0_0_8px_2px_rgba(99,102,241,0.7)]"
+      style={{ transform: `translate(${point.x - 6}px, ${point.y - 6}px)` }}
+    />,
+    document.body
   )
 }
 
@@ -2200,7 +2303,14 @@ export function SceneBuilderPage({
     vars: eventActive ? eventVars : null,
     alertTypes: proc.active ? proc.alertTypes : (trigger?.alertTypes ?? [])
   }
-  const processSchedule = proc.active ? (buildProcessSchedule(nodes, edges)?.schedule ?? []) : []
+  const processBuilt = proc.active ? buildProcessSchedule(nodes, edges) : null
+  const processSchedule = processBuilt?.schedule ?? []
+  // Real length (ms) of a running Process preview, totalMs plus the same
+  // exit-animation buffer handlePlay's own rAF loop runs the clock out to —
+  // what ProcessToken's clockMs is counted against (see its own doc
+  // comment), so the token finishes crossing the whole chain exactly as the
+  // preview run actually ends instead of drifting out of sync with it.
+  const processDurationMs = proc.active ? (processBuilt?.totalMs ?? 0) + processExitBufferMs(processSchedule, processBuilt?.totalMs ?? 0) : 0
   // Background FX cuts instantly on hide rather than riding out the content's
   // exit animation — mirrors overlays/custom.html's hideTriggeredContent,
   // which calls applyBackgroundFx(undefined, ...) before playExitAnimations.
@@ -2246,7 +2356,7 @@ export function SceneBuilderPage({
             zoomable
             className="!bg-card !border !border-border"
           />
-          <ProcessToken nodes={nodes} edges={edges} clockMs={processClockMs} active={proc.active && eventPhase === 'showing'} />
+          <ProcessToken nodes={nodes} edges={edges} clockMs={processClockMs} durationMs={processDurationMs} active={proc.active && eventPhase === 'showing'} />
           {/* Floating toolbar — name, URL key, and the save/prettify/test/help/delete actions — centered above the canvas instead of a full-width bar above it, now that the canvas itself fills the whole page. Delete sits apart from the rest (top-right, next to the name) since it's destructive and shouldn't be one click away from Save/Prettify/Test/Help, which live together in a footer row instead. */}
           {/*
             w-[27rem], not min-w: a shrink-to-fit (auto) width here made the
