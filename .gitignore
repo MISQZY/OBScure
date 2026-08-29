@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Build output (electron-vite)
+out/
+
+# Distribution builds (electron-builder)
+dist/
+dist-electron/
+
+# TypeScript incremental compilation cache
+*.tsbuildinfo
+
+# Environment variables (secrets)
+.env
+*.local
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+._*
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# AI agent config / generated docs
+.claude/
+.gemini/
+docs/
+
+# Optional: lock file (uncomment if you prefer not to track it)
+# package-lock.json

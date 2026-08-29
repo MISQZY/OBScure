@@ -1,0 +1,29 @@
+appId: com.obscure.app
+productName: OBScure
+directories:
+  output: dist
+
+icon: build/icon.ico
+
+files:
+  - out/**/*
+  - resources/**/*
+  - package.json
+
+extraResources:
+  - from: overlays
+    to: overlays
+
+win:
+  target:
+    - nsis
+    - portable
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  artifactName: ${productName}-${version}-setup.${ext}
+
+portable:
+  artifactName: ${productName}-${version}.${ext}
