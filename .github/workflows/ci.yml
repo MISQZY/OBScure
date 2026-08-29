@@ -1,0 +1,102 @@
+name: CI
+
+# Every push (any branch): lint + typecheck only.
+# A release tag push (vX.Y.Z): lint + typecheck, then two parallel build
+# jobs — NSIS installer and portable — both gated on lint/typecheck passing.
+# Adjust the `tags` pattern below if this project doesn't tag releases as v*.*.*.
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 20
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+
+  # Windows target (NSIS/portable) is built on a GitHub-hosted windows-latest
+  # runner rather than cross-compiled, so electron-builder's native NSIS
+  # tooling and Electron's Windows binaries just work without extra setup.
+  build-installer:
+    name: Build (NSIS installer)
+    needs: [lint, typecheck]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: ${{ runner.os }}-electron-builder-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-builder-
+      - run: npm ci
+      - run: npm run dist:installer
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OBScure-installer
+          path: dist/*-setup.*
+          if-no-files-found: error
+
+  build-portable:
+    name: Build (portable)
+    needs: [lint, typecheck]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: ${{ runner.os }}-electron-builder-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-builder-
+      - run: npm ci
+      - run: npm run dist:portable
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OBScure-portable
+          path: dist/*.exe
+          if-no-files-found: error
