@@ -46,7 +46,6 @@ interface SpotifyCurrentlyPlaying {
 }
 
 export class SpotifyIntegration extends BaseIntegration {
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
   private accessToken: string | null = null;
   private accessTokenExpiresAt = 0;
   private lastKey = "";
@@ -66,22 +65,15 @@ export class SpotifyIntegration extends BaseIntegration {
     try {
       await this.refreshAccessToken(clientId, refreshToken);
       this.setStatus("connected");
-      this.startPolling();
+      this.startPolling(() => this.poll(), POLL_INTERVAL_MS);
     } catch {
       this.setStatus("error");
     }
   }
 
   stop(): void {
-    if (this.pollTimer) clearInterval(this.pollTimer);
-    this.pollTimer = null;
+    this.stopPolling();
     this.lastKey = "";
-  }
-
-  private startPolling(): void {
-    if (this.pollTimer) clearInterval(this.pollTimer);
-    void this.poll();
-    this.pollTimer = setInterval(() => void this.poll(), POLL_INTERVAL_MS);
   }
 
   private async poll(): Promise<void> {
@@ -237,7 +229,7 @@ export class SpotifyIntegration extends BaseIntegration {
     this.accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000;
     this.config.setSecret("spotify.refreshToken", tokens.refresh_token);
     this.setStatus("connected");
-    this.startPolling();
+    this.startPolling(() => this.poll(), POLL_INTERVAL_MS);
   }
 
   disconnect(): void {

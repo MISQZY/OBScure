@@ -13,12 +13,31 @@ export interface Integration {
 
 export abstract class BaseIntegration implements Integration {
   protected status: IntegrationStatus = "disconnected";
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     public readonly key: IntegrationKey,
     protected readonly eventBus: EventBus,
     protected readonly config: ConfigStore,
   ) {}
+
+  /**
+   * Clears any existing poll timer, invokes `fn` immediately, then invokes it
+   * again every `intervalMs`.
+   */
+  protected startPolling(
+    fn: () => void | Promise<void>,
+    intervalMs: number,
+  ): void {
+    this.stopPolling();
+    void fn();
+    this.pollTimer = setInterval(() => void fn(), intervalMs);
+  }
+
+  protected stopPolling(): void {
+    if (this.pollTimer) clearInterval(this.pollTimer);
+    this.pollTimer = null;
+  }
 
   protected setStatus(newStatus: IntegrationStatus) {
     if (this.status !== newStatus) {

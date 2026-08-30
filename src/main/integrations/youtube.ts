@@ -30,7 +30,6 @@ interface GoogleTokenResponse {
 }
 
 export class YoutubeIntegration extends BaseIntegration {
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
   private accessToken: string | null = null;
   private accessTokenExpiresAt = 0;
 
@@ -58,8 +57,7 @@ export class YoutubeIntegration extends BaseIntegration {
   }
 
   stop(): void {
-    if (this.pollTimer) clearInterval(this.pollTimer);
-    this.pollTimer = null;
+    this.stopPolling();
   }
 
   async connect(): Promise<void> {

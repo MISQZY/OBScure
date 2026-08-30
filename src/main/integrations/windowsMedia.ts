@@ -73,7 +73,6 @@ if ($props.Thumbnail) {
 `.trim();
 
 export class WindowsMediaIntegration extends BaseIntegration {
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
   private lastKey = "";
 
   start(): void {
@@ -87,13 +86,11 @@ export class WindowsMediaIntegration extends BaseIntegration {
     }
 
     this.setStatus("connected");
-    void this.poll();
-    this.pollTimer = setInterval(() => void this.poll(), POLL_INTERVAL_MS);
+    this.startPolling(() => this.poll(), POLL_INTERVAL_MS);
   }
 
   stop(): void {
-    if (this.pollTimer) clearInterval(this.pollTimer);
-    this.pollTimer = null;
+    this.stopPolling();
     this.setStatus("disconnected");
   }
 
