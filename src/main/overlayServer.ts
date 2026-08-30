@@ -66,10 +66,8 @@ export class OverlayServer {
 
   private latestNowPlaying: NowPlayingPayload | null = null;
 
-  /** Latest Roulette round state, broadcast to every connected overlay client the moment it changes — see the `roulette-state` subscription below and RouletteEngine. Served to a freshly-loaded overlay page (before any WS message arrives) via /overlays/config/roulette-state.json, mirroring latestNowPlaying's own now-playing.json. */
+  // Snapshot-for-late-joiners pattern — see docs/main-process.md ("Overlay Server").
   private latestRouletteState: RouletteStatePayload | null = null;
-
-  /** Same as latestRouletteState above, for RandomEngine's own commit/reveal rounds — see the `random-state` subscription below, and /overlays/config/random-state.json. */
   private latestRandomState: RandomStatePayload | null = null;
 
   constructor(options: OverlayServerOptions) {

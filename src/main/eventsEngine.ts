@@ -53,13 +53,8 @@ export class RandomEngine {
 
     this.pendingSeed = null;
 
-    // Stays 'revealed' — numbers/hash/seed all included — until the NEXT
-    // commit() call overwrites it. Previously auto-cleared back to 'idle'
-    // after a fixed 30s via a timer, which made the result (in the Random
-    // tool page and on any overlay showing it) disappear on its own even
-    // while someone was still looking at it — see RandomToolPage.tsx/the
-    // Random Widget, neither of which has any other way to reach this
-    // state, so there's nothing left depending on the old auto-clear.
+    // Stays 'revealed' indefinitely — no auto-clear timer. See
+    // docs/main-process.md ("Events Engine") for why.
     return this.emit({
       phase: "revealed",
       hash,
