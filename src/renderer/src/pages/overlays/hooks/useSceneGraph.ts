@@ -12,7 +12,7 @@ import {
 } from '@xyflow/react'
 import { NODE_SOCKETS, NODE_OUTPUTS, NODE_DEFAULTS } from '@/components/nodes'
 import type { CustomOverlay } from '@shared/types'
-import { PROCESS_TYPES, CONTAINER_TYPES, sortNodesForParenting, layoutGraph, migrateLegacyModifierEdges, migrateLegacyAudioPlayerEdges } from '../sceneUtils'
+import { PROCESS_TYPES, CONTAINER_TYPES, sortNodesForParenting, withFrameZIndex, FRAME_Z_INDEX, layoutGraph, migrateLegacyModifierEdges, migrateLegacyAudioPlayerEdges } from '../sceneUtils'
 import { defaultNodes, defaultEdges } from '../sceneBuilderConstants'
 
 /**
@@ -32,7 +32,7 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
   useEffect(() => {
     if (overlay) {
       const isBlank = !overlay.nodes || overlay.nodes.length === 0
-      setNodes(isBlank ? defaultNodes : sortNodesForParenting(overlay.nodes))
+      setNodes(isBlank ? defaultNodes : withFrameZIndex(sortNodesForParenting(overlay.nodes)))
       setEdges(isBlank ? defaultEdges : migrateLegacyAudioPlayerEdges(migrateLegacyModifierEdges(overlay.edges || [])))
     } else {
       setNodes(defaultNodes)
@@ -219,7 +219,7 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
       // object reference) so editing this node's data can never mutate the
       // shared defaults for every other node of this type.
       data: { ...(NODE_DEFAULTS[type] ?? {}) },
-      zIndex: type === 'frame' ? -1 : undefined
+      zIndex: type === 'frame' ? FRAME_Z_INDEX : undefined
     }
     setNodes((nds) => [...nds, newNode])
   }

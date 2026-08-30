@@ -664,6 +664,28 @@ export function sortNodesForParenting(nodes: Node[]): Node[] {
   return ordered
 }
 
+/**
+ * Fixed background z-index for every Layout Frame node (see addNode in
+ * hooks/useSceneGraph.ts) — negative enough that even React Flow's own
+ * "bump a selected node above everything" boost (+1000 while selected, see
+ * @xyflow/system's calculateZ) can never push a Frame above an unselected
+ * sibling's baseline z of 0. Without this, clicking a Frame to move or
+ * resize it (which selects it) briefly put it — and its own opaque header —
+ * ON TOP of the very children it's supposed to sit behind, for as long as
+ * it stayed selected.
+ */
+export const FRAME_Z_INDEX = -10000
+
+/**
+ * Re-applies FRAME_Z_INDEX to every Frame node — a node's own `zIndex`
+ * comes from addNode at creation time, so this only matters for nodes
+ * loaded from a save made before FRAME_Z_INDEX existed (or edited by hand).
+ * Leaves every other node's zIndex untouched.
+ */
+export function withFrameZIndex(nodes: Node[]): Node[] {
+  return nodes.map((n) => (n.type === 'frame' && n.zIndex !== FRAME_Z_INDEX ? { ...n, zIndex: FRAME_Z_INDEX } : n))
+}
+
 /** Fallback size (px) for a node dagre hasn't measured yet — see layoutGraph. Close to BaseNode's own real footprint (min-w-[150px] plus a couple of socket rows) so the very first Prettify pass on a freshly-loaded graph is still reasonable before nodes settle to their true rendered size. */
 export const LAYOUT_DEFAULT_SIZE = { width: 190, height: 110 }
 
@@ -689,6 +711,18 @@ export const LAYOUT_DEFAULT_SIZE = { width: 190, height: 110 }
  * untouched, and this never runs automatically; it's a one-shot action from
  * the Prettify button, so a user's own manual arrangement is never silently
  * overwritten.
+ *
+ * A node nested inside a Layout Frame (`parentId` set) is left exactly
+ * where it is, Frame nodes themselves included: dagre only ever computes
+ * ABSOLUTE layout-space coordinates, but a child's own `position` is
+ * relative to its Frame, not the canvas — handing dagre's result straight
+ * to a child would have React Flow reinterpret that absolute coordinate as
+ * a relative offset from the Frame and fling it way outside it the instant
+ * Prettify writes it back (the "pulls nodes out of the Layout Frame" bug).
+ * Frame nodes have no edges of their own (Frame isn't in NODE_SOCKETS) for
+ * dagre to rank them by either, so there's nothing useful for it to decide
+ * about their position anyway — whatever's nested inside rides along
+ * automatically once the Frame itself stays put.
  */
 export function layoutGraph(nodes: Node[], edges: Edge[]): Node[] {
   const g = new dagre.graphlib.Graph()
@@ -700,11 +734,14 @@ export function layoutGraph(nodes: Node[], edges: Edge[]): Node[] {
     height: node.measured?.height ?? LAYOUT_DEFAULT_SIZE.height
   })
 
-  for (const node of nodes) {
+  const layoutable = nodes.filter((n) => !n.parentId && n.type !== 'frame')
+  const layoutableIds = new Set(layoutable.map((n) => n.id))
+
+  for (const node of layoutable) {
     g.setNode(node.id, sizeOf(node))
   }
   for (const edge of edges) {
-    if (!g.hasNode(edge.source) || !g.hasNode(edge.target)) continue
+    if (!layoutableIds.has(edge.source) || !layoutableIds.has(edge.target)) continue
     g.setEdge(edge.source, edge.target, { weight: edge.targetHandle === 'event-in' ? 12 : 1 })
   }
 
