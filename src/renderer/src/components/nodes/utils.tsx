@@ -344,7 +344,7 @@ export function BaseNode({
             <span className="truncate shrink-0">{title}</span>
             {help && (
               <NodePopover
-                side="right"
+                side="bottom"
                 className="w-56 text-xs leading-snug p-2.5"
                 trigger={
                   <button

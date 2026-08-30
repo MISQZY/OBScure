@@ -17,3 +17,23 @@
   position: absolute;
   inset: -8px;
 }
+
+/*
+  React Flow ships a default look (fixed 150px width, padding, border, a
+  translucent grey background) for its own reserved built-in node type
+  names — input/default/output/group — applied purely by matching the
+  node's `type` string via a `.react-flow__node-<type>` class, completely
+  independent of whatever component `nodeTypes` actually maps that type
+  to (dist/style.css in @xyflow/react). Our own "group" node (GroupNode —
+  an invisible content-grouping wrapper, unrelated to React Flow's own
+  grouping concept) collides with that reserved name, so every Group node
+  was quietly inheriting this stray box drawn behind its own custom
+  markup. Neutralize it so GroupNode's own rendering is the only thing
+  visible.
+*/
+.react-flow__node-group {
+  width: auto;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+}
