@@ -1,15 +1,12 @@
 import WebSocket from "ws";
 import type { EventBus } from "../../eventBus";
 import type { IntegrationStatus } from "../types";
-import { refreshAccessToken } from "./auth";
 import {
   parseEventSubMessage,
   DEFAULT_KEEPALIVE_TIMEOUT_SECONDS,
   MIN_RECONNECT_DELAY_MS,
   MAX_RECONNECT_DELAY_MS,
-  EVENTSUB_WS_URL,
   EventSubSession,
-  TwitchTokenResponse,
 } from "./utils";
 
 import {
@@ -21,12 +18,9 @@ import {
 /** Hooks that let TwitchSocket delegate back into TwitchIntegration's state. */
 export interface TwitchSocketHandlers {
   isStopping(): boolean;
-  getClientId(): string | null;
-  getRefreshToken(): string | null;
-  applyTokens(tokens: TwitchTokenResponse): void;
   setStatus(status: IntegrationStatus): void;
   subscribeAll(sessionId: string): Promise<void>;
-  onConnectFailure(error: unknown): void;
+  reconnect(): Promise<void>;
   eventBus: EventBus;
 }
 
@@ -237,21 +231,7 @@ export class TwitchSocket {
 
   private async reconnect(): Promise<void> {
     if (this.handlers.isStopping()) return;
-    const clientId = this.handlers.getClientId();
-    const refreshToken = this.handlers.getRefreshToken();
-    if (!clientId || !refreshToken) {
-      this.handlers.setStatus("disconnected");
-      return;
-    }
-
-    this.handlers.setStatus("connecting");
-    try {
-      const tokens = await refreshAccessToken(clientId, refreshToken);
-      this.handlers.applyTokens(tokens);
-      await this.openSession(EVENTSUB_WS_URL);
-    } catch (error) {
-      this.handlers.onConnectFailure(error);
-    }
+    await this.handlers.reconnect();
   }
 
   /** Clears all timers and forcibly closes the current socket, if any. */

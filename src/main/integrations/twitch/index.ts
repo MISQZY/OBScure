@@ -36,12 +36,9 @@ export class TwitchIntegration extends BaseIntegration {
     super(key, eventBus, config);
     this.twitchSocket = new TwitchSocket({
       isStopping: () => this.stopping,
-      getClientId: () => this.clientId,
-      getRefreshToken: () => this.config.getSecret("twitch.refreshToken"),
-      applyTokens: (tokens) => this.applyTokens(tokens),
       setStatus: (status) => this.setStatus(status),
       subscribeAll: (sessionId) => this.subscribeAll(sessionId),
-      onConnectFailure: (error) => this.handleConnectFailure(error),
+      reconnect: () => this.reconnect(),
       eventBus: this.eventBus,
     });
   }
@@ -69,6 +66,26 @@ export class TwitchIntegration extends BaseIntegration {
     refreshToken: string,
   ): Promise<void> {
     await waitForOnline(STARTUP_ONLINE_WAIT_MS);
+    await this.establishConnection(clientId, refreshToken);
+  }
+
+  /** Re-derives credentials from stored state and (re)establishes the socket. */
+  private async reconnect(): Promise<void> {
+    const clientId = this.clientId;
+    const refreshToken = this.config.getSecret("twitch.refreshToken");
+    if (!clientId || !refreshToken) {
+      this.setStatus("disconnected");
+      return;
+    }
+
+    this.setStatus("connecting");
+    await this.establishConnection(clientId, refreshToken);
+  }
+
+  private async establishConnection(
+    clientId: string,
+    refreshToken: string,
+  ): Promise<void> {
     try {
       const tokens = await refreshAccessToken(clientId, refreshToken);
       this.applyTokens(tokens);
