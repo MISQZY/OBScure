@@ -130,9 +130,13 @@ export function useHasIncomingEdgeFromType(nodeId: string, targetHandle: string,
  * output wired directly into THIS node's own Content socket (Content is one
  * bundled wire — see AUDIO_PLAYER_OUTPUTS/audioContentValues in overlays/
  * custom.html — so wiring it in arms both placeholders together, never just
- * one). Roulette Entrants has no placeholder tokens of its own — it feeds a
- * Text's Content socket as a full REPLACEMENT (see ROULETTE_ENTRANTS_OUTPUTS'
- * own doc comment in constants.ts and TextNode.tsx's own doc comment), not a
+ * one). Random's Content output works the same way (see RANDOM_OUTPUTS/
+ * randomContentValues) — wiring it into THIS node's own Content socket arms
+ * 'number'/'numbers'/'hash'/'seed' together, no scene-wide equivalent (it
+ * has nothing like Audio Player's own Event-into-Scene arming). Roulette
+ * Entrants has no placeholder tokens of its own — it feeds a Text's Content
+ * socket as a full REPLACEMENT (see ROULETTE_ENTRANTS_OUTPUTS' own doc
+ * comment in constants.ts and TextNode.tsx's own doc comment), not a
  * template these tokens fill into. Doesn't verify precise reachability from
  * this specific node's own Scene for the Event/scene-wide Audio check (just
  * whether one exists ANYWHERE in the graph) — a false positive only offers a
@@ -155,9 +159,13 @@ export function useAvailablePlaceholders(nodeId: string): readonly string[] {
       const directAudioContent = s.edges.some(
         (e) => e.target === nodeId && e.targetHandle === 'content' && s.nodes.find((n) => n.id === e.source)?.type === 'audioPlayer'
       )
+      const directRandomContent = s.edges.some(
+        (e) => e.target === nodeId && e.targetHandle === 'content' && s.nodes.find((n) => n.id === e.source)?.type === 'randomSource'
+      )
       const result: string[] = []
       if (hasEvent) result.push(...EVENT_PLACEHOLDERS)
       if (audioIntoScene || directAudioContent) result.push('artist', 'title')
+      if (directRandomContent) result.push('number', 'numbers', 'hash', 'seed')
       return result
     },
     (a, b) => a.length === b.length && a.every((v, i) => v === b[i])

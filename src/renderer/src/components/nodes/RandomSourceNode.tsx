@@ -32,13 +32,13 @@ import { useIntegrationsStatus } from '@/hooks/use-integration-status'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { HexColorPicker, HexColorInput } from 'react-colorful'
 
-import { 
+import {
   NodeCategory, InputSocket, OutputSocket,
   TEXT_SOCKETS, IMAGE_SOCKETS, VIDEO_SOCKETS, BOX_SOCKETS, SCENE_SOCKETS, BACKGROUND_FX_SOCKETS, START_SOCKETS, TASK_SOCKETS,
-  TEXT_OUTPUTS, IMAGE_OUTPUTS, VIDEO_OUTPUTS, BOX_OUTPUTS, AUDIO_PLAYER_OUTPUTS,
+  TEXT_OUTPUTS, IMAGE_OUTPUTS, VIDEO_OUTPUTS, BOX_OUTPUTS, AUDIO_PLAYER_OUTPUTS, RANDOM_OUTPUTS,
 } from './constants'
 import {
-  useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect, PlaceholderPicker, 
+  useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect, PlaceholderPicker,
   numberInputClass, textInputClass, textAreaClass, selectClass,
   SYSTEM_DEFAULT_FONT, TEXT_ALIGN_BUTTONS, TEXT_VERTICAL_BUTTONS, IconToggleGroup, UploadRow,
   ANIMATION_SUB_TYPES, BOX_SHAPE_IDS, EVENT_KINDS, ALERT_PLATFORM_LABELS, inferAlertPlatform, TASK_ACTIONS,
@@ -46,14 +46,25 @@ import {
 } from './utils'
 
 /**
- * Instrumental data sources — ongoing feeds/tools rather than one-shot
- * events, unlike EventNode above. Documents that a scene is meant to react
- * to Random/Roulette; not wired into any render logic yet (no effect on
- * rendering — same "reserved" state the old Data Source node's non-alert
- * options were already in). AudioPlayerNode below is the third member of
- * this "instrumental" group but, unlike these two, IS wired into rendering —
- * see its own doc comment.
+ * Live commit/reveal state from the Random tool (RandomEngine, driven by the
+ * Roll/Reveal buttons on RandomToolPage.tsx — min/max/count come from that
+ * page's own saved config, not from this node). Placing this ALSO places a
+ * permanently-paired Random Widget (see addNode's own doc comment in
+ * hooks/useSceneGraph.ts) — that's the node you actually wire into Scene to
+ * show the rolling numbers; this one stays a pure data/control node, same
+ * family as Roulette/Audio Player/Event. See RANDOM_OUTPUTS' own doc comment
+ * in constants.ts for exactly what each output does and where to wire it;
+ * that's also surfaced here as each row's own "?" help.
  */
 export function RandomSourceNode({ id, data }: NodeProps) {
-  return <BaseNode id={id} data={data} title="Random" category="data" soon help="Reserved for a Random-roll feed." />
+  return (
+    <BaseNode
+      id={id}
+      data={data}
+      title="Random"
+      category="data"
+      outputSockets={RANDOM_OUTPUTS}
+      help="Live commit/reveal state from the Random tool. Auto-paired with its own Random Widget — that's the node to wire into Scene. See each output's own ? for exactly what it does and where to wire it."
+    />
+  )
 }

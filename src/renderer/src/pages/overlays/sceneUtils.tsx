@@ -171,6 +171,30 @@ export const SAMPLE_ROULETTE_STATE = {
 }
 
 /**
+ * Sample roll for previewing a Random node's Content/Event outputs (see
+ * RANDOM_OUTPUTS in components/nodes/constants.ts) in the editor — same
+ * reasoning as SAMPLE_ROULETTE_STATE above: there's no live commit/reveal
+ * feed inside the builder (the real overlay gets one over the
+ * 'random-state' broadcast channel — see overlays/custom.html), so anything
+ * wired to Random always previews with this fixed sample instead. `phase`
+ * is fixed at 'revealed' (not 'idle'/'committed') so the Widget/Result
+ * preview always has something concrete to show rather than an empty state.
+ * Three numbers (not one) so the Widget's preview actually demonstrates a
+ * multi-result roll (Count > 1) — the real count only exists in the Random
+ * tool's own saved config (RandomToolPage.tsx), not on the node itself, so
+ * there's no "real" count to mirror here either way.
+ */
+export const SAMPLE_RANDOM_STATE = {
+  phase: 'revealed' as const,
+  numbers: [42, 17, 8],
+  hash: 'a3f9c1d8e2b74650f1a9c3d7e8b2f405c6a1d9e3f7b8c2a5d6e9f1b3c7a8d2e4',
+  seed: '91cdab34ef567890123456789abcdef0',
+  min: 1,
+  max: 100,
+  count: 3
+}
+
+/**
  * {entrants, entrantsList, winner, timeLeft} sample vars for a Start-armed-
  * by-Roulette process's own simulated Play/Test run (see
  * handlePlay in hooks/useScenePlayback.ts) — lets a Task's own
@@ -252,6 +276,30 @@ export function rouletteEntrantsTextValue(nodeId: string, edges: Edge[], map: No
   const rows = rouletteEntrantRows(SAMPLE_ROULETTE_STATE.entrants, entrantsData)
   const layout = (entrantsData.layout as string) || 'list'
   return layout === 'inline' ? rows.join((entrantsData.separator as string) ?? ', ') : rows.join('\n')
+}
+
+
+/**
+ * { number, numbers, hash, seed } from SAMPLE_RANDOM_STATE when Random's
+ * Content output (see RANDOM_OUTPUTS in components/nodes/constants.ts) feeds
+ * this Text's own Content socket, or null when it isn't wired in — same
+ * placeholder-MERGE shape as audioContentValues above (own doc comment
+ * covers the shared reasoning): this only ever supplies values a template
+ * still decides how to use, so the Text's own textarea stays fully editable
+ * (unlike Roulette Entrants' REPLACE-outright wire). `number` is the first
+ * rolled value; `numbers` space-joins all of them, for a multi-roll. Mirrors
+ * randomContentValues in overlays/custom.html, which instead reads the REAL
+ * live roll.
+ */
+export function randomContentValues(nodeId: string, edges: Edge[], map: NodeMap): { number: number | string; numbers: string; hash: string; seed: string } | null {
+  const hasRandomContent = edges.some((e) => e.target === nodeId && e.targetHandle === 'content' && map[e.source]?.type === 'randomSource')
+  if (!hasRandomContent) return null
+  return {
+    number: SAMPLE_RANDOM_STATE.numbers[0] ?? '',
+    numbers: SAMPLE_RANDOM_STATE.numbers.join(' '),
+    hash: SAMPLE_RANDOM_STATE.hash,
+    seed: SAMPLE_RANDOM_STATE.seed
+  }
 }
 
 
@@ -631,7 +679,7 @@ export function nextProcessNode(nodeId: string, edges: Edge[], map: NodeMap): No
 }
 
 
-export const CONTENT_TYPES = new Set(['text', 'image', 'video', 'box', 'group', 'rouletteWidget'])
+export const CONTENT_TYPES = new Set(['text', 'image', 'video', 'box', 'group', 'rouletteWidget', 'randomWidget'])
 
 /** Box and Group — the two node types that can nest one another via their shared `children` socket (see BOX_SOCKETS' own doc comment in components/nodes/index.tsx), and so are the only ones isValidConnection's cycle guard needs to walk. */
 export const CONTAINER_TYPES = new Set(['box', 'group'])
@@ -1151,15 +1199,19 @@ export function processExitBufferMs(schedule: ScheduledTask[], totalMs: number):
  * Whether Scene's process is armed — either by a DataSource(alert) wired
  * into its Start node (`alertTypes`, matched against a real alert), by an
  * Audio Player wired into Start (`audioArmed` — a track-change trigger
- * instead of a type match), or by a Roulette node wired into Start
- * (`rouletteArmed` — fires the moment a round starts collecting). All three
- * are only meaningful in the real overlay since the editor has no live
- * now-playing/roulette feed to react to — see processTrigger in
- * overlays/custom.html. Any one alone makes `active` true.
+ * instead of a type match), by a Roulette node wired into Start
+ * (`rouletteArmed` — fires the moment a round starts collecting), or by a
+ * Random node wired into Start (`randomArmed` — fires the moment a roll is
+ * committed). All four are only meaningful in the real overlay since the
+ * editor has no live now-playing/roulette/random feed to react to — see
+ * processTrigger in overlays/custom.html. Any one alone makes `active` true.
  */
-export function processTrigger(nodes: Node[], edges: Edge[]): { active: boolean; alertTypes: string[]; audioArmed: boolean; rouletteArmed: boolean } {
+export function processTrigger(
+  nodes: Node[],
+  edges: Edge[]
+): { active: boolean; alertTypes: string[]; audioArmed: boolean; rouletteArmed: boolean; randomArmed: boolean } {
   const start = nodes.find((n) => n.type === 'start')
-  if (!start) return { active: false, alertTypes: [], audioArmed: false, rouletteArmed: false }
+  if (!start) return { active: false, alertTypes: [], audioArmed: false, rouletteArmed: false, randomArmed: false }
   const map = buildNodeMap(nodes)
   const members = incoming(start.id, edges, map)
   const alertTypes = [
@@ -1172,7 +1224,8 @@ export function processTrigger(nodes: Node[], edges: Edge[]): { active: boolean;
   ]
   const audioArmed = members.some((n) => n.type === 'audioPlayer')
   const rouletteArmed = members.some((n) => n.type === 'rouletteSource')
-  return { active: alertTypes.length > 0 || audioArmed || rouletteArmed, alertTypes, audioArmed, rouletteArmed }
+  const randomArmed = members.some((n) => n.type === 'randomSource')
+  return { active: alertTypes.length > 0 || audioArmed || rouletteArmed || randomArmed, alertTypes, audioArmed, rouletteArmed, randomArmed }
 }
 
 
@@ -1251,6 +1304,27 @@ export function crossAxisFor(mods: Node[]): 'horizontal' | 'vertical' {
   const ordering = mods.find((m) => m.type === 'ordering')
   const layout = (ordering?.data.layout as string) || 'vertical'
   return layout === 'horizontal' ? 'vertical' : 'horizontal'
+}
+
+
+/**
+ * A Random Widget's own Ordering wire (see RANDOM_WIDGET_SOCKETS in
+ * components/nodes/constants.ts) resolved into a raw flex direction/gap —
+ * unlike orderingClass/orderingGap above (Tailwind classes, for Box/Scene's
+ * own children), this widget uses inline styles throughout, and its
+ * un-wired DEFAULT is a row (numbers side by side, wrapping if there's not
+ * enough width) rather than Box/Scene's own column default — a roll result
+ * reads far more naturally left-to-right than stacked, and this widget
+ * never had any prior scene depending on a column default to preserve.
+ * Mirrors randomWidgetOrdering in overlays/custom.html.
+ */
+export function randomWidgetOrdering(mods: Node[]): { flexDirection: 'row' | 'row-reverse' | 'column' | 'column-reverse'; gap: number } {
+  const ordering = mods.find((m) => m.type === 'ordering')
+  if (!ordering) return { flexDirection: 'row', gap: 12 }
+  const layout = (ordering.data.layout as string) || 'vertical'
+  const direction = (ordering.data.direction as string) || 'direct'
+  const flexDirection = layout === 'horizontal' ? (direction === 'revert' ? 'row-reverse' : 'row') : direction === 'revert' ? 'column-reverse' : 'column'
+  return { flexDirection, gap: (ordering.data.gap as number) ?? 8 }
 }
 
 

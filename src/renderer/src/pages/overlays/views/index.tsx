@@ -5,7 +5,8 @@ import { Music, Image as ImageIcon, Video as VideoIcon, Play } from "lucide-reac
 import { cn } from "@/lib/utils";
 import type { OverlayUrls } from "@shared/types";
 import { RouletteWheel } from "../../tools/RouletteWheel";
-import { buildNodeMap, incoming, lastOfType, migrateLegacyModifierEdges, migrateLegacyAudioPlayerEdges, SAMPLE_ALERT_VARS, SAMPLE_AUDIO_VARS, SAMPLE_ROULETTE_STATE, audioContentValues, hasAudioCover, rouletteEntrantsTextValue, sceneTrigger, sceneAudioTrigger, animationFallbackMs, maxExitDurationMs, interpolate, hexToRgba, modifierStyle, borderStyle, animationAttrs, overflowAutoScroll, PROCESS_TYPES, nextProcessNode, displayEdges, minimapNodeColor, layoutGraph, buildProcessSchedule, handleScreenCenter, processChainNodes, pointOnBezier, processTokenChain, processTokenPosition, processExitBufferMs, processTrigger, computeTaskState, orderingClass, orderingGap, crossAxisFor, boxShapeStyle, MAX_BOX_DEPTH, findBackgroundFx, findBackgroundFxLabel, SaveStatus, NodeMap, Anim, OverflowAutoScroll, ScheduledTask, TaskState } from "../sceneUtils";
+import { RandomSlotMachine } from "../../tools/RandomSlotMachine";
+import { buildNodeMap, incoming, lastOfType, migrateLegacyModifierEdges, migrateLegacyAudioPlayerEdges, SAMPLE_ALERT_VARS, SAMPLE_AUDIO_VARS, SAMPLE_ROULETTE_STATE, SAMPLE_RANDOM_STATE, audioContentValues, randomContentValues, hasAudioCover, rouletteEntrantsTextValue, sceneTrigger, sceneAudioTrigger, animationFallbackMs, maxExitDurationMs, interpolate, hexToRgba, modifierStyle, borderStyle, animationAttrs, overflowAutoScroll, PROCESS_TYPES, nextProcessNode, displayEdges, minimapNodeColor, layoutGraph, buildProcessSchedule, handleScreenCenter, processChainNodes, pointOnBezier, processTokenChain, processTokenPosition, processExitBufferMs, processTrigger, computeTaskState, orderingClass, orderingGap, crossAxisFor, randomWidgetOrdering, boxShapeStyle, MAX_BOX_DEPTH, findBackgroundFx, findBackgroundFxLabel, SaveStatus, NodeMap, Anim, OverflowAutoScroll, ScheduledTask, TaskState } from "../sceneUtils";
 
 /**
  * Small circle that slides along the process's own Sequence-flow edges
@@ -384,7 +385,42 @@ export function RouletteWheelView({ node, style, anim, played, hiding }: { node:
 }
 
 
-/** A content node (Text/Image/Video/Roulette wheel), or a nested Box (delegated to BoxView) — plus whatever's wired into ITS input (Position, Transform, Animation, ...). Roulette Entrants (see RouletteEntrantsNode.tsx) isn't among these — it has no rendering of its own, only a Content wire into a Text node's own socket (see rouletteEntrantsTextValue below). */
+/**
+ * What a Random Widget node itself renders (see NODE_SOCKETS.randomWidget/
+ * RANDOM_WIDGET_OUTPUTS in components/nodes/constants.ts) — reuses the real
+ * RandomSlotMachine component (pages/tools/RandomSlotMachine.tsx) the
+ * standalone Random tool page itself renders, fed the fixed
+ * SAMPLE_RANDOM_STATE (the editor has no live roll to preview — see that
+ * constant's own doc comment). Always shown, regardless of whether this
+ * widget's own `visible` socket is wired — same reasoning as
+ * RouletteWheelView's own doc comment. Static: `animate` is false, since
+ * there's no real roll to animate toward in the editor. `size` (from a
+ * wired Size modifier, width falling back to height, then 320 — matching
+ * RandomSlotMachine's own baseline) scales the boxes rather than clipping
+ * to a fixed box — a slot machine's natural width already depends on how
+ * many digits/numbers there are, unlike Roulette's fixed-square wheel.
+ * Mirrors buildRandomWidget in overlays/custom.html, which instead reads
+ * the REAL live roll, honors the `visible` socket, and does animate the
+ * reveal. `mods` — same list `style` was already built from — is read again
+ * here for its own Ordering wire (randomWidgetOrdering), which controls how
+ * the numbers lay out relative to EACH OTHER once Count is above 1.
+ */
+export function RandomWidgetView({ node, style, anim, played, hiding, mods }: { node: Node; style: React.CSSProperties; anim: Anim; played: boolean; hiding: boolean; mods: Node[] }) {
+  const size = typeof style.width === 'number' ? style.width : typeof style.height === 'number' ? style.height : 320
+  const { flexDirection, gap } = randomWidgetOrdering(mods)
+  return (
+    <div
+      className={cn('flex flex-col items-center justify-center shrink-0', anim && played && 'visible', anim && hiding && 'hiding')}
+      data-animation={anim?.type}
+      style={{ ...style, width: 'auto', height: 'auto', ...(anim?.duration ? { '--anim-duration': `${anim.duration}ms` } : {}) } as React.CSSProperties}
+    >
+      <RandomSlotMachine numbers={SAMPLE_RANDOM_STATE.numbers} min={SAMPLE_RANDOM_STATE.min} max={SAMPLE_RANDOM_STATE.max} animate={false} size={size} flexDirection={flexDirection} gap={gap} />
+    </div>
+  )
+}
+
+
+/** A content node (Text/Image/Video/Roulette wheel/Random widget), or a nested Box (delegated to BoxView) — plus whatever's wired into ITS input (Position, Transform, Animation, ...). Roulette Entrants (see RouletteEntrantsNode.tsx) isn't among these — it has no rendering of its own, only a Content wire into a Text node's own socket (see rouletteEntrantsTextValue below); Random has no node of its own like it at all, its Content output wiring straight into a Text's Content socket instead (see randomContentValues below). */
 export function ContentView({
   node,
   edges,
@@ -426,7 +462,15 @@ export function ContentView({
     )
   }
   const mods = incoming(node.id, edges, map)
+  // Audio Player and Random can both feed the same Text's Content socket at
+  // once (it's `multi: true` — see TEXT_SOCKETS in components/nodes/
+  // constants.ts) — each only ever SUPPLIES placeholder values, never
+  // replaces the template, so merging them is exactly what wiring both in
+  // means: {artist}/{title} AND {number}/{numbers}/{hash}/{seed} all
+  // available together.
   const audioValues = node.type === 'text' ? audioContentValues(node.id, edges, map) : null
+  const randomValues = node.type === 'text' ? randomContentValues(node.id, edges, map) : null
+  const contentValues = audioValues || randomValues ? { ...audioValues, ...randomValues } : null
   const replaceText = node.type === 'text' ? rouletteEntrantsTextValue(node.id, edges, map) : null
   const audioCover = node.type === 'image' && hasAudioCover(node.id, edges, map)
   // Task-agnostic, same reasoning as overflowAutoScroll's own doc comment —
@@ -436,18 +480,20 @@ export function ContentView({
   if (schedule.length > 0 && schedule.some((s) => s.targetId === node.id)) {
     const task = computeTaskState(schedule, node.id, clockMs, mods)
     if (!task.visible) return null
-    if (node.type === 'text') return <TextView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} vars={vars} contentValues={audioValues} replaceText={replaceText} crossAxis={crossAxis} autoScroll={autoScroll} />
+    if (node.type === 'text') return <TextView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} vars={vars} contentValues={contentValues} replaceText={replaceText} crossAxis={crossAxis} autoScroll={autoScroll} />
     if (node.type === 'image') return <ImageView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} urls={urls} audioCover={audioCover} />
     if (node.type === 'video') return <VideoView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} />
     if (node.type === 'rouletteWidget') return <RouletteWheelView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} />
+    if (node.type === 'randomWidget') return <RandomWidgetView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} mods={mods} />
     return null
   }
   const style = modifierStyle(mods)
   const anim = animationAttrs(mods)
-  if (node.type === 'text') return <TextView node={node} style={style} anim={anim} played={played} hiding={hiding} vars={vars} contentValues={audioValues} replaceText={replaceText} crossAxis={crossAxis} autoScroll={autoScroll} />
+  if (node.type === 'text') return <TextView node={node} style={style} anim={anim} played={played} hiding={hiding} vars={vars} contentValues={contentValues} replaceText={replaceText} crossAxis={crossAxis} autoScroll={autoScroll} />
   if (node.type === 'image') return <ImageView node={node} style={style} anim={anim} played={played} hiding={hiding} urls={urls} audioCover={audioCover} />
   if (node.type === 'video') return <VideoView node={node} style={style} anim={anim} played={played} hiding={hiding} />
   if (node.type === 'rouletteWidget') return <RouletteWheelView node={node} style={style} anim={anim} played={played} hiding={hiding} />
+  if (node.type === 'randomWidget') return <RandomWidgetView node={node} style={style} anim={anim} played={played} hiding={hiding} mods={mods} />
   return null
 }
 
@@ -483,7 +529,7 @@ export function BoxView({
     depth >= MAX_BOX_DEPTH
       ? []
       : incomingNodes.filter(
-          (n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group' || n.type === 'rouletteWidget'
+          (n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
         )
   const orderClass = orderingClass(incomingNodes)
   const childCrossAxis = crossAxisFor(incomingNodes)
@@ -793,7 +839,7 @@ export function ScenePreview({
   }
 
   const renderable = incoming(scene.id, edges, map).filter(
-    (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget'
+    (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
   )
   const orderMods = incoming(scene.id, edges, map)
   if (renderable.length === 0) {

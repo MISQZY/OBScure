@@ -6,46 +6,7 @@ import { CopyableValue } from '@/components/CopyableValue'
 import { useI18n } from '@/providers/I18nProvider'
 import { DEFAULT_RANDOM_CONFIG, type RandomConfig } from '@shared/eventsConfig'
 import type { RandomStatePayload } from '@shared/types'
-
-function SlotMachineNumber({ targetNumber, min, max, stopDelayMs }: { targetNumber: number, min: number, max: number, stopDelayMs: number }) {
-  const [rolling, setRolling] = useState(true)
-  const [strip] = useState<number[]>(() => {
-    const arr = [targetNumber]
-    for (let i = 0; i < 40; i++) {
-      arr.push(min + Math.floor(Math.random() * (max - min + 1)))
-    }
-    return arr
-  })
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setRolling(false)
-    }, 50)
-
-    return () => clearTimeout(t)
-  }, [])
-  const maxChars = Math.max(min.toString().length, max.toString().length)
-
-  return (
-    <div 
-      className="relative overflow-hidden h-[54px] inline-flex justify-center items-start px-2.5 bg-muted/30 rounded-md text-center font-mono ring-1 ring-border shadow-inner text-3xl font-bold"
-      style={{ width: `calc(${maxChars}ch + 1.25rem)` }}
-    >
-      <div 
-        className="flex flex-col transition-transform w-full"
-        style={{ 
-          transform: rolling ? `translateY(-${(strip.length - 1) * 54}px)` : `translateY(0)`,
-          transitionDuration: rolling ? '0ms' : `${stopDelayMs}ms`,
-          transitionTimingFunction: 'cubic-bezier(0.15, 0.85, 0.35, 1)' // smooth deceleration
-        }}
-      >
-        {strip.map((n, i) => (
-          <div key={i} className="h-[54px] flex-shrink-0 flex items-center justify-center leading-none">{n}</div>
-        ))}
-      </div>
-    </div>
-  )
-}
+import { SlotMachineNumber } from './RandomSlotMachine'
 
 const IDLE_STATE: RandomStatePayload = {
   phase: 'idle',

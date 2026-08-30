@@ -98,7 +98,7 @@ export const MODIFIER_SOCKETS: InputSocket[] = [
 // as Box's 'children'/Scene's own 'content' socket, so its dot reads green
 // like theirs instead of the data-source violet/sky-blue tint.
 export const TEXT_SOCKETS: InputSocket[] = [
-  { id: 'content', label: 'Content', accepts: ['audioPlayer', 'rouletteEntrants'], kind: 'content', multi: true },
+  { id: 'content', label: 'Content', accepts: ['audioPlayer', 'rouletteEntrants', 'randomSource'], kind: 'content', multi: true },
   ...MODIFIER_SOCKETS
 ]
 // The mandatory Roulette Widget's own two inputs — Source (accepts ONLY
@@ -125,6 +125,28 @@ export const ROULETTE_WIDGET_SOCKETS: InputSocket[] = [
 // comment in hooks/useSceneGraph.ts for how its creation differs from the
 // Widget's).
 export const ROULETTE_ENTRANTS_SOCKETS: InputSocket[] = [{ id: 'source', label: 'Source', accepts: ['rouletteSource'], kind: 'content' }]
+// Same pairing shape as ROULETTE_WIDGET_SOCKETS above: a Random Widget's own
+// Source is locked to the ONE Random node it was auto-paired with (see
+// addNode's own doc comment in hooks/useSceneGraph.ts), Visibility is the
+// same Random's own Event output (see RANDOM_OUTPUTS below) wired in to hide
+// THIS widget outside an active roll instead of it always showing. Unlike
+// Roulette, Random has no second auto-created node — its Content output
+// wires DIRECTLY into a Text node's own Content socket instead (a
+// placeholder merge, same shape as Audio Player's own Content wire — see
+// TEXT_SOCKETS above / randomContentValues in overlays/sceneUtils.tsx), so
+// there's nothing here for a separate node to own.
+export const RANDOM_WIDGET_SOCKETS: InputSocket[] = [
+  { id: 'source', label: 'Source', accepts: ['randomSource'], kind: 'content' },
+  { id: 'visible', label: 'Visibility', accepts: ['randomSource'], kind: 'data' },
+  ...MODIFIER_SOCKETS,
+  // Same Ordering socket Box/Scene have (see BOX_SOCKETS above) — controls
+  // how the rolled numbers lay out relative to EACH OTHER (row/column, gap)
+  // once Count is above 1. Not needed at all for a single number; matters
+  // once there's more than one to arrange, same as it would for any other
+  // multi-item layout — see RandomWidgetView in overlays/views/index.tsx /
+  // buildRandomWidget in overlays/custom.html.
+  { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' }
+]
 // Same "Content" concept as TEXT_SOCKETS' own socket above, but for Image:
 // wiring Audio Player's Content output in shows the live now-playing album
 // art unconditionally (see buildImage's own doc comment), taking priority
@@ -148,13 +170,13 @@ export const VIDEO_SOCKETS: InputSocket[] = MODIFIER_SOCKETS
  * nested, same as at the top level.
  */
 export const BOX_SOCKETS: InputSocket[] = [
-  { id: 'children', label: 'Children', accepts: ['text', 'image', 'video', 'box', 'group', 'rouletteWidget'], kind: 'content', multi: true },
+  { id: 'children', label: 'Children', accepts: ['text', 'image', 'video', 'box', 'group', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true },
   ...MODIFIER_SOCKETS,
   { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' }
 ]
 
 export const SCENE_SOCKETS: InputSocket[] = [
-  { id: 'content', label: 'Content', accepts: ['box', 'group', 'text', 'image', 'video', 'rouletteWidget'], kind: 'content', multi: true },
+  { id: 'content', label: 'Content', accepts: ['box', 'group', 'text', 'image', 'video', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true },
   // kind 'data', not 'style' — Background FX is category 'data' (see its own
   // doc comment below), so this socket's dot/wire should match ITS color,
   // not the per-component style modifiers (Position/Animation/...) it has
@@ -188,7 +210,7 @@ export const START_SOCKETS: InputSocket[] = [
   // AUDIO_PLAYER_OUTPUTS below) — an alternative to an Event node for
   // arming a process: fires on a track change instead of matching a real
   // alert's type. See processTrigger's audioArmed in overlays/custom.html.
-  { id: 'event', label: 'Event', accepts: ['event', 'audioPlayer', 'rouletteSource'], kind: 'data' },
+  { id: 'event', label: 'Event', accepts: ['event', 'audioPlayer', 'rouletteSource', 'randomSource'], kind: 'data' },
   { id: 'sound', label: 'Sound', accepts: ['sound'], kind: 'data' },
   { id: 'backgroundFx', label: 'Background FX', accepts: ['backgroundAnimation'], kind: 'data' }
 ]
@@ -222,7 +244,8 @@ export const NODE_SOCKETS: Record<string, InputSocket[]> = {
   start: START_SOCKETS,
   task: TASK_SOCKETS,
   rouletteWidget: ROULETTE_WIDGET_SOCKETS,
-  rouletteEntrants: ROULETTE_ENTRANTS_SOCKETS
+  rouletteEntrants: ROULETTE_ENTRANTS_SOCKETS,
+  randomWidget: RANDOM_WIDGET_SOCKETS
 }
 
 /**
@@ -402,6 +425,44 @@ export const ROULETTE_ENTRANTS_OUTPUTS: OutputSocket[] = [
   }
 ]
 
+/**
+ * Random's two roles for its single commit/reveal feed — same "one wire,
+ * meaning depends on where it lands" shape as AUDIO_PLAYER_OUTPUTS above.
+ * Content feeds EITHER the mandatory Random Widget's own `source` pairing
+ * socket (the rolling numbers — see NODE_SOCKETS.randomWidget/
+ * RANDOM_WIDGET_OUTPUTS below) OR a Text node's own Content socket (see
+ * TEXT_SOCKETS above) directly — landing on Text merges {number}/{numbers}/
+ * {hash}/{seed} into whatever template is already there (see
+ * randomContentValues in overlays/sceneUtils.tsx), the SAME placeholder-
+ * merge shape Audio Player's own Content wire uses for {artist}/{title},
+ * not a replacement — that Text's own textarea stays fully editable. Event
+ * carries the roll's phase signal: wired into a Start node's own Event
+ * socket it arms a process the moment a roll is committed (a hash
+ * published, before the numbers themselves are known — see
+ * RandomEngine.commit); wired into a Random Widget's own `visible` socket
+ * instead, it hides that SPECIFIC widget outside an active roll rather than
+ * showing it unconditionally.
+ */
+export const RANDOM_OUTPUTS: OutputSocket[] = [
+  {
+    id: 'content',
+    label: 'Content',
+    kind: 'content',
+    feeds: ['source', 'content'],
+    help: "Wire into this Random's own paired Widget's Source socket (permanent pairing), or into any Text node's own Content socket to fill its {number}/{numbers}/{hash}/{seed} placeholders — same merge behavior as Audio Player's own Content wire, template stays editable."
+  },
+  {
+    id: 'event',
+    label: 'Event',
+    kind: 'data',
+    feeds: ['event', 'visible'],
+    help: "The roll's phase signal. Wire into a Start node's own Event socket to arm a process the moment a roll is committed (hash published, numbers still hidden). Wire into a Random Widget's own Visibility socket to hide THAT widget outside an active roll instead of it always showing — both at once is fine."
+  }
+]
+
+/** A Random Widget's own single Structural/Target role — same reuse of STRUCTURAL_OUTPUT/TARGET_OUTPUT as ROULETTE_WIDGET_OUTPUTS above; nothing Random-specific about the output side. */
+export const RANDOM_WIDGET_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
+
 /** Every node type's OUTPUT sockets, keyed by node `type` — analogous to NODE_SOCKETS. Node types absent here (the large majority) render the single generic "output" handle unchanged. */
 export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
   text: TEXT_OUTPUTS,
@@ -412,7 +473,9 @@ export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
   audioPlayer: AUDIO_PLAYER_OUTPUTS,
   rouletteSource: ROULETTE_OUTPUTS,
   rouletteWidget: ROULETTE_WIDGET_OUTPUTS,
-  rouletteEntrants: ROULETTE_ENTRANTS_OUTPUTS
+  rouletteEntrants: ROULETTE_ENTRANTS_OUTPUTS,
+  randomSource: RANDOM_OUTPUTS,
+  randomWidget: RANDOM_WIDGET_OUTPUTS
 }
 
 /**
@@ -473,6 +536,7 @@ export const NODE_CATEGORY: Record<string, NodeCategory> = {
   overflow: 'style',
   event: 'data',
   randomSource: 'data',
+  randomWidget: 'content',
   rouletteSource: 'data',
   rouletteWidget: 'content',
   rouletteEntrants: 'data',

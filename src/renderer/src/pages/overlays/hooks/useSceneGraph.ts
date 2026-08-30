@@ -16,21 +16,41 @@ import { PROCESS_TYPES, CONTAINER_TYPES, sortNodesForParenting, withFrameZIndex,
 import { defaultNodes, defaultEdges } from '../sceneBuilderConstants'
 
 /**
- * Whether `edge` is the mandatory Roulette -> Roulette Widget pairing edge
- * created by addNode below — the one edge in the whole graph that can't be
- * removed on its own (see onNodesChange/onEdgesChange/onEdgeDoubleClick).
- * Identified structurally (source is a Roulette, target is a Widget, landed
- * on the Widget's own `source` socket) rather than by a stored flag, so it
- * still holds even across a save/reload round-trip. Roulette Entrants (see
- * RouletteEntrantsNode.tsx) is auto-created the same way but deliberately
- * NOT locked like this — it keeps its own normal delete/rewire behavior,
- * only cascading in the Roulette -> Entrants direction (see onNodesChange).
+ * Every "instrumental data source" type (see RandomSourceNode.tsx's own doc
+ * comment) that addNode below auto-pairs with a mandatory Widget the moment
+ * it's placed. Roulette additionally gets its own optional, freely-deletable
+ * secondary node (Roulette Entrants — see onNodesChange's cascade loop below
+ * for how that one cascades); Random has no secondary of its own — its
+ * Content output wires straight into a Text node's own Content socket
+ * instead, a placeholder MERGE (same shape as Audio Player's own Content
+ * wire — see RANDOM_OUTPUTS' own doc comment in components/nodes/
+ * constants.ts), not a node of its own to own that formatting. The single
+ * source of truth isMandatoryWidgetPairEdge and isValidConnection's own
+ * widget-lock check both read off of.
  */
-function isRouletteWidgetPairEdge(edge: Edge, nodes: Node[]): boolean {
+const SOURCE_PAIRINGS: Record<string, { widget: string; secondary?: string }> = {
+  rouletteSource: { widget: 'rouletteWidget', secondary: 'rouletteEntrants' },
+  randomSource: { widget: 'randomWidget' }
+}
+
+/**
+ * Whether `edge` is a mandatory Source -> Widget pairing edge created by
+ * addNode below (see SOURCE_PAIRINGS) — the one kind of edge in the whole
+ * graph that can't be removed on its own (see onNodesChange/onEdgesChange/
+ * onEdgeDoubleClick). Identified structurally (source is one of
+ * SOURCE_PAIRINGS' own keys, target is ITS OWN paired widget type, landed on
+ * the widget's own `source` socket) rather than by a stored flag, so it
+ * still holds even across a save/reload round-trip. Roulette Entrants (the
+ * only secondary node left — see SOURCE_PAIRINGS' own doc comment) is
+ * auto-created the same way but deliberately NOT locked like this — it
+ * keeps its own normal delete/rewire behavior, only cascading in the
+ * Source -> secondary direction (see onNodesChange).
+ */
+function isMandatoryWidgetPairEdge(edge: Edge, nodes: Node[]): boolean {
   if (edge.targetHandle !== 'source') return false
   const source = nodes.find((n) => n.id === edge.source)
   const target = nodes.find((n) => n.id === edge.target)
-  return source?.type === 'rouletteSource' && target?.type === 'rouletteWidget'
+  return !!source && SOURCE_PAIRINGS[source.type!]?.widget === target?.type
 }
 
 /**
@@ -144,21 +164,23 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
     (changes: NodeChange[]) => {
       const removeIds = new Set(changes.filter((c) => c.type === 'remove').map((c) => c.id))
       if (removeIds.size > 0) {
-        // The Roulette <-> Roulette Widget pairing is mandatory (see
-        // addNode above) — deleting either half cascades to the other, so a
-        // scene never ends up with a dangling half-pair. Roulette Entrants
-        // is auto-created the same way but only cascades ONE direction —
-        // deleting its Roulette takes it with it, but deleting Entrants on
-        // its own leaves the Roulette (and Widget) alone.
+        // Each Source <-> Widget pairing (see SOURCE_PAIRINGS above) is
+        // mandatory — deleting either half cascades to the other, so a scene
+        // never ends up with a dangling half-pair. The secondary node
+        // (Roulette Entrants, the only one left) is auto-created the same
+        // way but only cascades ONE direction — deleting its Source takes
+        // it with it, but deleting the secondary on its own leaves the
+        // Source (and Widget) alone.
         for (const edge of edges) {
           if (edge.targetHandle !== 'source') continue
           const source = nodes.find((n) => n.id === edge.source)
           const target = nodes.find((n) => n.id === edge.target)
-          if (source?.type !== 'rouletteSource') continue
-          if (target?.type === 'rouletteWidget') {
+          const pairing = source && SOURCE_PAIRINGS[source.type!]
+          if (!pairing) continue
+          if (target?.type === pairing.widget) {
             if (removeIds.has(edge.source)) removeIds.add(edge.target)
             if (removeIds.has(edge.target)) removeIds.add(edge.source)
-          } else if (target?.type === 'rouletteEntrants') {
+          } else if (pairing.secondary && target?.type === pairing.secondary) {
             if (removeIds.has(edge.source)) removeIds.add(edge.target)
           }
         }
@@ -187,7 +209,7 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
       const filtered = changes.filter((c) => {
         if (c.type !== 'remove') return true
         const edge = edges.find((e) => e.id === c.id)
-        return !edge || !isRouletteWidgetPairEdge(edge, nodes)
+        return !edge || !isMandatoryWidgetPairEdge(edge, nodes)
       })
       setEdges((eds) => applyEdgeChanges(filtered, eds))
     },
@@ -236,16 +258,17 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
       const targetNode = nodes.find((n) => n.id === connection.target)
       if (!sourceNode || !targetNode) return false
       if (connection.targetHandle === 'event-in') return PROCESS_TYPES.has(sourceNode.type!)
-      // A Roulette Widget's own `source` socket is locked to whichever
-      // Roulette it was auto-paired with the moment it was created (see
-      // addNode/isRouletteWidgetPairEdge above) once that pairing exists —
-      // reject dropping a NEW wire onto an already-paired one, which would
-      // otherwise silently replace (and so break) the pairing since it's a
-      // single-value socket. Still connectable if somehow unpaired (hand-
-      // edited/imported JSON) rather than permanently dead. Roulette
-      // Entrants' own `source` socket has no such lock — it's a normal,
+      // A mandatory widget's (see SOURCE_PAIRINGS above) own `source` socket
+      // is locked to whichever Source it was auto-paired with the moment it
+      // was created (see addNode/isMandatoryWidgetPairEdge above) once that
+      // pairing exists — reject dropping a NEW wire onto an already-paired
+      // one, which would otherwise silently replace (and so break) the
+      // pairing since it's a single-value socket. Still connectable if
+      // somehow unpaired (hand-edited/imported JSON) rather than
+      // permanently dead. The secondary node's (Roulette Entrants / Random
+      // Result) own `source` socket has no such lock — it's a normal,
       // freely rewireable node.
-      if (targetNode.type === 'rouletteWidget' && connection.targetHandle === 'source') {
+      if (Object.values(SOURCE_PAIRINGS).some((p) => p.widget === targetNode.type) && connection.targetHandle === 'source') {
         const alreadyPaired = edges.some((e) => e.target === targetNode.id && e.targetHandle === 'source')
         if (alreadyPaired) return false
       }
@@ -286,7 +309,7 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
 
   const onEdgeDoubleClick = useCallback(
     (_: React.MouseEvent, edge: Edge) => {
-      if (isRouletteWidgetPairEdge(edge, nodes)) return
+      if (isMandatoryWidgetPairEdge(edge, nodes)) return
       setEdges((eds) => eds.filter((e) => e.id !== edge.id))
     },
     [nodes]
@@ -348,6 +371,34 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
       }
       setNodes((nds) => [...nds, newNode, widgetNode, entrantsNode])
       setEdges((eds) => [...eds, widgetEdge, entrantsEdge])
+      return
+    }
+    if (type === 'randomSource') {
+      // Same reasoning as the rouletteSource block above — a Random node is
+      // useless without something to actually show its roll (see
+      // RANDOM_OUTPUTS' own doc comment in components/nodes/constants.ts).
+      // Auto-pairs it with a Random Widget (the rolling numbers) the moment
+      // it's placed; NODE_PALETTE deliberately doesn't offer that on its
+      // own. No secondary node (unlike rouletteSource's own Entrants) — a
+      // Text node's {number}/{numbers}/{hash}/{seed} placeholders come from
+      // wiring this Random's own Content output straight into that Text's
+      // Content socket by hand (see TEXT_SOCKETS' own doc comment).
+      const widgetId = `randomWidget-${Date.now()}`
+      const widgetNode: Node = {
+        id: widgetId,
+        type: 'randomWidget',
+        position: { x: position.x + 240, y: position.y },
+        data: {}
+      }
+      const widgetEdge: Edge = {
+        id: `e-${id}-${widgetId}-source`,
+        source: id,
+        sourceHandle: 'content',
+        target: widgetId,
+        targetHandle: 'source'
+      }
+      setNodes((nds) => [...nds, newNode, widgetNode])
+      setEdges((eds) => [...eds, widgetEdge])
       return
     }
     setNodes((nds) => [...nds, newNode])

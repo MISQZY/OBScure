@@ -20,6 +20,7 @@ import { BackgroundAnimationNode } from './BackgroundAnimationNode'
 import { SoundNode } from './SoundNode'
 import { EventNode } from './EventNode'
 import { RandomSourceNode } from './RandomSourceNode'
+import { RandomWidgetNode } from './RandomWidgetNode'
 import { RouletteSourceNode } from './RouletteSourceNode'
 import { RouletteWidgetNode } from './RouletteWidgetNode'
 import { RouletteEntrantsNode } from './RouletteEntrantsNode'
@@ -51,6 +52,7 @@ export const nodeTypes = {
   sound: SoundNode,
   event: EventNode,
   randomSource: RandomSourceNode,
+  randomWidget: RandomWidgetNode,
   rouletteSource: RouletteSourceNode,
   rouletteWidget: RouletteWidgetNode,
   rouletteEntrants: RouletteEntrantsNode,

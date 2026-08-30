@@ -7,22 +7,18 @@ import type {
   RouletteStatePayload,
 } from "../shared/types";
 
-const REVEAL_DISPLAY_MS = 30_000;
-
 export class RandomEngine {
   private readonly eventBus: EventBus;
   private pendingSeed: string | null = null;
   private pendingMin = 0;
   private pendingMax = 0;
   private pendingCount = 1;
-  private clearTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(eventBus: EventBus) {
     this.eventBus = eventBus;
   }
 
   commit(min: number, max: number, count: number): RandomStatePayload {
-    if (this.clearTimer) clearTimeout(this.clearTimer);
     const seed = randomBytes(16).toString("hex");
     this.pendingSeed = seed;
     this.pendingMin = min;
@@ -57,7 +53,14 @@ export class RandomEngine {
 
     this.pendingSeed = null;
 
-    const state = this.emit({
+    // Stays 'revealed' — numbers/hash/seed all included — until the NEXT
+    // commit() call overwrites it. Previously auto-cleared back to 'idle'
+    // after a fixed 30s via a timer, which made the result (in the Random
+    // tool page and on any overlay showing it) disappear on its own even
+    // while someone was still looking at it — see RandomToolPage.tsx/the
+    // Random Widget, neither of which has any other way to reach this
+    // state, so there's nothing left depending on the old auto-clear.
+    return this.emit({
       phase: "revealed",
       hash,
       numbers,
@@ -66,18 +69,6 @@ export class RandomEngine {
       max,
       count,
     });
-    this.clearTimer = setTimeout(() => {
-      this.emit({
-        phase: "idle",
-        hash: null,
-        numbers: null,
-        seed: null,
-        min,
-        max,
-        count,
-      });
-    }, REVEAL_DISPLAY_MS);
-    return state;
   }
 
   private emit(state: RandomStatePayload): RandomStatePayload {

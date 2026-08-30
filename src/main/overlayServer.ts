@@ -15,6 +15,7 @@ import type {
   NowPlayingPayload,
   OverlayAddress,
   OverlayUrls,
+  RandomStatePayload,
   RouletteStatePayload,
 } from "../shared/types";
 
@@ -68,6 +69,9 @@ export class OverlayServer {
   /** Latest Roulette round state, broadcast to every connected overlay client the moment it changes — see the `roulette-state` subscription below and RouletteEngine. Served to a freshly-loaded overlay page (before any WS message arrives) via /overlays/config/roulette-state.json, mirroring latestNowPlaying's own now-playing.json. */
   private latestRouletteState: RouletteStatePayload | null = null;
 
+  /** Same as latestRouletteState above, for RandomEngine's own commit/reveal rounds — see the `random-state` subscription below, and /overlays/config/random-state.json. */
+  private latestRandomState: RandomStatePayload | null = null;
+
   constructor(options: OverlayServerOptions) {
     this.host = options.host;
     this.port = options.port;
@@ -86,6 +90,10 @@ export class OverlayServer {
     this.eventBus.on("roulette-state", (payload) => {
       this.latestRouletteState = payload;
       this.broadcast("roulette-state", payload);
+    });
+    this.eventBus.on("random-state", (payload) => {
+      this.latestRandomState = payload;
+      this.broadcast("random-state", payload);
     });
   }
 
@@ -214,6 +222,15 @@ export class OverlayServer {
         "Cache-Control": "no-store",
       });
       res.end(JSON.stringify(this.latestRouletteState));
+      return;
+    }
+
+    if (pathname === `${OVERLAYS_PREFIX}/config/random-state.json`) {
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+      });
+      res.end(JSON.stringify(this.latestRandomState));
       return;
     }
 

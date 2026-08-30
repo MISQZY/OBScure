@@ -71,6 +71,42 @@
         font-weight: 600;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
       }
+      #scene .random-widget-node {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      #scene .random-slot-box {
+        position: relative;
+        overflow: hidden;
+        display: inline-flex;
+        justify-content: center;
+        align-items: flex-start;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+        text-align: center;
+        font-family: ui-monospace, SFMono-Regular, monospace;
+        font-weight: 700;
+        color: #ffffff;
+        flex-shrink: 0;
+      }
+      #scene .random-slot-track {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+      }
+      #scene .random-slot-cell {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+      }
       #scene .text-node {
         display: flex;
         flex-direction: column;
@@ -146,6 +182,17 @@
       // CURRENT snapshot (if any) by the roulette-state.json fetch below,
       // same as latestNowPlaying above.
       let latestRouletteState = { phase: 'idle', entrants: [], winner: null }
+      // Last payload seen on the 'random-state' channel — see
+      // randomContentValues/randomWidgetVisible/buildRandomWidget. Defaults
+      // to idle/no numbers; immediately overwritten with the CURRENT
+      // snapshot (if any) by the random-state.json fetch below, same as
+      // latestRouletteState above. Unlike Roulette, there's no periodic
+      // client-side poll to keep this "ticking" — RandomEngine's commit and
+      // reveal are each already a discrete broadcast (reveal stays 'revealed'
+      // indefinitely now, until the next commit — no auto-idle timer), so
+      // every state change this needs to react to already arrives as its
+      // own 'random-state' WS message.
+      let latestRandomState = { phase: 'idle', hash: null, numbers: null, seed: null, min: 0, max: 0, count: 1 }
 
       // Per auto-scrolling node (keyed by node id): when its loop FIRST
       // started, and the measured size/duration its CURRENT pace is based
@@ -319,7 +366,7 @@
           } else if (current.type === 'task') {
             const incomingNodes = incoming(current.id, edges, map)
             const target = incomingNodes.find(
-              (n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group' || n.type === 'rouletteWidget'
+              (n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
             )
             if (target) {
               schedule.push({
@@ -359,7 +406,7 @@
         const edges = overlay?.edges || []
         const map = nodeMap(nodes)
         const start = nodes.find((n) => n.type === 'start')
-        if (!start) return { active: false, alertTypes: new Set(), audioArmed: false, rouletteArmed: false }
+        if (!start) return { active: false, alertTypes: new Set(), audioArmed: false, rouletteArmed: false, randomArmed: false }
         const members = incoming(start.id, edges, map)
         const alertTypes = new Set(
           members
@@ -372,7 +419,10 @@
         // below) arms this the same way a track change arms audioArmed —
         // "the round just started", not a type match.
         const rouletteArmed = members.some((n) => n.type === 'rouletteSource')
-        return { active: alertTypes.size > 0 || audioArmed || rouletteArmed, alertTypes, audioArmed, rouletteArmed }
+        // A roll committing (see the 'random-state' WS handler below) arms
+        // this the same way — "a roll just started", not a type match.
+        const randomArmed = members.some((n) => n.type === 'randomSource')
+        return { active: alertTypes.size > 0 || audioArmed || rouletteArmed || randomArmed, alertTypes, audioArmed, rouletteArmed, randomArmed }
       }
 
       /**
@@ -771,6 +821,58 @@
       function rouletteWidgetVisible(nodeId, edges, map) {
         const wired = edges.some((e) => e.target === nodeId && e.targetHandle === 'visible' && map[e.source] && map[e.source].type === 'rouletteSource')
         return !wired || latestRouletteState.phase !== 'idle'
+      }
+
+      // { number, numbers, hash, seed } sourced straight from
+      // `latestRandomState` (the always-current global, NOT this render's
+      // own `vars`) when Random's own Content output feeds this Text's own
+      // Content socket, or null when it isn't wired in — same placeholder-
+      // MERGE shape as audioContentValues above (own doc comment covers the
+      // shared reasoning): this only ever supplies values a template still
+      // decides how to use, so the Text's own textarea stays fully editable
+      // (unlike Roulette Entrants' REPLACE-outright wire). `number` is the
+      // first rolled value; `numbers` space-joins all of them, for a multi-
+      // roll. `seed` stays empty until revealed (RandomEngine only discloses
+      // it in RandomEngine.reveal). Mirrors randomContentValues in
+      // pages/overlays/sceneUtils.tsx, which instead reads the fixed
+      // SAMPLE_RANDOM_STATE for the editor.
+      function randomContentValues(nodeId, edges, map) {
+        const hasRandomContent = edges.some((e) => e.target === nodeId && e.targetHandle === 'content' && map[e.source] && map[e.source].type === 'randomSource')
+        if (!hasRandomContent) return null
+        const numbers = latestRandomState.numbers || []
+        return {
+          number: numbers[0] ?? '',
+          numbers: numbers.join(' '),
+          hash: latestRandomState.hash || '',
+          seed: latestRandomState.seed || ''
+        }
+      }
+
+      // Whether ANY node in the graph has a live-data dependency on Random —
+      // mirrors hasRouletteContentDeps above exactly, just for the
+      // 'random-state' channel. Two shapes: a Random Widget's own
+      // `source`/`visible` socket, or a Text node's own `content` socket fed
+      // directly by Random's own Content output (see randomContentValues
+      // above).
+      function hasRandomContentDeps(overlay) {
+        const edges = overlay?.edges || []
+        const nodes = overlay?.nodes || []
+        const map = nodeMap(nodes)
+        return edges.some((e) => {
+          const src = map[e.source]
+          if (!src) return false
+          return src.type === 'randomSource' && (e.targetHandle === 'source' || e.targetHandle === 'visible' || e.targetHandle === 'content')
+        })
+      }
+
+      // Whether a Random Widget node should currently be rendered at all —
+      // true unconditionally unless its own `visible` socket is wired to a
+      // Random (see RANDOM_WIDGET_SOCKETS in components/nodes/constants.ts),
+      // in which case it follows that roll's own phase: visible for as long
+      // as it isn't 'idle'. Mirrors rouletteWidgetVisible above.
+      function randomWidgetVisible(nodeId, edges, map) {
+        const wired = edges.some((e) => e.target === nodeId && e.targetHandle === 'visible' && map[e.source] && map[e.source].type === 'randomSource')
+        return !wired || latestRandomState.phase !== 'idle'
       }
 
       // Ordering modifier wired into a target (Box or Scene) — mirrors
@@ -1301,6 +1403,12 @@
       // an unrelated re-render mid-spin (there shouldn't be one — no other
       // event fires during the 5s window) doesn't replay the animation.
       let rouletteSpinFromDeg = null
+      // Same "armed for exactly one render pass" shape as rouletteSpinFromDeg
+      // above, set by the 'random-state' WS handler the instant a roll
+      // transitions into 'revealed' — buildRandomWidget reads and
+      // immediately clears it, so an unrelated re-render doesn't replay the
+      // slot machine's roll-in.
+      let randomRevealArmed = false
       // Cancels/invalidates the live pointer-tracking loop (see
       // buildRouletteWheel's own tick() below) whenever a NEWER wheel build
       // starts — otherwise a stale loop from a torn-down element would keep
@@ -1549,6 +1657,119 @@
         })
       }
 
+      // --- Random slot machine widget ---------------------------------------
+      // Ports the CSS-transition roll from pages/tools/RandomSlotMachine.tsx
+      // (itself a port of the strip-prefilled-then-settles trick
+      // RandomToolPage.tsx's own SlotMachineNumber originated) to plain DOM.
+
+      // One rolling digit box. `animate` plays the roll (prefills a strip of
+      // random numbers above the target, parked with no transition, then
+      // defers a slow settling transition to the next two frames — same
+      // two-frame "let the start state paint first" trick
+      // buildRouletteWheel's own spin-up above uses); false just renders
+      // `targetNumber` at rest. `scale` resizes the box/font proportionally,
+      // 1 matching RandomSlotMachine.tsx's own fixed 54px/text-3xl baseline.
+      function buildRandomSlotNumber(targetNumber, min, max, animate, stopDelayMs, scale) {
+        const box = document.createElement('div')
+        box.className = 'random-slot-box'
+        const maxChars = Math.max(String(min).length, String(max).length)
+        const boxHeight = 54 * scale
+        box.style.width = `calc(${maxChars}ch + ${1.25 * scale}rem)`
+        box.style.height = `${boxHeight}px`
+        box.style.paddingLeft = `${10 * scale}px`
+        box.style.paddingRight = `${10 * scale}px`
+        box.style.fontSize = `${30 * scale}px`
+
+        const track = document.createElement('div')
+        track.className = 'random-slot-track'
+        const strip = [targetNumber]
+        if (animate) {
+          for (let i = 0; i < 40; i++) strip.push(min + Math.floor(Math.random() * (max - min + 1)))
+        }
+        for (const n of strip) {
+          const cell = document.createElement('div')
+          cell.className = 'random-slot-cell'
+          cell.style.height = `${boxHeight}px`
+          cell.textContent = String(n)
+          track.appendChild(cell)
+        }
+        box.appendChild(track)
+
+        if (animate) {
+          track.style.transform = `translateY(-${(strip.length - 1) * boxHeight}px)`
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              track.style.transitionProperty = 'transform'
+              track.style.transitionDuration = `${stopDelayMs}ms`
+              track.style.transitionTimingFunction = 'cubic-bezier(0.15, 0.85, 0.35, 1)'
+              track.style.transform = 'translateY(0)'
+            })
+          })
+        } else {
+          track.style.transform = 'translateY(0)'
+        }
+        return box
+      }
+
+      // A Random Widget's own Ordering wire resolved into a raw flex
+      // direction/gap — mirrors randomWidgetOrdering in
+      // pages/overlays/sceneUtils.tsx (own doc comment there covers why its
+      // un-wired default is a ROW, unlike orderingFlexDirection/orderingGap
+      // above's own column/8 default for Box/Scene).
+      function randomWidgetOrdering(mods) {
+        const ordering = mods.find((m) => m.type === 'ordering')
+        if (!ordering) return { flexDirection: 'row', gap: 12 }
+        const d = ordering.data || {}
+        const layout = d.layout || 'vertical'
+        const direction = d.direction || 'direct'
+        const flexDirection = layout === 'horizontal' ? (direction === 'revert' ? 'row-reverse' : 'row') : direction === 'revert' ? 'column-reverse' : 'column'
+        return { flexDirection, gap: d.gap ?? 8 }
+      }
+
+      // What a Random Widget node itself renders — see NODE_SOCKETS.
+      // randomWidget/RANDOM_WIDGET_OUTPUTS in components/nodes/constants.ts.
+      // Called only when randomWidgetVisible(...) is true (see buildContent's
+      // own dispatch) — this function itself doesn't gate on that. Reads the
+      // always-current `latestRandomState` global, same reasoning as
+      // buildRouletteWheel above. No own Width/Height field — 320 here is
+      // only the fallback SCALE reference (RandomSlotMachine.tsx's own
+      // baseline), not a clipping box: unlike Roulette's fixed-square wheel,
+      // a slot machine's natural width already depends on how many
+      // digits/numbers there are, so a Size modifier resizes the boxes
+      // rather than constraining the wrap.
+      //
+      // Renders nothing while 'idle'/'committed' (no numbers to show yet —
+      // {hash} is still available to a Text wired to this Random's own
+      // Result node even then) — only 'revealed' has anything to roll.
+      // `randomRevealArmed` (see its own doc comment above) plays the roll-in
+      // for exactly the render pass right after a reveal; every later
+      // render of the same revealed state shows the settled numbers as-is.
+      function buildRandomWidget(node, mods, animate, registry) {
+        const wrap = document.createElement('div')
+        wrap.className = 'random-widget-node'
+        applyModifierStyle(wrap, mods)
+        const sizeRaw = parseFloat(wrap.style.width) || parseFloat(wrap.style.height) || 320
+        wrap.style.width = ''
+        wrap.style.height = ''
+        const scale = sizeRaw / 320
+        const { flexDirection, gap } = randomWidgetOrdering(mods)
+        wrap.style.flexDirection = flexDirection
+        wrap.style.flexWrap = flexDirection === 'row' || flexDirection === 'row-reverse' ? 'wrap' : 'nowrap'
+        wrap.style.gap = `${gap * scale}px`
+
+        const revealArmed = randomRevealArmed
+        randomRevealArmed = false
+        const numbers = latestRandomState.numbers || []
+        if (latestRandomState.phase === 'revealed' && numbers.length > 0) {
+          numbers.forEach((n, i) => {
+            wrap.appendChild(buildRandomSlotNumber(n, latestRandomState.min, latestRandomState.max, revealArmed, 1500 + i * 400, scale))
+          })
+        }
+        applyAnimation(wrap, mods, animate)
+        if (registry) registry[node.id] = wrap
+        return wrap
+      }
+
       // Nesting can go as deep as the graph wants (see BOX_SOCKETS' own doc
       // comment in components/nodes/index.tsx) — this cap is only a safety
       // net against a cycle slipping past isValidConnection's own guard in
@@ -1566,13 +1787,20 @@
       function buildContent(node, edges, map, animate, vars, registry, depth = 0, crossAxis) {
         const mods = incoming(node.id, edges, map)
         if (node.type === 'text') {
+          // Audio Player and Random can both feed the same Text's Content
+          // socket at once (it's `multi: true`) — each only ever SUPPLIES
+          // placeholder values, never replaces the template, so merging
+          // them is exactly what wiring both in means.
           const audioValues = audioContentValues(node.id, edges, map)
+          const randomValues = randomContentValues(node.id, edges, map)
+          const contentValues = audioValues || randomValues ? { ...audioValues, ...randomValues } : null
           const replaceText = rouletteEntrantsTextValue(node.id, edges, map)
-          return buildText(node, mods, animate, vars, registry, crossAxis, audioValues, replaceText)
+          return buildText(node, mods, animate, vars, registry, crossAxis, contentValues, replaceText)
         }
         if (node.type === 'image') return buildImage(node, mods, animate, vars, registry, hasAudioCover(node.id, edges, map))
         if (node.type === 'video') return buildVideo(node, mods, animate, registry)
         if (node.type === 'rouletteWidget') return rouletteWidgetVisible(node.id, edges, map) ? buildRouletteWheel(node, mods, animate, registry) : null
+        if (node.type === 'randomWidget') return randomWidgetVisible(node.id, edges, map) ? buildRandomWidget(node, mods, animate, registry) : null
         // A nested Box or Group (see BOX_SOCKETS' own doc comment in
         // components/nodes/index.tsx) — buildBox is defined below but
         // function declarations are hoisted, so this forward reference
@@ -1591,7 +1819,7 @@
           depth >= MAX_BOX_DEPTH
             ? []
             : incomingNodes.filter(
-                (n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group' || n.type === 'rouletteWidget'
+                (n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
               )
         const childCrossAxis = crossAxisFor(incomingNodes)
         const d = node.data || {}
@@ -1697,7 +1925,7 @@
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
         const renderable = members.filter(
-          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget'
+          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
         )
         const crossAxis = crossAxisFor(members)
 
@@ -1732,7 +1960,7 @@
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
         const renderable = members.filter(
-          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget'
+          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
         )
         const crossAxis = crossAxisFor(members)
         for (const n of renderable) {
@@ -1781,7 +2009,7 @@
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
         const renderable = members.filter(
-          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget'
+          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
         )
         const crossAxis = crossAxisFor(members)
         const registry = {}
@@ -1916,7 +2144,7 @@
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
         const renderable = members.filter(
-          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget'
+          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
         )
         const crossAxis = crossAxisFor(members)
         for (const n of renderable) {
@@ -2050,22 +2278,24 @@
             if (built) showProcessContent(overlay, vars, built.schedule, built.totalMs)
             return
           }
-          // A process armed PURELY by Roulette (no real alert type, no
-          // Audio Player) does NOT hide the rest of the scene between
-          // individual roulette-state ticks — see ROULETTE_OUTPUTS' own doc
-          // comment in components/nodes/constants.ts: the Widget/Entrants
-          // list show unconditionally regardless of this wiring; only the
-          // Task-driven one-shot cue itself (fired directly via
-          // showProcessContent, from the 'roulette-state' WS handler's own
-          // justStartedCollecting branch) is actually gated by "did a round
-          // just start collecting". Falling through to the plain static
-          // render here is what keeps the wheel visible — and its own spin
-          // animation actually playing — on every LATER tick, instead of it
-          // vanishing the instant render() is next called for any other
-          // reason (this was the "spin animation disappeared" bug: every
-          // 'roulette-state' tick after the first ended up here and wiped
-          // sceneEl since `hideTimer` is never set by the process path).
-          if (proc.rouletteArmed && !proc.audioArmed && proc.alertTypes.size === 0) {
+          // A process armed PURELY by Roulette or Random (no real alert
+          // type, no Audio Player) does NOT hide the rest of the scene
+          // between individual roulette-state/random-state ticks — see
+          // ROULETTE_OUTPUTS'/RANDOM_OUTPUTS' own doc comments in
+          // components/nodes/constants.ts: the Widget/secondary node show
+          // unconditionally regardless of this wiring; only the Task-driven
+          // one-shot cue itself (fired directly via showProcessContent, from
+          // the 'roulette-state'/'random-state' WS handler's own
+          // justStartedCollecting/justCommitted branch) is actually gated by
+          // "did a round just start"/"did a roll just commit". Falling
+          // through to the plain static render here is what keeps the
+          // widget visible — and, for Roulette, its own spin animation
+          // actually playing — on every LATER tick, instead of it vanishing
+          // the instant render() is next called for any other reason (this
+          // was the "spin animation disappeared" bug: every roulette-state
+          // tick after the first ended up here and wiped sceneEl since
+          // `hideTimer` is never set by the process path).
+          if ((proc.rouletteArmed || proc.randomArmed) && !proc.audioArmed && proc.alertTypes.size === 0) {
             renderStatic(overlay, animate)
             return
           }
@@ -2138,10 +2368,14 @@
             .catch(() => null),
           fetch('/overlays/config/roulette-state.json')
             .then((res) => res.json())
+            .catch(() => null),
+          fetch('/overlays/config/random-state.json')
+            .then((res) => res.json())
             .catch(() => null)
         ])
-          .then(([overlay, nowPlaying, rouletteState]) => {
+          .then(([overlay, nowPlaying, rouletteState, randomState]) => {
             if (nowPlaying) latestNowPlaying = nowPlaying
+            if (randomState) latestRandomState = randomState
             if (rouletteState) {
               latestRouletteState = rouletteState
               // A page opened/reloaded mid-round (or after one already
@@ -2283,6 +2517,58 @@
               // reasoning as showAudioContent's own animate arg.
               if (!processArmedThisTick && hasRouletteContentDeps(latestOverlay)) render(latestOverlay, rouletteSpinFromDeg != null)
               ensureRouletteCountdownTicking()
+            } else if (type === 'random-state') {
+              // Reused both to decide whether to fire a Start-wired
+              // Random's own Process trigger (see processTrigger's
+              // randomArmed, just below) and to gate the silent refresh
+              // further down — only the moment a roll actually commits (a
+              // hash published), not on reveal.
+              const justCommitted = payload.phase === 'committed' && latestRandomState.phase !== 'committed'
+              // Armed for exactly one render pass (see randomRevealArmed's
+              // own doc comment) the instant a roll transitions into
+              // 'revealed', so buildRandomWidget actually plays the roll-in
+              // instead of snapping straight to the final numbers.
+              if (payload.phase === 'revealed' && latestRandomState.phase !== 'revealed') {
+                randomRevealArmed = true
+              }
+              latestRandomState = payload
+
+              // Fires the SAME Start->Task->...->End sequence a real alert
+              // would, whenever Start is wired to Random (processTrigger's
+              // randomArmed) — an alternative arming condition, for a
+              // process that should play some animation/sound/update the
+              // moment a roll commits (NOT the widget itself, which shows
+              // on its own regardless — see RANDOM_OUTPUTS' own doc comment
+              // in components/nodes/constants.ts). No scene-level vars of
+              // its own (unlike Roulette's {entrants}/{winner}/{timeLeft} —
+              // see rouletteStateVars above): the number/hash/seed only ever
+              // reach a Text via Random's own Content wire straight into
+              // that Text's Content socket (see randomContentValues), not
+              // scene-wide placeholders.
+              // NOT queued behind alertActive, same reasoning as the
+              // 'roulette-state' branch's own justStartedCollecting handling.
+              let processArmedThisTick = false
+              if (justCommitted && !alertActive) {
+                const proc = processTrigger(latestOverlay)
+                if (proc.randomArmed) {
+                  const built = buildProcessSchedule(latestOverlay.nodes || [], latestOverlay.edges || [])
+                  if (built) {
+                    alertActive = true
+                    processArmedThisTick = true
+                    showProcessContent(latestOverlay, {}, built.schedule, built.totalMs)
+                  }
+                }
+              }
+              // A Text wired straight into Random's own Content output, or
+              // a Widget wired straight into Scene/a Box, needs a live
+              // refresh on every phase change to keep tracking the roll —
+              // see hasRandomContentDeps. Skipped when THIS SAME tick
+              // already fired the process above, same reasoning as the
+              // 'roulette-state' branch's own processArmedThisTick handling.
+              // `animate` is true only right after a reveal (randomRevealArmed)
+              // so the widget picks up its roll-in transition; otherwise
+              // false, same reasoning as showAudioContent's own animate arg.
+              if (!processArmedThisTick && hasRandomContentDeps(latestOverlay)) render(latestOverlay, randomRevealArmed)
             }
           }
           ws.onclose = () => setTimeout(connect, 1000)
