@@ -40,6 +40,7 @@ lerna-debug.log*
 .claude/
 .gemini/
 docs/
+CLAUDE.md
 
 # Optional: lock file (uncomment if you prefer not to track it)
 # package-lock.json
