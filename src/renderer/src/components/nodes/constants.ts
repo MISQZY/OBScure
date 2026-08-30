@@ -1,43 +1,10 @@
 import { ALERT_TYPES_BY_PLATFORM } from '@shared/types'
 /**
- * Everything flows left-to-right toward the single Scene node (the output —
- * see SceneNode): Text/Image feed into an optional Box, Box/Text/Image feed
- * into Scene, and "modifier" nodes (Position, Size, Transform, Animation,
- * Event, Sound, Timer, Hide, Display) have an output only, wired INTO
- * the node they affect. A node's own input sockets are therefore "what
- * modifies or contains me" — grouped by ROLE (Blender-style modifier stack —
- * see InputSocket/NODE_SOCKETS below), not a single shared dot: Transform
- * (Position/Size/Transform) and Style (Opacity/Shadow/Animation/Hide) each
- * take any number of wires, any mix of the types they accept, instead of one
- * dedicated socket per individual node type. Its output is "what I
- * contribute to". This is also what ScenePreview (SceneBuilderPage.tsx) and
- * overlays/custom.html walk to render the scene — both resolve wiring by the
- * connected node's `type`, never by which specific socket it's plugged into,
- * so which socket a wire lands on is purely for the graph to read clearly,
- * not something the interpreters care about. Where two wires land in the
- * same group and would set the same field (e.g. two Position nodes both
- * feeding one Transform group), whichever was wired more recently wins,
- * unless reordered via the numbered priority badge (see usePriorityInfo/
- * cyclePriority) — same as a later modifier overriding an earlier one in a
- * Blender modifier stack.
- *
- * Background FX is the one exception with BOTH: an output into Scene (to
- * activate it) and an input a Text node can feed (to caption
- * paratrooper/airdrop) — see BackgroundAnimationNode's own doc comment.
- *
- * Start/Task/Wait/End (the "Process" group) form a SECOND, separate kind of
- * edge in the same graph: sequence flow ("then"), not the data/composition
- * flow above ("feeds into"/"modifies"). Start → Task → Wait → ... → End
- * chains describe WHEN things happen — Wait accumulates elapsed time, each
- * Task shows/hides/updates ONE Text/Image/Box (wired into the Task's
- * `target` socket, same convention Box already uses for its own children)
- * with whatever Animation/Position/Size/Transform modifiers are wired into
- * that Task's OWN dedicated sockets for those. The structural graph above
- * still decides WHAT exists and how it's laid out/nested (a Task's target
- * must still reach Scene to render at all) — Start/Task/Wait/End only layer
- * timing on top. A Scene with a Start node reachable to an End ignores the
- * older Event+Timer→Scene single show/hide model entirely — see
- * buildProcessSchedule in SceneBuilderPage.tsx and overlays/custom.html.
+ * The node graph has two independent kinds of edges (data/composition vs.
+ * sequence-flow) and groups input sockets by role, Blender-modifier-stack
+ * style — see docs/events-system.md's "Node Graph Data Model" section for
+ * the full picture before changing InputSocket/NODE_SOCKETS/NODE_OUTPUTS
+ * below.
  */
 
 /**

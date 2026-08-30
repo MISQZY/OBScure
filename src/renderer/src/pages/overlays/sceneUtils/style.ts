@@ -170,7 +170,7 @@ export function borderStyle(node: Node): string | undefined {
 /** Ordering modifier node wired into a target (Box or Scene), expressed as a tailwind flex-direction class. */
 export function orderingClass(mods: Node[]): string {
   const ordering = mods.find((m) => m.type === 'ordering')
-  if (!ordering) return 'flex-col' // default
+  if (!ordering) return 'flex-col'
 
   const layout = (ordering.data.layout as string) || 'vertical'
   const direction = (ordering.data.direction as string) || 'direct'
