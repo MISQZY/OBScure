@@ -1,0 +1,98 @@
+import { Node, Edge } from "@xyflow/react";
+import type { OverlayUrls } from "@shared/types";
+import {
+  incoming,
+  audioContentValues,
+  randomContentValues,
+  hasAudioCover,
+  rouletteEntrantsTextValue,
+  overflowAutoScroll,
+  modifierStyle,
+  animationAttrs,
+  computeTaskState,
+  NodeMap,
+  ScheduledTask
+} from "../sceneUtils";
+import { BoxView } from "./BoxView";
+import { TextView } from "./TextView";
+import { ImageView } from "./ImageView";
+import { VideoView } from "./VideoView";
+import { RouletteWheelView } from "./RouletteWheelView";
+import { RandomWidgetView } from "./RandomWidgetView";
+
+/** A content node (Text/Image/Video/Roulette wheel/Random widget), or a nested Box (delegated to BoxView) — plus whatever's wired into ITS input (Position, Transform, Animation, ...). Roulette Entrants (see RouletteEntrantsNode.tsx) isn't among these — it has no rendering of its own, only a Content wire into a Text node's own socket (see rouletteEntrantsTextValue below); Random has no node of its own like it at all, its Content output wiring straight into a Text's Content socket instead (see randomContentValues below). */
+export function ContentView({
+  node,
+  edges,
+  map,
+  playToken,
+  played,
+  hiding,
+  vars,
+  schedule,
+  clockMs,
+  urls,
+  depth = 0,
+  crossAxis
+}: {
+  node: Node
+  edges: Edge[]
+  map: NodeMap
+  playToken: number
+  played: boolean
+  hiding: boolean
+  vars: Record<string, unknown> | null
+  /** A running Process's resolved Tasks, if any — see computeTaskState. Components with no Task targeting them fall through to the graph's own modifiers/wiring below, unaffected. */
+  schedule: ScheduledTask[]
+  clockMs: number
+  urls: OverlayUrls | null
+  /** Nesting depth so far (0 = directly on Scene) — see BoxView's own doc comment for why this is capped. */
+  depth?: number
+  /** The CROSS axis of whichever Box/Scene `node` is a direct child of — see TextView's own doc comment. Only consumed for a `text` node; a nested Box computes a FRESH one off its own Ordering for ITS OWN children. */
+  crossAxis: 'horizontal' | 'vertical'
+}) {
+  // A nested Box or Group (see BOX_SOCKETS' own doc comment in
+  // components/nodes/index.tsx) — BoxView resolves its OWN schedule/style/
+  // vars, same as a top-level one, and handles both node types identically
+  // except for Box's own decorative styling; ContentView/BoxView are
+  // mutually recursive to whatever depth the graph nests.
+  if (node.type === 'box' || node.type === 'group') {
+    return (
+      <BoxView node={node} edges={edges} map={map} playToken={playToken} played={played} hiding={hiding} vars={vars} schedule={schedule} clockMs={clockMs} urls={urls} depth={depth} />
+    )
+  }
+  const mods = incoming(node.id, edges, map)
+  // Audio Player and Random can both feed the same Text's Content socket at
+  // once (it's `multi: true` — see TEXT_SOCKETS in components/nodes/
+  // constants.ts) — each only ever SUPPLIES placeholder values, never
+  // replaces the template, so merging them is exactly what wiring both in
+  // means: {artist}/{title} AND {number}/{numbers}/{hash}/{seed} all
+  // available together.
+  const audioValues = node.type === 'text' ? audioContentValues(node.id, edges, map) : null
+  const randomValues = node.type === 'text' ? randomContentValues(node.id, edges, map) : null
+  const contentValues = audioValues || randomValues ? { ...audioValues, ...randomValues } : null
+  const replaceText = node.type === 'text' ? rouletteEntrantsTextValue(node.id, edges, map) : null
+  const audioCover = node.type === 'image' && hasAudioCover(node.id, edges, map)
+  // Task-agnostic, same reasoning as overflowAutoScroll's own doc comment —
+  // a Task never wires its own Overflow, so this reads identically whether
+  // or not a Process is currently driving `node`.
+  const autoScroll = node.type === 'text' ? overflowAutoScroll(mods) : null
+  if (schedule.length > 0 && schedule.some((s) => s.targetId === node.id)) {
+    const task = computeTaskState(schedule, node.id, clockMs, mods)
+    if (!task.visible) return null
+    if (node.type === 'text') return <TextView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} vars={vars} contentValues={contentValues} replaceText={replaceText} crossAxis={crossAxis} autoScroll={autoScroll} />
+    if (node.type === 'image') return <ImageView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} urls={urls} audioCover={audioCover} />
+    if (node.type === 'video') return <VideoView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} />
+    if (node.type === 'rouletteWidget') return <RouletteWheelView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} />
+    if (node.type === 'randomWidget') return <RandomWidgetView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} mods={mods} />
+    return null
+  }
+  const style = modifierStyle(mods)
+  const anim = animationAttrs(mods)
+  if (node.type === 'text') return <TextView node={node} style={style} anim={anim} played={played} hiding={hiding} vars={vars} contentValues={contentValues} replaceText={replaceText} crossAxis={crossAxis} autoScroll={autoScroll} />
+  if (node.type === 'image') return <ImageView node={node} style={style} anim={anim} played={played} hiding={hiding} urls={urls} audioCover={audioCover} />
+  if (node.type === 'video') return <VideoView node={node} style={style} anim={anim} played={played} hiding={hiding} />
+  if (node.type === 'rouletteWidget') return <RouletteWheelView node={node} style={style} anim={anim} played={played} hiding={hiding} />
+  if (node.type === 'randomWidget') return <RandomWidgetView node={node} style={style} anim={anim} played={played} hiding={hiding} mods={mods} />
+  return null
+}
