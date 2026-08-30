@@ -78,7 +78,7 @@ export function FrameNode({ id, data, selected }: NodeProps) {
       <div
         className={cn(
           'relative flex flex-col rounded-md border shadow-sm transition-colors overflow-hidden group',
-          selected ? 'border-primary' : 'border-muted',
+          selected ? 'border-primary bg-primary/10' : 'border-muted bg-muted/20',
           collapsed ? 'h-auto' : 'h-full'
         )}
         style={{ minWidth: 200, minHeight: collapsed ? 'auto' : 150 }}
