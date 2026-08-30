@@ -1,0 +1,409 @@
+import React, { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Handle, Position, useReactFlow } from '@xyflow/react'
+import { Trash2, ChevronDown, ChevronUp, Copy, Pencil } from 'lucide-react'
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
+import { cn } from '@/lib/utils'
+import { NodeCategory, InputSocket, OutputSocket, CATEGORY_STYLES, CATEGORY_DOT, SOCKET_DOT } from '../constants'
+import { usePriorityInfo, useSequenceInfo } from './hooks'
+import { NodePopover } from './NodePopover'
+
+/** One labeled input-socket row — the dot is nested inside this (relatively positioned) row rather than placed by percentage on the whole node, so any number of sockets stacks cleanly regardless of node height. */
+export function SocketRow({ id, label, dotClass, title }: { id: string; label: string; dotClass: string; title: string }) {
+  return (
+    <div className="relative flex items-center gap-1.5 pl-3 pr-2 h-5 text-[10px] text-muted-foreground">
+      <Handle
+        type="target"
+        position={Position.Left}
+        id={id}
+        style={{ position: 'absolute', left: -6, top: '50%', transform: 'translateY(-50%)' }}
+        className={cn('w-2.5 h-2.5', dotClass)}
+        title={title}
+      />
+      <span className="truncate">{label}</span>
+    </div>
+  )
+}
+
+/** One labeled output-socket row — the source-side mirror of SocketRow, dot on the right edge. Only rendered for node types with an `outputSockets` list (see OutputSocket/NODE_OUTPUTS above); every other node keeps the single generic "output" handle. `help` (optional — see OutputSocket's own doc comment) renders the same small "?" popover BaseNode's header uses, so a node's header help can stay a short one-liner while each output's own exact behavior lives on the row it belongs to. Placed AFTER the label (not before) so it sits flush against the row's right edge — the last child in a `justify-end` row lands at a fixed position regardless of the label's own width, so the "?" lines up identically across every output row instead of drifting with each label's length. */
+export function OutputRow({ id, label, dotClass, title, help }: { id: string; label: string; dotClass: string; title: string; help?: string }) {
+  return (
+    <div className="relative flex items-center justify-end gap-1.5 pl-2 pr-3 h-5 text-[10px] text-muted-foreground">
+      <span className="truncate">{label}</span>
+      {help && (
+        <NodePopover
+          side="bottom"
+          className="w-56 text-xs leading-snug p-2.5"
+          trigger={
+            <button
+              type="button"
+              onClick={(e) => e.stopPropagation()}
+              title="Help"
+              className="nodrag shrink-0 flex items-center justify-center size-3.5 rounded-full border border-muted-foreground/50 text-muted-foreground text-[9px] font-bold leading-none hover:bg-accent hover:text-accent-foreground hover:border-foreground/50 transition-colors cursor-pointer"
+            >
+              ?
+            </button>
+          }
+        >
+          {help}
+        </NodePopover>
+      )}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id={id}
+        style={{ position: 'absolute', right: -6, top: '50%', transform: 'translateY(-50%)' }}
+        className={cn('w-2.5 h-2.5', dotClass)}
+        title={title}
+      />
+    </div>
+  )
+}
+
+export function BaseNode({
+  id,
+  data,
+  title,
+  children,
+  outputs = true,
+  deletable = true,
+  labelable = false,
+  category = 'style',
+  sockets = [],
+  sequenceIn = false,
+  outputSockets,
+  soon = false,
+  help
+}: {
+  id: string
+  data: Record<string, unknown>
+  title: string
+  /** Optional now that longer notes moved behind `help` — a node whose sockets/fields say everything (Scene, Start, End, ...) can have no body at all. */
+  children?: React.ReactNode
+  outputs?: boolean
+  deletable?: boolean
+  labelable?: boolean
+  /** Visual grouping only — see the NodeCategory doc comment above. Defaults to 'style' (the largest, catch-all group of modifier nodes). */
+  category?: NodeCategory
+  /** This node's labeled input sockets, one per parameter — see InputSocket/NODE_SOCKETS above. Empty for pure-source nodes (Position, Animation, Event, ...) which have no inputs of their own. */
+  sockets?: InputSocket[]
+  /** True for a node that's placeable and connectable but has no effect on rendering yet (see each such node's own doc comment for what's missing) — shows a "Soon" badge so a scene built around it doesn't silently do nothing with no visible cue why. */
+  soon?: boolean
+  /** Longer usage note, tucked behind a "?" next to the title instead of sitting in the node body as always-visible text — keeps the body to just its actual controls. Omit for a node whose fields are self-explanatory. */
+  help?: string
+  /**
+   * Start/Task/Wait/End only: the process sequence-flow input ("previous
+   * step", id "event-in") — separate from `sockets` above because it isn't
+   * a parameter, it's what precedes this step. Start has none (entry
+   * point, nothing precedes it). See isValidConnection in
+   * SceneBuilderPage.tsx for how it's kept strictly for process-to-process
+   * connections despite every node's output sharing the same generic
+   * "output" id.
+   */
+  sequenceIn?: boolean
+  /** This node's labeled OUTPUT sockets — see OutputSocket/NODE_OUTPUTS above. Only Text/Image/Box/Group set this today; every other node ignores it and keeps the single generic "output" handle (gated by `outputs` above). */
+  outputSockets?: OutputSocket[]
+}) {
+  const { deleteElements, updateNodeData, getEdges, getNodes, getNode, addNodes } = useReactFlow()
+  const collapsed = Boolean(data.collapsed)
+  const priority = usePriorityInfo(id)
+  const sequence = useSequenceInfo(id)
+  const [isEditingLabel, setIsEditingLabel] = useState(false)
+  const [labelText, setLabelText] = useState((data.label as string) || '')
+  const categoryStyle = CATEGORY_STYLES[category]
+  const hasSocketSection = sockets.length > 0 || sequenceIn
+  const hasBody = Boolean(children) && !collapsed
+  const showTrailingBorder = hasSocketSection || hasBody
+
+  /** Every sibling node (deduped, sorted by current priority) competing for the same (target, targetHandle) socket this node feeds — shared by cyclePriority/setPriority below. Mirrors usePriorityInfo's own computation (see its doc comment for the scoping/dedup reasoning); can't reuse the hook's own memoized result directly since these need the RAW node list to write new priorities back to, not just position/total. */
+  const getPrioritySiblings = () => {
+    const edges = getEdges()
+    const nodes = getNodes()
+    const outEdge = edges.find((e) => e.source === id)
+    if (!outEdge) return null
+    const seenNodeIds = new Set<string>()
+    return edges
+      .filter((e) => e.target === outEdge.target && e.targetHandle === outEdge.targetHandle)
+      .map((e) => nodes.find((n) => n.id === e.source))
+      .filter((n): n is (typeof nodes)[number] => n != null)
+      .filter((n) => (seenNodeIds.has(n.id) ? false : (seenNodeIds.add(n.id), true)))
+      .sort((a, b) => ((a.data.priority as number) ?? 0) - ((b.data.priority as number) ?? 0))
+  }
+
+  /** Left-click on the Priority Badge: rotate every sibling by 1 (1->2, 2->3, ..., N->1) — the quick "send this one to the back" gesture. Right-click instead (see setPriority/PriorityMenu below) jumps straight to a specific position. */
+  const cyclePriority = () => {
+    if (!priority) return
+    const siblings = getPrioritySiblings()
+    if (!siblings) return
+    siblings.forEach((n, idx) => {
+      const newPos = (idx + 1) % siblings.length + 1
+      updateNodeData(n.id, { priority: newPos })
+    })
+  }
+
+  /**
+   * Right-click on the Priority Badge (see the menu rendered further down):
+   * jump straight to a SPECIFIC position instead of only cycling — e.g.
+   * siblings at 1,2,3 and THIS node (currently 1) picking "2" becomes
+   * 2,1,3: a SWAP with whoever currently holds position 2, not a full
+   * reshuffle — every other sibling's own priority is left untouched. Lets
+   * "1,2,3 -> 2,1,3" happen in one click, which cyclePriority's rotate-only
+   * model can never reach directly.
+   */
+  const setPriority = (newPosition: number) => {
+    if (!priority) return
+    const siblings = getPrioritySiblings()
+    if (!siblings) return
+    const currentIndex = siblings.findIndex((n) => n.id === id)
+    const targetIndex = newPosition - 1
+    if (currentIndex === -1 || targetIndex === currentIndex || targetIndex < 0 || targetIndex >= siblings.length) return
+    const other = siblings[targetIndex]
+    updateNodeData(id, { priority: newPosition })
+    updateNodeData(other.id, { priority: currentIndex + 1 })
+  }
+
+  const [priorityMenuAnchor, setPriorityMenuAnchor] = useState<{ left: number; top: number } | null>(null)
+  const priorityBadgeRef = useRef<HTMLButtonElement>(null)
+  const priorityMenuRef = useRef<HTMLDivElement>(null)
+
+  // Capture phase — see PlaceholderPicker's own outside-click effect for why.
+  useEffect(() => {
+    if (!priorityMenuAnchor) return
+    const onPointerDown = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (priorityBadgeRef.current?.contains(target) || priorityMenuRef.current?.contains(target)) return
+      setPriorityMenuAnchor(null)
+    }
+    document.addEventListener('mousedown', onPointerDown, true)
+    return () => document.removeEventListener('mousedown', onPointerDown, true)
+  }, [priorityMenuAnchor])
+
+  /** A fresh, unconnected copy right next to the original — same id scheme as the Add Node palette (see addNode in SceneBuilderPage.tsx), deep-cloned data so editing the copy never mutates the original. */
+  const duplicateNode = () => {
+    const current = getNode(id)
+    if (!current) return
+    addNodes({
+      ...current,
+      id: `${current.type}-${Date.now()}`,
+      position: { x: current.position.x + 32, y: current.position.y + 32 },
+      data: structuredClone(current.data),
+      selected: false
+    })
+  }
+
+  return (
+    <div
+      className={cn(
+        'min-w-[150px] rounded-md border border-l-4 bg-card text-card-foreground shadow-sm bg-background group relative',
+        categoryStyle.border
+      )}
+    >
+      <ContextMenu>
+      <ContextMenuTrigger asChild>
+      <div
+        className={cn(
+          'px-3 py-2 rounded-tr-md font-semibold text-sm flex justify-between items-center gap-2',
+          categoryStyle.header,
+          showTrailingBorder ? 'border-b' : 'rounded-br-md'
+        )}
+      >
+        <div
+          onClick={() => updateNodeData(id, { collapsed: !collapsed })}
+          className="flex items-center gap-1.5 min-w-0 flex-1 text-left cursor-pointer"
+          title={collapsed ? 'Expand' : 'Collapse'}
+        >
+          <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', collapsed && '-rotate-90')} />
+          <div className="flex items-center min-w-0 flex-1 gap-1.5">
+            <span className="truncate shrink-0">{title}</span>
+            {help && (
+              <NodePopover
+                side="bottom"
+                className="w-56 text-xs leading-snug p-2.5"
+                trigger={
+                  <button
+                    type="button"
+                    onClick={(e) => e.stopPropagation()}
+                    title="Help"
+                    className="nodrag shrink-0 flex items-center justify-center size-3.5 rounded-full border border-muted-foreground/50 text-muted-foreground text-[9px] font-bold leading-none hover:bg-accent hover:text-accent-foreground hover:border-foreground/50 transition-colors cursor-pointer"
+                  >
+                    ?
+                  </button>
+                }
+              >
+                {help}
+              </NodePopover>
+            )}
+            {isEditingLabel ? (
+              <input
+                autoFocus
+                type="text"
+                className="nodrag bg-transparent outline-none border-b border-primary text-muted-foreground font-normal min-w-0 flex-1"
+                value={labelText}
+                onChange={(e) => setLabelText(e.target.value)}
+                onBlur={() => {
+                  setIsEditingLabel(false)
+                  updateNodeData(id, { label: labelText })
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setIsEditingLabel(false)
+                    updateNodeData(id, { label: labelText })
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <>
+                {data.label && <span className="font-normal text-muted-foreground truncate">{data.label as string}</span>}
+                {labelable && (
+                  <Pencil
+                    className="size-3 text-muted-foreground/50 hover:text-foreground transition-colors shrink-0 nodrag cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setLabelText((data.label as string) || '')
+                      setIsEditingLabel(true)
+                    }}
+                  />
+                )}
+              </>
+            )}
+          </div>
+        </div>
+        {soon && (
+          <span
+            className="nodrag shrink-0 inline-flex items-center justify-center h-4 px-1.5 rounded-full bg-amber-500 text-white text-[9px] font-bold leading-none"
+            title="Not wired into rendering yet — this node can be placed and connected, but currently has no effect on the overlay."
+          >
+            SOON
+          </span>
+        )}
+        {sequence !== null && (
+          <span
+            className="nodrag shrink-0 inline-flex items-center justify-center size-5 rounded-full bg-indigo-500 text-white text-[10px] font-bold leading-none"
+            title={`Step ${sequence} in the process sequence (Start → ... → End)`}
+          >
+            {sequence}
+          </span>
+        )}
+        {priority && (
+          <button
+            ref={priorityBadgeRef}
+            type="button"
+            onClick={cyclePriority}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              const rect = priorityBadgeRef.current?.getBoundingClientRect()
+              if (rect) setPriorityMenuAnchor({ left: rect.left, top: rect.bottom + 4 })
+            }}
+            className="nodrag shrink-0 inline-flex items-center justify-center size-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold leading-none cursor-pointer hover:opacity-80 transition-opacity"
+            title={`Render priority ${priority.position} of ${priority.total} — click to move to end, right-click to set a specific position`}
+          >
+            {priority.position}
+          </button>
+        )}
+        {priority &&
+          priorityMenuAnchor &&
+          createPortal(
+            <div
+              ref={priorityMenuRef}
+              style={{ left: priorityMenuAnchor.left, top: priorityMenuAnchor.top }}
+              className="nodrag fixed z-[9999] min-w-[64px] rounded-md border bg-popover text-popover-foreground shadow-lg py-1"
+            >
+              {Array.from({ length: priority.total }, (_, i) => i + 1).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setPriority(n)
+                    setPriorityMenuAnchor(null)
+                  }}
+                  className={cn(
+                    'w-full text-center px-3 py-1 text-xs',
+                    n === priority.position ? 'bg-accent text-accent-foreground font-semibold' : 'hover:bg-accent hover:text-accent-foreground'
+                  )}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>,
+            document.body
+          )}
+        {deletable && (
+          <button
+            type="button"
+            onClick={() => deleteElements({ nodes: [{ id }] })}
+            className="nodrag shrink-0 text-muted-foreground hover:text-destructive transition-colors outline-none cursor-pointer"
+            title="Delete node"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        )}
+      </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => updateNodeData(id, { collapsed: !collapsed })}>
+          {collapsed ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+          {collapsed ? 'Expand' : 'Collapse'}
+        </ContextMenuItem>
+        {deletable && (
+          <ContextMenuItem onSelect={duplicateNode}>
+            <Copy className="size-4" />
+            Duplicate
+          </ContextMenuItem>
+        )}
+        {deletable && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem variant="destructive" onSelect={() => deleteElements({ nodes: [{ id }] })}>
+              <Trash2 className="size-4" />
+              Delete
+            </ContextMenuItem>
+          </>
+        )}
+      </ContextMenuContent>
+      </ContextMenu>
+      {hasSocketSection && (
+        <div className="flex flex-col border-b py-0.5">
+          {sockets.map((socket) => (
+            <SocketRow
+              key={socket.id}
+              id={socket.id}
+              label={socket.label}
+              dotClass={SOCKET_DOT[socket.kind]}
+              title={`${socket.label} in${socket.multi ? ' (multiple)' : ''}`}
+            />
+          ))}
+          {sequenceIn && <SocketRow id="event-in" label="Sequence" dotClass="!bg-indigo-500" title="Event in — previous step" />}
+        </div>
+      )}
+      {hasBody && <div className="p-3 flex flex-col gap-2">{children}</div>}
+      {outputs &&
+        (outputSockets && outputSockets.length > 0 ? (
+          <div className="flex flex-col border-t py-0.5">
+            {outputSockets.map((socket) => (
+              <OutputRow key={socket.id} id={socket.id} label={socket.label} dotClass={SOCKET_DOT[socket.kind]} title={`${socket.label} out`} help={socket.help} />
+            ))}
+          </div>
+        ) : (
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="output"
+            className={cn('w-3 h-3', CATEGORY_DOT[category])}
+            title="Output"
+          />
+        ))}
+    </div>
+  )
+}
+
+export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex justify-between items-center text-xs gap-2">
+      <label className="shrink-0">{label}</label>
+      {children}
+    </div>
+  )
+}
