@@ -56,9 +56,7 @@ export class YoutubeIntegration extends BaseIntegration {
     }
   }
 
-  stop(): void {
-    this.stopPolling();
-  }
+  stop(): void {}
 
   async connect(): Promise<void> {
     const clientId = this.config.getSetting<string | null>(
