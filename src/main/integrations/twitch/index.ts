@@ -1,10 +1,9 @@
 import { shell } from "electron";
-import WebSocket from "ws";
 import { BaseIntegration } from "../types";
+import type { EventBus } from "../../eventBus";
+import type { ConfigStore } from "../../configStore";
 import type {
-  AlertPayload,
-  ChatMessagePayload,
-  PointsRedemptionPayload,
+  IntegrationKey,
   TwitchChannelStats,
   TwitchCustomReward,
 } from "../../../shared/types";
@@ -12,52 +11,43 @@ import type {
 import {
   TwitchAuthError,
   fetchTwitch,
-  sleep,
   waitForOnline,
-  parseEventSubMessage,
   SCOPES,
   EVENTSUB_WS_URL,
   HELIX_BASE,
   DEVICE_CODE_URL,
-  DEVICE_GRANT_TYPE,
-  BUILTIN_CLIENT_ID,
-  DEFAULT_KEEPALIVE_TIMEOUT_SECONDS,
-  MIN_RECONNECT_DELAY_MS,
-  MAX_RECONNECT_DELAY_MS,
   STARTUP_ONLINE_WAIT_MS,
   TwitchTokenResponse,
   DeviceCodeResponse,
-  EventSubSession,
-  EventSubMessage,
 } from "./utils";
 
-import {
-  mapNotificationToAlert,
-  mapNotificationToChatMessage,
-  mapNotificationToPointsRedemption,
-} from "./mappers";
+import { getClientId, pollForDeviceToken, refreshAccessToken } from "./auth";
+import { TwitchSocket } from "./socket";
 
 export class TwitchIntegration extends BaseIntegration {
-  private socket: WebSocket | null = null;
   private accessToken: string | null = null;
   private accessTokenExpiresAt = 0;
   private clientId: string | null = null;
   private broadcasterId: string | null = null;
-  private keepaliveTimeoutSeconds = DEFAULT_KEEPALIVE_TIMEOUT_SECONDS;
-  private staleTimer: ReturnType<typeof setTimeout> | null = null;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private reconnectDelayMs = MIN_RECONNECT_DELAY_MS;
   private stopping = false;
+  private readonly twitchSocket: TwitchSocket;
 
-  private getClientId(): string | null {
-    return (
-      this.config.getSetting<string | null>("twitch.clientId", null) ||
-      BUILTIN_CLIENT_ID
-    );
+  constructor(key: IntegrationKey, eventBus: EventBus, config: ConfigStore) {
+    super(key, eventBus, config);
+    this.twitchSocket = new TwitchSocket({
+      isStopping: () => this.stopping,
+      getClientId: () => this.clientId,
+      getRefreshToken: () => this.config.getSecret("twitch.refreshToken"),
+      applyTokens: (tokens) => this.applyTokens(tokens),
+      setStatus: (status) => this.setStatus(status),
+      subscribeAll: (sessionId) => this.subscribeAll(sessionId),
+      onConnectFailure: (error) => this.handleConnectFailure(error),
+      eventBus: this.eventBus,
+    });
   }
 
   async start(): Promise<void> {
-    const clientId = this.getClientId();
+    const clientId = getClientId(this.config);
     const refreshToken = this.config.getSecret("twitch.refreshToken");
     if (!clientId || !refreshToken) {
       console.error("[twitch] start() found nothing to reconnect with:", {
@@ -80,8 +70,9 @@ export class TwitchIntegration extends BaseIntegration {
   ): Promise<void> {
     await waitForOnline(STARTUP_ONLINE_WAIT_MS);
     try {
-      await this.refreshAccessToken(clientId, refreshToken);
-      await this.openSession(EVENTSUB_WS_URL);
+      const tokens = await refreshAccessToken(clientId, refreshToken);
+      this.applyTokens(tokens);
+      await this.twitchSocket.openSession(EVENTSUB_WS_URL);
     } catch (error) {
       this.handleConnectFailure(error);
     }
@@ -96,7 +87,7 @@ export class TwitchIntegration extends BaseIntegration {
       this.config.deleteSecret("twitch.refreshToken");
       this.accessToken = null;
       this.accessTokenExpiresAt = 0;
-      this.clearReconnectTimer();
+      this.twitchSocket.cancelReconnect();
       this.setStatus("disconnected");
       return;
     }
@@ -105,19 +96,16 @@ export class TwitchIntegration extends BaseIntegration {
       error instanceof Error ? error.message : error,
     );
     this.setStatus("error");
-    this.scheduleReconnect();
+    this.twitchSocket.scheduleReconnect();
   }
 
   stop(): void {
     this.stopping = true;
-    this.clearStaleTimer();
-    this.clearReconnectTimer();
-    this.teardownSocket(this.socket);
-    this.socket = null;
+    this.twitchSocket.teardownAll();
   }
 
   async connect(): Promise<void> {
-    const clientId = this.getClientId();
+    const clientId = getClientId(this.config);
     if (!clientId) {
       throw new Error("Сначала укажи Client ID");
     }
@@ -141,7 +129,7 @@ export class TwitchIntegration extends BaseIntegration {
 
     let tokens: TwitchTokenResponse;
     try {
-      tokens = await this.pollForDeviceToken(
+      tokens = await pollForDeviceToken(
         clientId,
         device.device_code,
         device.interval,
@@ -152,58 +140,15 @@ export class TwitchIntegration extends BaseIntegration {
       throw error;
     }
 
-    this.accessToken = tokens.access_token;
-    this.accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000;
-    this.config.setSecret("twitch.refreshToken", tokens.refresh_token);
+    this.applyTokens(tokens);
     this.clientId = clientId;
     this.stopping = false;
 
     try {
-      await this.openSession(EVENTSUB_WS_URL);
+      await this.twitchSocket.openSession(EVENTSUB_WS_URL);
     } catch (error) {
       this.setStatus("error");
       throw error;
-    }
-  }
-
-  private async pollForDeviceToken(
-    clientId: string,
-    deviceCode: string,
-    intervalSeconds: number,
-    expiresInSeconds: number,
-  ): Promise<TwitchTokenResponse> {
-    const deadline = Date.now() + expiresInSeconds * 1000;
-    let delayMs = Math.max(intervalSeconds, 1) * 1000;
-
-    for (;;) {
-      await sleep(delayMs);
-      if (Date.now() >= deadline) {
-        throw new Error("Время на подтверждение авторизации в Twitch истекло");
-      }
-
-      const tokenUrl = new URL("https://id.twitch.tv/oauth2/token");
-      tokenUrl.searchParams.set("client_id", clientId);
-      tokenUrl.searchParams.set("scopes", SCOPES);
-      tokenUrl.searchParams.set("device_code", deviceCode);
-      tokenUrl.searchParams.set("grant_type", DEVICE_GRANT_TYPE);
-
-      const response = await fetchTwitch(tokenUrl, { method: "POST" });
-      if (response.ok) {
-        return (await response.json()) as TwitchTokenResponse;
-      }
-
-      const body = (await response.json().catch(() => null)) as {
-        message?: string;
-      } | null;
-      const message = body?.message ?? "";
-      if (message === "authorization_pending") continue;
-      if (message === "slow_down") {
-        delayMs += 5000;
-        continue;
-      }
-      throw new Error(
-        `Twitch отклонил авторизацию устройства: ${message || response.status}`,
-      );
     }
   }
 
@@ -216,237 +161,10 @@ export class TwitchIntegration extends BaseIntegration {
     this.setStatus("disconnected");
   }
 
-  private async refreshAccessToken(
-    clientId: string,
-    refreshToken: string,
-  ): Promise<void> {
-    const tokenUrl = new URL("https://id.twitch.tv/oauth2/token");
-    tokenUrl.searchParams.set("client_id", clientId);
-    tokenUrl.searchParams.set("grant_type", "refresh_token");
-    tokenUrl.searchParams.set("refresh_token", refreshToken);
-
-    const response = await fetchTwitch(tokenUrl, { method: "POST" });
-    if (!response.ok) {
-      const body = await response.text();
-
-      if (response.status === 400 || response.status === 401) {
-        throw new TwitchAuthError(
-          `Twitch отклонил refresh-токен (${response.status}): ${body}`,
-        );
-      }
-      throw new Error(
-        `Не удалось обновить токен Twitch (${response.status}): ${body}`,
-      );
-    }
-
-    const tokens = (await response.json()) as TwitchTokenResponse;
+  private applyTokens(tokens: TwitchTokenResponse): void {
     this.accessToken = tokens.access_token;
     this.accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000;
     this.config.setSecret("twitch.refreshToken", tokens.refresh_token);
-  }
-
-  private async openSession(url: string): Promise<void> {
-    const { socket, session } = await this.connectAndAwaitWelcome(url);
-    await this.subscribeAll(session.id);
-    this.attachSocket(
-      socket,
-      session.keepalive_timeout_seconds ?? DEFAULT_KEEPALIVE_TIMEOUT_SECONDS,
-    );
-    this.setStatus("connected");
-    this.reconnectDelayMs = MIN_RECONNECT_DELAY_MS;
-  }
-
-  private async migrateSession(reconnectUrl: string): Promise<void> {
-    const previousSocket = this.socket;
-    let migrated: { socket: WebSocket; session: EventSubSession };
-    try {
-      migrated = await this.connectAndAwaitWelcome(reconnectUrl);
-    } catch {
-      this.teardownSocket(previousSocket);
-      if (this.socket === previousSocket) this.socket = null;
-      this.setStatus("error");
-      this.scheduleReconnect();
-      return;
-    }
-
-    this.attachSocket(
-      migrated.socket,
-      migrated.session.keepalive_timeout_seconds ??
-        this.keepaliveTimeoutSeconds,
-    );
-    this.setStatus("connected");
-    this.teardownSocket(previousSocket);
-  }
-
-  private connectAndAwaitWelcome(
-    url: string,
-  ): Promise<{ socket: WebSocket; session: EventSubSession }> {
-    return new Promise((resolve, reject) => {
-      const socket = new WebSocket(url);
-      let settled = false;
-
-      const onMessage = (raw: WebSocket.RawData): void => {
-        const message = parseEventSubMessage(raw);
-        if (message?.metadata.message_type === "session_welcome") {
-          settled = true;
-          socket.off("message", onMessage);
-          socket.off("close", onClose);
-          socket.off("error", onError);
-          resolve({
-            socket,
-            session: (message as { payload: { session: EventSubSession } })
-              .payload.session,
-          });
-        }
-      };
-      const onClose = (): void => {
-        if (settled) return;
-        reject(
-          new Error("Twitch EventSub закрыл соединение до session_welcome"),
-        );
-      };
-      const onError = (error: Error): void => {
-        if (settled) return;
-        reject(error);
-      };
-
-      socket.on("message", onMessage);
-      socket.once("close", onClose);
-      socket.once("error", onError);
-    });
-  }
-
-  private attachSocket(
-    socket: WebSocket,
-    keepaliveTimeoutSeconds: number,
-  ): void {
-    this.socket = socket;
-    this.keepaliveTimeoutSeconds = keepaliveTimeoutSeconds;
-    this.resetStaleTimer();
-
-    socket.on("message", (raw) => {
-      if (this.socket !== socket) return;
-      this.resetStaleTimer();
-
-      const message = parseEventSubMessage(raw);
-      if (!message) return;
-
-      switch (message.metadata.message_type) {
-        case "session_reconnect": {
-          const reconnectUrl = (
-            message as { payload: { session: EventSubSession } }
-          ).payload.session.reconnect_url;
-          if (reconnectUrl) void this.migrateSession(reconnectUrl);
-          break;
-        }
-        case "notification": {
-          const { subscription, event } = (
-            message as {
-              payload: {
-                subscription: { type: string };
-                event: Record<string, unknown>;
-              };
-            }
-          ).payload;
-
-          if (subscription.type === "channel.chat.message") {
-            this.eventBus.emit(
-              "chat-message",
-              mapNotificationToChatMessage(event),
-            );
-            break;
-          }
-          if (
-            subscription.type ===
-            "channel.channel_points_custom_reward_redemption.add"
-          ) {
-            this.eventBus.emit(
-              "points-redemption",
-              mapNotificationToPointsRedemption(event),
-            );
-            break;
-          }
-          const alert = mapNotificationToAlert(subscription.type, event);
-          if (alert) this.eventBus.emit("alert", alert);
-          break;
-        }
-        default:
-          break;
-      }
-    });
-
-    socket.on("close", () => {
-      if (this.socket !== socket) return;
-      this.socket = null;
-      this.clearStaleTimer();
-      if (this.stopping) return;
-      this.setStatus("error");
-      this.scheduleReconnect();
-    });
-
-    socket.on("error", () => {
-      // 'close' always follows; the retry is driven from there.
-    });
-  }
-
-  private resetStaleTimer(): void {
-    this.clearStaleTimer();
-    const timeoutMs = (this.keepaliveTimeoutSeconds + 5) * 1000;
-    this.staleTimer = setTimeout(() => {
-      const deadSocket = this.socket;
-      this.socket = null;
-      this.teardownSocket(deadSocket);
-      if (this.stopping) return;
-      this.setStatus("error");
-      this.scheduleReconnect();
-    }, timeoutMs);
-  }
-
-  private clearStaleTimer(): void {
-    if (this.staleTimer) clearTimeout(this.staleTimer);
-    this.staleTimer = null;
-  }
-
-  private clearReconnectTimer(): void {
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = null;
-  }
-
-  private teardownSocket(socket: WebSocket | null): void {
-    if (!socket) return;
-    socket.removeAllListeners();
-    socket.terminate();
-  }
-
-  private scheduleReconnect(): void {
-    if (this.stopping) return;
-    this.clearReconnectTimer();
-    const delay = this.reconnectDelayMs;
-    this.reconnectDelayMs = Math.min(
-      this.reconnectDelayMs * 2,
-      MAX_RECONNECT_DELAY_MS,
-    );
-    this.reconnectTimer = setTimeout(() => {
-      void this.reconnect();
-    }, delay);
-  }
-
-  private async reconnect(): Promise<void> {
-    if (this.stopping) return;
-    const clientId = this.clientId;
-    const refreshToken = this.config.getSecret("twitch.refreshToken");
-    if (!clientId || !refreshToken) {
-      this.setStatus("disconnected");
-      return;
-    }
-
-    this.setStatus("connecting");
-    try {
-      await this.refreshAccessToken(clientId, refreshToken);
-      await this.openSession(EVENTSUB_WS_URL);
-    } catch (error) {
-      this.handleConnectFailure(error);
-    }
   }
 
   private async fetchBroadcasterId(): Promise<string> {
