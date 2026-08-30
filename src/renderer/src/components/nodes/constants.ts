@@ -316,14 +316,15 @@ export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
  *    rather than reshaping a piece of content — see BackgroundAnimationNode's
  *    own doc comment for why it lives here despite the "FX" name.
  */
-export type NodeCategory = 'process' | 'content' | 'style' | 'data'
+export type NodeCategory = 'process' | 'content' | 'style' | 'data' | 'utils'
 
 /** `dot`: solid bg-*-500, for small indicators (SocketRow's dots, the Add Node palette's group/button accents in SceneBuilderPage.tsx) that need a stronger color than the subtle `header` tint. */
 export const CATEGORY_STYLES: Record<NodeCategory, { header: string; border: string; dot: string }> = {
   process: { header: 'bg-indigo-500/15', border: 'border-l-indigo-500', dot: 'bg-indigo-500' },
   content: { header: 'bg-emerald-500/15', border: 'border-l-emerald-500', dot: 'bg-emerald-500' },
   style: { header: 'bg-amber-500/15', border: 'border-l-amber-500', dot: 'bg-amber-500' },
-  data: { header: 'bg-sky-500/15', border: 'border-l-sky-500', dot: 'bg-sky-500' }
+  data: { header: 'bg-sky-500/15', border: 'border-l-sky-500', dot: 'bg-sky-500' },
+  utils: { header: 'bg-slate-500/15', border: 'border-l-slate-500', dot: 'bg-slate-500' }
 }
 
 export const PROCESS_TYPES = new Set(['start', 'task', 'wait', 'end'])
@@ -343,6 +344,7 @@ export const NODE_CATEGORY: Record<string, NodeCategory> = {
   video: 'content',
   box: 'content',
   group: 'content',
+  frame: 'utils',
   start: 'process',
   task: 'process',
   wait: 'process',
@@ -386,6 +388,7 @@ export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
   timer: { delay: 1000 },
   animation: { type: 'fade', duration: 500, subType: 'auto' },
   box: { background: '#18181b', paddingX: 16, paddingY: 12, shape: 'rectangle', borderRadius: 10, borderEnabled: false, borderWidth: 2, borderColor: '#ffffff' },
+  frame: { collapsed: false, label: 'Layout Frame' },
   image: { borderRadius: 8, borderEnabled: false, borderWidth: 2, borderColor: '#ffffff' },
   video: { muted: true, loop: true, borderRadius: 8, borderEnabled: false, borderWidth: 2, borderColor: '#ffffff' },
   backgroundAnimation: { type: 'none', color: '#18181b', speed: 1, repeat: false },
@@ -418,5 +421,6 @@ export const CATEGORY_DOT: Record<NodeCategory, string> = {
   process: '!bg-indigo-500',
   content: '!bg-emerald-500',
   style: '!bg-amber-500',
-  data: '!bg-sky-500'
-}
+  data: '!bg-sky-500',
+  utils: '!bg-slate-500'
+}

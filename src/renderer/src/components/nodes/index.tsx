@@ -12,6 +12,7 @@ import { TimerNode } from './TimerNode'
 import { AnimationNode } from './AnimationNode'
 import { BoxNode } from './BoxNode'
 import { GroupNode } from './GroupNode'
+import { FrameNode } from './FrameNode'
 import { ImageNode } from './ImageNode'
 import { VideoNode } from './VideoNode'
 import { BackgroundAnimationNode } from './BackgroundAnimationNode'
@@ -39,6 +40,7 @@ export const nodeTypes = {
   animation: AnimationNode,
   box: BoxNode,
   group: GroupNode,
+  frame: FrameNode,
   image: ImageNode,
   video: VideoNode,
   backgroundAnimation: BackgroundAnimationNode,
@@ -54,3 +56,7 @@ export const nodeTypes = {
   wait: WaitNode,
   end: EndNode
 }
+
+export * from './constants'
+export { NODE_DEFAULTS, CATEGORY_STYLES, NODE_CATEGORY } from './constants'
+export { SavedNodeDataProvider, useSavedNodeData } from './utils'

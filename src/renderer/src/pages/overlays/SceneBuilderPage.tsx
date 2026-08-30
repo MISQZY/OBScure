@@ -35,7 +35,7 @@ import type { NavKey } from '@/lib/nav'
 import type { OverlayUrls } from '@shared/types'
 import { CanvasConfig, DEFAULT_CANVAS_CONFIG } from '@shared/canvasConfig'
 import { useTour } from '@/providers/TourProvider'
-import { buildNodeMap, incoming, lastOfType, migrateLegacyModifierEdges, migrateLegacyAudioPlayerEdges, SAMPLE_ALERT_VARS, SAMPLE_AUDIO_VARS, audioContentValues, hasAudioCover, sceneTrigger, sceneAudioTrigger, animationFallbackMs, maxExitDurationMs, interpolate, hexToRgba, modifierStyle, borderStyle, animationAttrs, PROCESS_TYPES, CONTAINER_TYPES, nextProcessNode, displayEdges, minimapNodeColor, layoutGraph, buildProcessSchedule, handleScreenCenter, processChainNodes, pointOnBezier, processTokenChain, processTokenPosition, processExitBufferMs, processTrigger, computeTaskState, orderingClass, orderingGap, crossAxisFor, boxShapeStyle, MAX_BOX_DEPTH, findBackgroundFx, findBackgroundFxLabel, SaveStatus, NodeMap, Anim, ScheduledTask, TaskState } from "./sceneUtils";
+import { buildNodeMap, incoming, lastOfType, migrateLegacyModifierEdges, migrateLegacyAudioPlayerEdges, SAMPLE_ALERT_VARS, SAMPLE_AUDIO_VARS, audioContentValues, hasAudioCover, sceneTrigger, sceneAudioTrigger, animationFallbackMs, maxExitDurationMs, interpolate, hexToRgba, modifierStyle, borderStyle, animationAttrs, PROCESS_TYPES, CONTAINER_TYPES, nextProcessNode, displayEdges, minimapNodeColor, layoutGraph, sortNodesForParenting, buildProcessSchedule, handleScreenCenter, processChainNodes, pointOnBezier, processTokenChain, processTokenPosition, processExitBufferMs, processTrigger, computeTaskState, orderingClass, orderingGap, crossAxisFor, boxShapeStyle, MAX_BOX_DEPTH, findBackgroundFx, findBackgroundFxLabel, SaveStatus, NodeMap, Anim, ScheduledTask, TaskState } from "./sceneUtils";
 import { TextView, ImageView, VideoView, ContentView, BoxView, BackgroundFxLayer, ScenePreview, ProcessToken, PreviewEventState, OverlayEffectController, overlayEffectScriptsPromise, loadOverlayEffectScripts } from "./views";
 
 /**
@@ -91,7 +91,8 @@ const NODE_PALETTE: { type: string; label: string; group: string }[] = [
   { type: 'event', label: 'Event', group: 'Data' },
   { type: 'randomSource', label: 'Random', group: 'Data' },
   { type: 'rouletteSource', label: 'Roulette', group: 'Data' },
-  { type: 'audioPlayer', label: 'Audio Player', group: 'Data' }
+  { type: 'audioPlayer', label: 'Audio Player', group: 'Data' },
+  { type: 'frame', label: 'Layout Frame', group: 'Utils' }
 ]
 const PALETTE_GROUPS = [...new Set(NODE_PALETTE.map((entry) => entry.group))]
 /** Drag-to-resize bounds (px) for the live preview panel — see handlePreviewResizeStart. */
@@ -275,7 +276,7 @@ export function SceneBuilderPage({
   useEffect(() => {
     if (overlay) {
       const isBlank = !overlay.nodes || overlay.nodes.length === 0
-      setNodes(isBlank ? defaultNodes : overlay.nodes)
+      setNodes(isBlank ? defaultNodes : sortNodesForParenting(overlay.nodes))
       setEdges(isBlank ? defaultEdges : migrateLegacyAudioPlayerEdges(migrateLegacyModifierEdges(overlay.edges || [])))
       setNameInput(overlay.name)
       setUrlKeyInput(overlay.urlKey)
@@ -522,6 +523,70 @@ export function SceneBuilderPage({
     }
   }
 
+  const onNodeDragStop = useCallback(
+    (_: MouseEvent | TouchEvent, node: Node) => {
+      const instance = reactFlowInstanceRef.current
+      if (!instance || node.type === 'frame') return
+
+      const intersections = instance.getIntersectingNodes(node).filter((n) => n.type === 'frame')
+      const targetFrame = intersections[0]
+
+      // Wait for React Flow to finish flushing its position changes (dragging: false)
+      setTimeout(() => {
+        setNodes((nds) => {
+          const getAbsolute = (nId: string) => {
+            let curr = nds.find((x) => x.id === nId)
+            if (!curr) return { x: 0, y: 0 }
+            let x = curr.position.x
+            let y = curr.position.y
+            while (curr.parentId) {
+              curr = nds.find((x) => x.id === curr!.parentId)
+              if (!curr) break
+              x += curr.position.x
+              y += curr.position.y
+            }
+            return { x, y }
+          }
+
+          const absNodePos = getAbsolute(node.id)
+
+          const reparented = nds.map((n) => {
+            if (n.id === node.id) {
+              if (targetFrame && n.parentId !== targetFrame.id) {
+                const absFramePos = getAbsolute(targetFrame.id)
+                return {
+                  ...n,
+                  position: {
+                    x: absNodePos.x - absFramePos.x,
+                    y: absNodePos.y - absFramePos.y
+                  },
+                  parentId: targetFrame.id
+                }
+              } else if (!targetFrame && n.parentId) {
+                return {
+                  ...n,
+                  position: {
+                    x: absNodePos.x,
+                    y: absNodePos.y
+                  },
+                  parentId: undefined
+                }
+              }
+            }
+            return n
+          })
+
+          // A newly-set parentId only helps if the Frame is actually ahead
+          // of this node in the array — see sortNodesForParenting's own doc
+          // comment for why React Flow silently mispositions the child
+          // otherwise (the exact "flies off" bug this fixes).
+          return sortNodesForParenting(reparented)
+        })
+      }, 50) // Use 50ms to ensure onNodesChange has fully executed
+    },
+    [setNodes]
+  )
+
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       setNodes((nds) => applyNodeChanges(changes, nds))
@@ -626,7 +691,8 @@ export function SceneBuilderPage({
       // Spread a fresh copy of NODE_DEFAULTS[type] (rather than the same
       // object reference) so editing this node's data can never mutate the
       // shared defaults for every other node of this type.
-      data: { ...(NODE_DEFAULTS[type] ?? {}) }
+      data: { ...(NODE_DEFAULTS[type] ?? {}) },
+      zIndex: type === 'frame' ? -1 : undefined
     }
     setNodes((nds) => [...nds, newNode])
   }
@@ -714,6 +780,7 @@ export function SceneBuilderPage({
           nodes={nodes}
           edges={displayEdges(nodes, edges)}
           onNodesChange={onNodesChange}
+          onNodeDragStop={onNodeDragStop}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           isValidConnection={isValidConnection}

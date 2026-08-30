@@ -532,54 +532,86 @@ export const DATA_TYPES = new Set(['event', 'sound', 'timer', 'backgroundAnimati
  */
 export function displayEdges(nodes: Node[], edges: Edge[]): Edge[] {
   const map = buildNodeMap(nodes)
-  return edges.map((e) => {
+  const result: Edge[] = []
+  for (const e of edges) {
     const sourceType = map[e.source]?.type
     const targetType = map[e.target]?.type
     const outSocket = sourceType ? NODE_OUTPUTS[sourceType]?.find((o) => o.id === e.sourceHandle) : undefined
     const isContentSource = (sourceType && CONTENT_TYPES.has(sourceType)) || outSocket?.kind === 'content'
+
+    let styled: Edge
     if (sourceType && targetType && PROCESS_TYPES.has(sourceType) && PROCESS_TYPES.has(targetType)) {
-      return {
+      styled = {
         ...e,
         style: { stroke: '#6366f1', strokeWidth: 3 },
         animated: true,
         zIndex: 10,
         markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1', width: 12, height: 12 }
       }
-    }
-    if (targetType === 'task' && isContentSource) {
-      return {
+    } else if (targetType === 'task' && isContentSource) {
+      styled = {
         ...e,
         style: { stroke: '#10b981', strokeWidth: 2, strokeDasharray: '5 3' },
         markerEnd: { type: MarkerType.ArrowClosed, color: '#10b981', width: 16, height: 16 }
       }
-    }
-    if (isContentSource) {
-      return {
+    } else if (isContentSource) {
+      styled = {
         ...e,
         style: { stroke: '#10b981', strokeWidth: 1.5 },
         markerEnd: { type: MarkerType.ArrowClosed, color: '#10b981', width: 12, height: 12 }
       }
-    }
-    if (sourceType && STYLE_TYPES.has(sourceType)) {
-      return {
+    } else if (sourceType && STYLE_TYPES.has(sourceType)) {
+      styled = {
         ...e,
         style: { stroke: '#f59e0b', strokeWidth: 1.25, strokeDasharray: '2 3' },
         markerEnd: { type: MarkerType.ArrowClosed, color: '#f59e0b', width: 12, height: 12 }
       }
-    }
-    if (sourceType && DATA_TYPES.has(sourceType)) {
-      return {
+    } else if (sourceType && DATA_TYPES.has(sourceType)) {
+      styled = {
         ...e,
         style: { stroke: '#0ea5e9', strokeWidth: 1.25, strokeDasharray: '2 3' },
         markerEnd: { type: MarkerType.ArrowClosed, color: '#0ea5e9', width: 12, height: 12 }
       }
+    } else {
+      styled = {
+        ...e,
+        style: { stroke: '#94a3b8', strokeWidth: 1.25, strokeDasharray: '2 3' },
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8', width: 12, height: 12 }
+      }
     }
-    return {
-      ...e,
-      style: { stroke: '#94a3b8', strokeWidth: 1.25, strokeDasharray: '2 3' },
-      markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8', width: 12, height: 12 }
+
+    /**
+     * A node hidden by its Frame's collapse (see FrameNode's toggleCollapse
+     * in components/nodes/FrameNode.tsx) renders no Handle of its own —
+     * React Flow simply drops any edge attached to a hidden node, which
+     * otherwise makes a collapsed Frame's children's real connections to
+     * the outside world disappear the instant it collapses. Redirect that
+     * end to the Frame's own passthrough handles instead so the wire still
+     * reaches (or leaves from) the group as a whole; color/style above is
+     * still computed from the REAL endpoint types so a redirected wire
+     * keeps telling you what kind of connection it actually is. Both ends
+     * landing on the same Frame (an edge wholly INTERNAL to one collapsed
+     * group) has nothing external left to show, so that edge is dropped
+     * rather than drawn as a self-loop.
+     */
+    const sourceNode = map[e.source]
+    const targetNode = map[e.target]
+    let source = styled.source
+    let sourceHandle = styled.sourceHandle
+    let target = styled.target
+    let targetHandle = styled.targetHandle
+    if (sourceNode?.hidden && sourceNode.parentId && map[sourceNode.parentId]?.type === 'frame') {
+      source = sourceNode.parentId
+      sourceHandle = 'frame-source'
     }
-  })
+    if (targetNode?.hidden && targetNode.parentId && map[targetNode.parentId]?.type === 'frame') {
+      target = targetNode.parentId
+      targetHandle = 'frame-target'
+    }
+    if (source === target) continue
+    result.push({ ...styled, source, sourceHandle, target, targetHandle })
+  }
+  return result
 }
 
 
@@ -597,6 +629,40 @@ export function minimapNodeColor(node: Node): string {
   return '#94a3b8'
 }
 
+
+/**
+ * React Flow's own internal engine (@xyflow/system's updateChildNode) walks
+ * `nodes` in array order and requires a `parentId` to already have been
+ * processed — i.e. a parent must appear BEFORE its children in the array —
+ * or it warns "Parent node not found" and leaves that child's absolute
+ * position unresolved, which is what makes a node dropped onto a Frame (see
+ * onNodeDragStop in SceneBuilderPage.tsx, the only place `parentId` gets
+ * set) visibly jump to the wrong spot the instant the drop sets `parentId`:
+ * the node was added to the array (or loaded from a save) before the Frame
+ * it just got nested under. Restores that invariant by pulling each node's
+ * ancestor chain in ahead of it wherever it's missing, otherwise leaving
+ * relative order untouched — call this any time `parentId` changes (a
+ * reparent) or nodes are loaded from a save that might predate this
+ * ordering fix.
+ */
+export function sortNodesForParenting(nodes: Node[]): Node[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const ordered: Node[] = []
+  const placed = new Set<string>()
+
+  const place = (node: Node): void => {
+    if (placed.has(node.id)) return
+    if (node.parentId) {
+      const parent = byId.get(node.parentId)
+      if (parent) place(parent)
+    }
+    placed.add(node.id)
+    ordered.push(node)
+  }
+
+  nodes.forEach(place)
+  return ordered
+}
 
 /** Fallback size (px) for a node dagre hasn't measured yet — see layoutGraph. Close to BaseNode's own real footprint (min-w-[150px] plus a couple of socket rows) so the very first Prettify pass on a freshly-loaded graph is still reasonable before nodes settle to their true rendered size. */
 export const LAYOUT_DEFAULT_SIZE = { width: 190, height: 110 }
