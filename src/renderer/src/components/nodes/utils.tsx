@@ -104,6 +104,19 @@ export function useHasIncomingEdge(nodeId: string, targetHandle: string): boolea
 }
 
 /**
+ * Like useHasIncomingEdge above, but additionally requires the wire's
+ * SOURCE to be `sourceType` — used where a socket accepts more than one
+ * node type but only ONE of them should flip some other UI behavior. Text's
+ * own Content socket is the case that matters today: it accepts both Audio
+ * Player (a placeholder-merge, template stays editable — see
+ * audioContentValues) and Roulette Entrants (a full replacement — see
+ * TextNode.tsx's own doc comment for why ONLY that one locks the textarea).
+ */
+export function useHasIncomingEdgeFromType(nodeId: string, targetHandle: string, sourceType: string): boolean {
+  return useStore((s) => s.edges.some((e) => e.target === nodeId && e.targetHandle === targetHandle && s.nodes.find((n) => n.id === e.source)?.type === sourceType))
+}
+
+/**
  * Which of TEXT_PLACEHOLDERS this Text node can actually get a value for
  * right now, given the current graph — PlaceholderPicker's {} menu only
  * offers these, instead of every token whether or not anything would ever
@@ -117,10 +130,13 @@ export function useHasIncomingEdge(nodeId: string, targetHandle: string): boolea
  * output wired directly into THIS node's own Content socket (Content is one
  * bundled wire — see AUDIO_PLAYER_OUTPUTS/audioContentValues in overlays/
  * custom.html — so wiring it in arms both placeholders together, never just
- * one). Doesn't verify precise reachability from this specific node's own
- * Scene for the Event/scene-wide-Audio checks (just whether one exists
- * ANYWHERE in the graph) — a false positive only offers a token that
- * happens not to resolve, same harmless-if-imprecise reasoning as
+ * one). Roulette Entrants has no placeholder tokens of its own — it feeds a
+ * Text's Content socket as a full REPLACEMENT (see ROULETTE_ENTRANTS_OUTPUTS'
+ * own doc comment in constants.ts and TextNode.tsx's own doc comment), not a
+ * template these tokens fill into. Doesn't verify precise reachability from
+ * this specific node's own Scene for the Event/scene-wide Audio check (just
+ * whether one exists ANYWHERE in the graph) — a false positive only offers a
+ * token that happens not to resolve, same harmless-if-imprecise reasoning as
  * hasAudioContentDeps in overlays/custom.html.
  */
 export function useAvailablePlaceholders(nodeId: string): readonly string[] {
@@ -283,27 +299,68 @@ export function BaseNode({
   const hasBody = Boolean(children) && !collapsed
   const showTrailingBorder = hasSocketSection || hasBody
 
-  /** Cycle through priority values: clicking rotates all siblings sharing this exact socket (1->2, 2->3, ..., N->1) — see usePriorityInfo's own doc comment for why siblings are scoped by (target, targetHandle) AND deduplicated by node id rather than by raw edge count. */
-  const cyclePriority = () => {
-    if (!priority) return
+  /** Every sibling node (deduped, sorted by current priority) competing for the same (target, targetHandle) socket this node feeds — shared by cyclePriority/setPriority below. Mirrors usePriorityInfo's own computation (see its doc comment for the scoping/dedup reasoning); can't reuse the hook's own memoized result directly since these need the RAW node list to write new priorities back to, not just position/total. */
+  const getPrioritySiblings = () => {
     const edges = getEdges()
     const nodes = getNodes()
     const outEdge = edges.find((e) => e.source === id)
-    if (!outEdge) return
+    if (!outEdge) return null
     const seenNodeIds = new Set<string>()
-    const siblings = edges
+    return edges
       .filter((e) => e.target === outEdge.target && e.targetHandle === outEdge.targetHandle)
       .map((e) => nodes.find((n) => n.id === e.source))
       .filter((n): n is (typeof nodes)[number] => n != null)
       .filter((n) => (seenNodeIds.has(n.id) ? false : (seenNodeIds.add(n.id), true)))
       .sort((a, b) => ((a.data.priority as number) ?? 0) - ((b.data.priority as number) ?? 0))
+  }
 
-    // Shift all priorities by 1, wrapping around
+  /** Left-click on the Priority Badge: rotate every sibling by 1 (1->2, 2->3, ..., N->1) — the quick "send this one to the back" gesture. Right-click instead (see setPriority/PriorityMenu below) jumps straight to a specific position. */
+  const cyclePriority = () => {
+    if (!priority) return
+    const siblings = getPrioritySiblings()
+    if (!siblings) return
     siblings.forEach((n, idx) => {
       const newPos = (idx + 1) % siblings.length + 1
       updateNodeData(n.id, { priority: newPos })
     })
   }
+
+  /**
+   * Right-click on the Priority Badge (see the menu rendered further down):
+   * jump straight to a SPECIFIC position instead of only cycling — e.g.
+   * siblings at 1,2,3 and THIS node (currently 1) picking "2" becomes
+   * 2,1,3: a SWAP with whoever currently holds position 2, not a full
+   * reshuffle — every other sibling's own priority is left untouched. Lets
+   * "1,2,3 -> 2,1,3" happen in one click, which cyclePriority's rotate-only
+   * model can never reach directly.
+   */
+  const setPriority = (newPosition: number) => {
+    if (!priority) return
+    const siblings = getPrioritySiblings()
+    if (!siblings) return
+    const currentIndex = siblings.findIndex((n) => n.id === id)
+    const targetIndex = newPosition - 1
+    if (currentIndex === -1 || targetIndex === currentIndex || targetIndex < 0 || targetIndex >= siblings.length) return
+    const other = siblings[targetIndex]
+    updateNodeData(id, { priority: newPosition })
+    updateNodeData(other.id, { priority: currentIndex + 1 })
+  }
+
+  const [priorityMenuAnchor, setPriorityMenuAnchor] = useState<{ left: number; top: number } | null>(null)
+  const priorityBadgeRef = useRef<HTMLButtonElement>(null)
+  const priorityMenuRef = useRef<HTMLDivElement>(null)
+
+  // Capture phase — see PlaceholderPicker's own outside-click effect for why.
+  useEffect(() => {
+    if (!priorityMenuAnchor) return
+    const onPointerDown = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (priorityBadgeRef.current?.contains(target) || priorityMenuRef.current?.contains(target)) return
+      setPriorityMenuAnchor(null)
+    }
+    document.addEventListener('mousedown', onPointerDown, true)
+    return () => document.removeEventListener('mousedown', onPointerDown, true)
+  }, [priorityMenuAnchor])
 
   /** A fresh, unconnected copy right next to the original — same id scheme as the Add Node palette (see addNode in SceneBuilderPage.tsx), deep-cloned data so editing the copy never mutates the original. */
   const duplicateNode = () => {
@@ -414,14 +471,49 @@ export function BaseNode({
         )}
         {priority && (
           <button
+            ref={priorityBadgeRef}
             type="button"
             onClick={cyclePriority}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              const rect = priorityBadgeRef.current?.getBoundingClientRect()
+              if (rect) setPriorityMenuAnchor({ left: rect.left, top: rect.bottom + 4 })
+            }}
             className="nodrag shrink-0 inline-flex items-center justify-center size-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold leading-none cursor-pointer hover:opacity-80 transition-opacity"
-            title={`Render priority ${priority.position} of ${priority.total} — click to move to end`}
+            title={`Render priority ${priority.position} of ${priority.total} — click to move to end, right-click to set a specific position`}
           >
             {priority.position}
           </button>
         )}
+        {priority &&
+          priorityMenuAnchor &&
+          createPortal(
+            <div
+              ref={priorityMenuRef}
+              style={{ left: priorityMenuAnchor.left, top: priorityMenuAnchor.top }}
+              className="nodrag fixed z-[9999] min-w-[64px] rounded-md border bg-popover text-popover-foreground shadow-lg py-1"
+            >
+              {Array.from({ length: priority.total }, (_, i) => i + 1).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setPriority(n)
+                    setPriorityMenuAnchor(null)
+                  }}
+                  className={cn(
+                    'w-full text-center px-3 py-1 text-xs',
+                    n === priority.position ? 'bg-accent text-accent-foreground font-semibold' : 'hover:bg-accent hover:text-accent-foreground'
+                  )}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>,
+            document.body
+          )}
         {deletable && (
           <button
             type="button"
@@ -1100,3 +1192,7 @@ export function inferAlertPlatform(data: Record<string, unknown>): AlertPlatform
   return (ALERT_TYPES_BY_PLATFORM.youtube as string[]).includes(savedType) ? 'youtube' : 'twitch'
 }
 export const TASK_ACTIONS = ['show', 'hide', 'update'] as const
+/** Maps 1:1 onto CSS `overflow-x`/`overflow-y` — see OverflowNode. 'auto' shows a scrollbar only once content actually exceeds the box (from a wired Size, most often); 'scroll' always reserves one. */
+export const OVERFLOW_MODES = ['visible', 'hidden', 'auto', 'scroll'] as const
+/** Which way an Overflow node's Auto-scroll animates its content — see overflowAutoScroll in overlays/sceneUtils.tsx. 'up'/'down' pick the vertical keyframe, 'left'/'right' the horizontal one; 'down'/'right' just play the same keyframe in reverse. */
+export const SCROLL_DIRECTIONS = ['up', 'down', 'left', 'right'] as const

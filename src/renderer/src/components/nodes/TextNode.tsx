@@ -38,11 +38,11 @@ import {
   TEXT_OUTPUTS, IMAGE_OUTPUTS, VIDEO_OUTPUTS, BOX_OUTPUTS, AUDIO_PLAYER_OUTPUTS,
 } from './constants'
 import {
-  useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect, PlaceholderPicker, 
+  useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect, PlaceholderPicker,
   numberInputClass, textInputClass, textAreaClass, selectClass,
   SYSTEM_DEFAULT_FONT, TEXT_ALIGN_BUTTONS, TEXT_VERTICAL_BUTTONS, IconToggleGroup, UploadRow,
   ANIMATION_SUB_TYPES, BOX_SHAPE_IDS, EVENT_KINDS, ALERT_PLATFORM_LABELS, inferAlertPlatform, TASK_ACTIONS,
-  useHasIncomingEdge, useAvailablePlaceholders
+  useHasIncomingEdge, useHasIncomingEdgeFromType, useAvailablePlaceholders
 } from './utils'
 
 export function TextNode({ id, data }: NodeProps) {
@@ -60,6 +60,15 @@ export function TextNode({ id, data }: NodeProps) {
   const bold = data.bold !== false
   const italic = Boolean(data.italic)
   const availablePlaceholders = useAvailablePlaceholders(id)
+  // Roulette Entrants' Content output REPLACES this Text's own template
+  // outright (see ROULETTE_ENTRANTS_OUTPUTS' own doc comment in
+  // constants.ts / rouletteEntrantsTextValue in overlays/sceneUtils.tsx) —
+  // unlike Audio Player's own Content wire, which only ever supplies
+  // {artist}/{title} values a template still decides how to use. The
+  // textarea goes read-only while connected, same as ImageNode's own URL
+  // field does for Audio Player's Content (see its own doc comment) — an
+  // editable-but-ignored field would just be confusing.
+  const rouletteEntrantsConnected = useHasIncomingEdgeFromType(id, 'content', 'rouletteEntrants')
 
   const insertPlaceholder = (token: string) => {
     const el = inputRef.current
@@ -83,11 +92,13 @@ export function TextNode({ id, data }: NodeProps) {
           <textarea
             ref={inputRef}
             rows={3}
+            placeholder={rouletteEntrantsConnected ? 'Provided by Roulette Entrants connection' : undefined}
+            disabled={rouletteEntrantsConnected}
             value={text}
             onChange={(e) => updateNodeData(id, { text: e.target.value })}
-            className={textAreaClass}
+            className={cn(textAreaClass, rouletteEntrantsConnected && 'opacity-50')}
           />
-          <PlaceholderPicker tokens={availablePlaceholders} onInsert={insertPlaceholder} />
+          {!rouletteEntrantsConnected && <PlaceholderPicker tokens={availablePlaceholders} onInsert={insertPlaceholder} />}
         </div>
       </div>
       <Field label="Color">

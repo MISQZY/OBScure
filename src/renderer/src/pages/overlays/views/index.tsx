@@ -1,10 +1,11 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Node, Edge } from "@xyflow/react";
 import { Music, Image as ImageIcon, Video as VideoIcon, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OverlayUrls } from "@shared/types";
-import { buildNodeMap, incoming, lastOfType, migrateLegacyModifierEdges, migrateLegacyAudioPlayerEdges, SAMPLE_ALERT_VARS, SAMPLE_AUDIO_VARS, audioContentValues, hasAudioCover, sceneTrigger, sceneAudioTrigger, animationFallbackMs, maxExitDurationMs, interpolate, hexToRgba, modifierStyle, borderStyle, animationAttrs, PROCESS_TYPES, nextProcessNode, displayEdges, minimapNodeColor, layoutGraph, buildProcessSchedule, handleScreenCenter, processChainNodes, pointOnBezier, processTokenChain, processTokenPosition, processExitBufferMs, processTrigger, computeTaskState, orderingClass, orderingGap, crossAxisFor, boxShapeStyle, MAX_BOX_DEPTH, findBackgroundFx, findBackgroundFxLabel, SaveStatus, NodeMap, Anim, ScheduledTask, TaskState } from "../sceneUtils";
+import { RouletteWheel } from "../../tools/RouletteWheel";
+import { buildNodeMap, incoming, lastOfType, migrateLegacyModifierEdges, migrateLegacyAudioPlayerEdges, SAMPLE_ALERT_VARS, SAMPLE_AUDIO_VARS, SAMPLE_ROULETTE_STATE, audioContentValues, hasAudioCover, rouletteEntrantsTextValue, sceneTrigger, sceneAudioTrigger, animationFallbackMs, maxExitDurationMs, interpolate, hexToRgba, modifierStyle, borderStyle, animationAttrs, overflowAutoScroll, PROCESS_TYPES, nextProcessNode, displayEdges, minimapNodeColor, layoutGraph, buildProcessSchedule, handleScreenCenter, processChainNodes, pointOnBezier, processTokenChain, processTokenPosition, processExitBufferMs, processTrigger, computeTaskState, orderingClass, orderingGap, crossAxisFor, boxShapeStyle, MAX_BOX_DEPTH, findBackgroundFx, findBackgroundFxLabel, SaveStatus, NodeMap, Anim, OverflowAutoScroll, ScheduledTask, TaskState } from "../sceneUtils";
 
 /**
  * Small circle that slides along the process's own Sequence-flow edges
@@ -50,6 +51,96 @@ export function ProcessToken({
 }
 
 
+/**
+ * Renders `children` twice back-to-back inside a track animated by CSS
+ * (ov-autoscroll-x/-y, defined identically in scene-preview-animations.css
+ * and overlays/animations.css) — the standard seamless-marquee trick:
+ * translating the track by exactly -50% of its own size always lands on the
+ * SECOND copy's start, which is pixel-identical to the first copy's start
+ * (both copies are the same content), so the loop never visibly snaps or
+ * resets. The PARENT element still needs its own `overflow: hidden`/`auto`
+ * — that's the Overflow modifier's plain style fields (via modifierStyle),
+ * already applied on the caller's own wrapper; this only ever supplies the
+ * motion. No `gap` between the two copies — a gap would break the exact 50%
+ * math the loop depends on. `flexShrink: 0` on the track itself (not just
+ * the two copies) defends against the flexbox "min-height:auto" shrink
+ * trap — a flex item can otherwise be squeezed below its content size by a
+ * fixed-size ancestor with no visible symptom except silently-wrong content.
+ *
+ * `scroll.speed` is px/second, not a loop duration (see overflowAutoScroll's
+ * own doc comment for why) — this measures its OWN first copy's real
+ * rendered size (ResizeObserver, so it re-measures if content/fonts change,
+ * e.g. Roulette Entrants gaining a row) and sets `animation-duration` from
+ * that, instead of a fixed guess. Nothing animates until the first
+ * measurement lands (`animationCss` starts undefined) — a brief flash of
+ * static content beats a wrong, too-fast pass.
+ *
+ * `anchorRef` pins a start time AND the duration it was computed from the
+ * first time this instance measures, and keeps reusing both across later
+ * ResizeObserver firings unless the measured size ACTUALLY changed by a
+ * whole pixel. That first version recomputed `durationSec` fresh from every
+ * single measurement — layout isn't perfectly bit-identical fire to fire
+ * (a fraction-of-a-pixel difference is enough), so the modulo phase math
+ * below (elapsedSec % durationSec) drifted out of sync with wherever the
+ * animation actually visually was, compounding over time into a visible
+ * snap right around when a lap would otherwise complete. Pinning both
+ * removes that drift entirely for the (overwhelmingly common) case where
+ * nothing about the content actually changed size between firings. A plain
+ * ref (not state) since it only needs to persist for the life of this
+ * mounted instance, never trigger a re-render itself.
+ */
+function AutoScrollTrack({ scroll, children }: { scroll: NonNullable<OverflowAutoScroll>; children: React.ReactNode }) {
+  const copyRef = useRef<HTMLDivElement>(null)
+  const [animationCss, setAnimationCss] = useState<string | undefined>(undefined)
+  const anchorRef = useRef<{ startedAt: number; size: number; durationSec: number } | null>(null)
+
+  useLayoutEffect(() => {
+    const el = copyRef.current
+    if (!el) return
+    const measure = () => {
+      const rect = el.getBoundingClientRect()
+      const size = scroll.axis === 'x' ? rect.width : rect.height
+      if (size <= 0) {
+        setAnimationCss(undefined)
+        return
+      }
+      const rounded = Math.round(size)
+      let anchor = anchorRef.current
+      if (!anchor) {
+        anchor = { startedAt: Date.now(), size: rounded, durationSec: rounded / scroll.speed }
+        anchorRef.current = anchor
+      } else if (anchor.size !== rounded) {
+        anchor.size = rounded
+        anchor.durationSec = rounded / scroll.speed
+      }
+      const elapsedSec = (Date.now() - anchor.startedAt) / 1000
+      const delaySec = -(elapsedSec % anchor.durationSec)
+      setAnimationCss(`ov-autoscroll-${scroll.axis} ${anchor.durationSec}s linear ${delaySec}s infinite${scroll.reverse ? ' reverse' : ''}`)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [scroll.axis, scroll.speed, scroll.reverse])
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: scroll.axis === 'x' ? 'row' : 'column',
+        flexShrink: 0,
+        width: scroll.axis === 'x' ? 'max-content' : undefined,
+        willChange: 'transform',
+        animation: animationCss
+      }}
+    >
+      <div ref={copyRef} style={{ flexShrink: 0 }}>{children}</div>
+      <div style={{ flexShrink: 0 }} aria-hidden="true">{children}</div>
+    </div>
+  )
+}
+
+
 export function TextView({
   node,
   style,
@@ -57,8 +148,10 @@ export function TextView({
   played,
   hiding,
   vars,
-  audioValues,
-  crossAxis
+  contentValues,
+  replaceText,
+  crossAxis,
+  autoScroll
 }: {
   node: Node
   style: React.CSSProperties
@@ -68,8 +161,12 @@ export function TextView({
   hiding: boolean
   /** Current event's placeholder values (see sceneTrigger) — null outside an event-triggered show. */
   vars: Record<string, unknown> | null
-  /** { artist, title } from Audio Player's Content wire into this node's own Content socket, or null — see audioContentValues. Merged into `vars` below, same as buildText merges the live feed in overlays/custom.html; Content's own template still decides what's shown. */
-  audioValues: { artist?: string; title?: string } | null
+  /** { artist, title } from Audio Player's Content wire into this node's own Content socket — null when it isn't wired in. See audioContentValues. Merged into `vars` below, same as buildText merges the live feed in overlays/custom.html; Content's own template still decides what's shown. */
+  contentValues: Record<string, unknown> | null
+  /** Roulette Entrants' formatted rows, when THIS node's own Content socket is wired to one — see rouletteEntrantsTextValue. Non-null REPLACES the template outright (ignores `data.text`/`contentValues`/`vars` entirely), unlike contentValues above which only ever supplies values a template still interpolates — see TextNode.tsx's own doc comment for why the node's textarea goes read-only in this case. */
+  replaceText: string | null
+  /** From the same Overflow modifier `style` was built from — see overflowAutoScroll's own doc comment. Null renders the text plainly (unchanged from before this existed); set, it wraps the text in an AutoScrollTrack instead. */
+  autoScroll?: OverflowAutoScroll
   /**
    * The CROSS axis of whichever Box/Scene this Text is a direct child of
    * (crossAxisFor, computed by the caller off THAT parent's own Ordering) —
@@ -109,7 +206,20 @@ export function TextView({
           width: isAnchored ? 'auto' : '100%',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: verticalAlign === 'bottom' ? 'flex-end' : verticalAlign === 'middle' ? 'center' : 'flex-start',
+          // Auto-scroll's keyframes (ov-autoscroll-y) assume the track
+          // starts flush against this box's OWN top edge — translateY(0) IS
+          // "show the very top of copy1". Vertical/'middle' or 'bottom'
+          // instead CENTERS/bottom-aligns the (always taller, by design)
+          // track within this box before the animation ever runs, offsetting
+          // that starting point by however much the track overflows — which
+          // silently breaks the translateY(0)->(-50%) math (it was derived
+          // assuming a flex-start base position), showing a seemingly
+          // arbitrary slice of the middle of the list and skipping the rest
+          // on each loop instead of sweeping through all of it. Vertical
+          // Align is about placing SHORT, non-overflowing content within its
+          // box — meaningless once autoScroll guarantees the content always
+          // overflows, so it's ignored here rather than fought elsewhere.
+          justifyContent: autoScroll ? 'flex-start' : verticalAlign === 'bottom' ? 'flex-end' : verticalAlign === 'middle' ? 'center' : 'flex-start',
           alignSelf: needsStretch ? 'stretch' : undefined,
           // Content's own field is a multi-line textarea — preserves both
           // the line breaks the user typed and normal word-wrapping,
@@ -128,13 +238,16 @@ export function TextView({
         } as React.CSSProperties
       }
     >
-      {interpolate((node.data.text as string) ?? '', audioValues ? { ...vars, ...audioValues } : vars) || (
-        // Editor-only affordance — see the matching one on BoxView's empty
-        // state. An empty Text node has zero natural width, so without this
-        // it (and any Box wrapping only it) collapses to a near-invisible
-        // sliver once scaled down for the preview panel.
-        <span className="opacity-40 italic">Empty text</span>
-      )}
+      {(() => {
+        const content = (replaceText != null ? replaceText : interpolate((node.data.text as string) ?? '', contentValues ? { ...vars, ...contentValues } : vars)) || (
+          // Editor-only affordance — see the matching one on BoxView's empty
+          // state. An empty Text node has zero natural width, so without this
+          // it (and any Box wrapping only it) collapses to a near-invisible
+          // sliver once scaled down for the preview panel.
+          <span className="opacity-40 italic">{replaceText != null ? 'No entrants' : 'Empty text'}</span>
+        )
+        return autoScroll ? <AutoScrollTrack scroll={autoScroll}>{content}</AutoScrollTrack> : content
+      })()}
     </div>
   )
 }
@@ -238,7 +351,40 @@ export function VideoView({ node, style, anim, played, hiding }: { node: Node; s
 }
 
 
-/** A content node (Text/Image/Video), or a nested Box (delegated to BoxView) — plus whatever's wired into ITS input (Position, Transform, Animation, ...). */
+/**
+ * What a Roulette Widget node itself renders (see NODE_SOCKETS.
+ * rouletteWidget/ROULETTE_WIDGET_OUTPUTS in components/nodes/constants.ts)
+ * — reuses the real RouletteWheel component (pages/tools/RouletteWheel.tsx)
+ * the standalone Roulette tool page itself renders, fed the fixed
+ * SAMPLE_ROULETTE_STATE (the editor has no live round to preview — see
+ * SAMPLE_ROULETTE_STATE's own doc comment). Always shown, regardless of
+ * whether this widget's own `visible` socket is wired — the editor preview
+ * doesn't simulate the round ever going idle (see the widget's own doc
+ * comment in RouletteWidgetNode.tsx for what that socket does for real).
+ * Static: `animate`/`tracking` are both false, since there's no real spin to
+ * animate toward in the editor. Mirrors buildRouletteWheel in
+ * overlays/custom.html, which instead reads the REAL live round, honors the
+ * `visible` socket, and does animate its spin.
+ */
+export function RouletteWheelView({ node, style, anim, played, hiding }: { node: Node; style: React.CSSProperties; anim: Anim; played: boolean; hiding: boolean }) {
+  // No own Width/Height field, same reasoning as ImageView/VideoView above —
+  // a wired Size node's width (falling back to height, then the default)
+  // picks the wheel's rendered size; it's always square regardless of which
+  // axis a Size modifier actually set.
+  const size = typeof style.width === 'number' ? style.width : typeof style.height === 'number' ? style.height : 240
+  return (
+    <div
+      className={cn('flex items-center justify-center shrink-0', anim && played && 'visible', anim && hiding && 'hiding')}
+      data-animation={anim?.type}
+      style={{ ...style, width: size, height: size, ...(anim?.duration ? { '--anim-duration': `${anim.duration}ms` } : {}) } as React.CSSProperties}
+    >
+      <RouletteWheel entrants={SAMPLE_ROULETTE_STATE.entrants} rotation={0} winnerId={null} animate={false} tracking={false} size={size} />
+    </div>
+  )
+}
+
+
+/** A content node (Text/Image/Video/Roulette wheel), or a nested Box (delegated to BoxView) — plus whatever's wired into ITS input (Position, Transform, Animation, ...). Roulette Entrants (see RouletteEntrantsNode.tsx) isn't among these — it has no rendering of its own, only a Content wire into a Text node's own socket (see rouletteEntrantsTextValue below). */
 export function ContentView({
   node,
   edges,
@@ -281,20 +427,27 @@ export function ContentView({
   }
   const mods = incoming(node.id, edges, map)
   const audioValues = node.type === 'text' ? audioContentValues(node.id, edges, map) : null
+  const replaceText = node.type === 'text' ? rouletteEntrantsTextValue(node.id, edges, map) : null
   const audioCover = node.type === 'image' && hasAudioCover(node.id, edges, map)
+  // Task-agnostic, same reasoning as overflowAutoScroll's own doc comment —
+  // a Task never wires its own Overflow, so this reads identically whether
+  // or not a Process is currently driving `node`.
+  const autoScroll = node.type === 'text' ? overflowAutoScroll(mods) : null
   if (schedule.length > 0 && schedule.some((s) => s.targetId === node.id)) {
     const task = computeTaskState(schedule, node.id, clockMs, mods)
     if (!task.visible) return null
-    if (node.type === 'text') return <TextView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} vars={vars} audioValues={audioValues} crossAxis={crossAxis} />
+    if (node.type === 'text') return <TextView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} vars={vars} contentValues={audioValues} replaceText={replaceText} crossAxis={crossAxis} autoScroll={autoScroll} />
     if (node.type === 'image') return <ImageView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} urls={urls} audioCover={audioCover} />
     if (node.type === 'video') return <VideoView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} />
+    if (node.type === 'rouletteWidget') return <RouletteWheelView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} />
     return null
   }
   const style = modifierStyle(mods)
   const anim = animationAttrs(mods)
-  if (node.type === 'text') return <TextView node={node} style={style} anim={anim} played={played} hiding={hiding} vars={vars} audioValues={audioValues} crossAxis={crossAxis} />
+  if (node.type === 'text') return <TextView node={node} style={style} anim={anim} played={played} hiding={hiding} vars={vars} contentValues={audioValues} replaceText={replaceText} crossAxis={crossAxis} autoScroll={autoScroll} />
   if (node.type === 'image') return <ImageView node={node} style={style} anim={anim} played={played} hiding={hiding} urls={urls} audioCover={audioCover} />
   if (node.type === 'video') return <VideoView node={node} style={style} anim={anim} played={played} hiding={hiding} />
+  if (node.type === 'rouletteWidget') return <RouletteWheelView node={node} style={style} anim={anim} played={played} hiding={hiding} />
   return null
 }
 
@@ -327,7 +480,11 @@ export function BoxView({
   const isBox = node.type === 'box'
   const incomingNodes = incoming(node.id, edges, map)
   const children =
-    depth >= MAX_BOX_DEPTH ? [] : incomingNodes.filter((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group')
+    depth >= MAX_BOX_DEPTH
+      ? []
+      : incomingNodes.filter(
+          (n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group' || n.type === 'rouletteWidget'
+        )
   const orderClass = orderingClass(incomingNodes)
   const childCrossAxis = crossAxisFor(incomingNodes)
 
@@ -620,7 +777,7 @@ export function ScenePreview({
           <VideoView key={`${n.id}-${playToken}`} node={n} style={{}} anim={null} played={playToken > 0} hiding={false} />
         ))}
         {texts.map((n) => (
-          <TextView key={`${n.id}-${playToken}`} node={n} style={{}} anim={null} played={playToken > 0} hiding={false} vars={null} audioValues={null} crossAxis="horizontal" />
+          <TextView key={`${n.id}-${playToken}`} node={n} style={{}} anim={null} played={playToken > 0} hiding={false} vars={null} contentValues={null} replaceText={null} crossAxis="horizontal" />
         ))}
       </div>
     )
@@ -629,13 +786,15 @@ export function ScenePreview({
   if (eventState.active && !eventState.visible) {
     return (
       <span className="text-white/40 text-xs text-center px-4">
-        {/* alertTypes is empty when armed purely by Audio Player (no Event — see processTrigger's audioArmed), which has no "type" to name — describe the trigger instead of joining an empty list into a bare "Waiting for  —". */}
-        Waiting for {eventState.alertTypes.length > 0 ? eventState.alertTypes.join(' / ') : 'a track change'} — press Play to simulate it.
+        {/* alertTypes is empty when armed purely by Audio Player/Roulette (no Event — see processTrigger's audioArmed/rouletteArmed), neither of which has a "type" to name — describe the trigger instead of joining an empty list into a bare "Waiting for  —". */}
+        Waiting for {eventState.alertTypes.length > 0 ? eventState.alertTypes.join(' / ') : 'a track change or round start'} — press Play to simulate it.
       </span>
     )
   }
 
-  const renderable = incoming(scene.id, edges, map).filter((n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+  const renderable = incoming(scene.id, edges, map).filter(
+    (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget'
+  )
   const orderMods = incoming(scene.id, edges, map)
   if (renderable.length === 0) {
     return <span className="text-white/40 text-xs text-center px-4">Nothing connected to Scene yet — wire a Text, Image, Video, Shape or Group into it.</span>

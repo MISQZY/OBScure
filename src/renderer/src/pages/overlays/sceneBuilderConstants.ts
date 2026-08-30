@@ -40,6 +40,7 @@ export const NODE_PALETTE: { type: string; label: string; group: string }[] = [
   { type: 'shadow', label: 'Shadow', group: 'Style' },
   { type: 'animation', label: 'Animation', group: 'Style' },
   { type: 'hide', label: 'Hide', group: 'Style' },
+  { type: 'overflow', label: 'Overflow', group: 'Style' },
   // Matches Box/Scene's own Layout socket (formerly labeled "Ordering") —
   // the only node type it accepts.
   { type: 'ordering', label: 'Ordering', group: 'Layout' },

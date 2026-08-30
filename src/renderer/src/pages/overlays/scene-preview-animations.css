@@ -124,6 +124,30 @@
 }
 
 /*
+  Overflow node's auto-scroll (see overflowAutoScroll/AutoScrollTrack in
+  pages/overlays/views/index.tsx) — mirrors ov-autoscroll-x/-y in
+  overlays/animations.css exactly, same hand-kept-in-sync reasoning as every
+  other rule in this file. -50% always lands on the identical-content SECOND
+  copy AutoScrollTrack renders, which is what makes the loop seamless.
+*/
+@keyframes ov-autoscroll-y {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+@keyframes ov-autoscroll-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/*
   Checkerboard "transparent background" indicator for the preview panel
   (SceneBuilderPage.tsx) — the same convention image editors use for a .png
   with alpha. Not real transparency: the real Browser Source is transparent

@@ -7,6 +7,7 @@ import { PositionNode } from './PositionNode'
 import { SizeNode } from './SizeNode'
 import { OpacityNode } from './OpacityNode'
 import { ShadowNode } from './ShadowNode'
+import { OverflowNode } from './OverflowNode'
 import { TextNode } from './TextNode'
 import { TimerNode } from './TimerNode'
 import { AnimationNode } from './AnimationNode'
@@ -20,6 +21,8 @@ import { SoundNode } from './SoundNode'
 import { EventNode } from './EventNode'
 import { RandomSourceNode } from './RandomSourceNode'
 import { RouletteSourceNode } from './RouletteSourceNode'
+import { RouletteWidgetNode } from './RouletteWidgetNode'
+import { RouletteEntrantsNode } from './RouletteEntrantsNode'
 import { AudioPlayerNode } from './AudioPlayerNode'
 import { OrderingNode } from './OrderingNode'
 import { HideNode } from './HideNode'
@@ -35,6 +38,7 @@ export const nodeTypes = {
   size: SizeNode,
   opacity: OpacityNode,
   shadow: ShadowNode,
+  overflow: OverflowNode,
   text: TextNode,
   timer: TimerNode,
   animation: AnimationNode,
@@ -48,6 +52,8 @@ export const nodeTypes = {
   event: EventNode,
   randomSource: RandomSourceNode,
   rouletteSource: RouletteSourceNode,
+  rouletteWidget: RouletteWidgetNode,
+  rouletteEntrants: RouletteEntrantsNode,
   audioPlayer: AudioPlayerNode,
   ordering: OrderingNode,
   hide: HideNode,

@@ -44,9 +44,11 @@ export interface RouletteWheelProps {
   animate: boolean
   tracking: boolean
   onTick?: (name: string | null) => void
+  /** Rendered pixel size (both width and height — the wheel is always square). Defaults to 320 (the standalone Roulette tool page's own h-80/w-80). Lets a scene's own Size modifier resize the wheel widget (see RouletteWheelView in overlays/views/index.tsx / buildRouletteWheel in overlays/custom.html) without touching the SVG's own viewBox math. */
+  size?: number
 }
 
-export function RouletteWheel({ entrants, rotation, winnerId, animate, tracking, onTick }: RouletteWheelProps): React.JSX.Element {
+export function RouletteWheel({ entrants, rotation, winnerId, animate, tracking, onTick, size = 320 }: RouletteWheelProps): React.JSX.Element {
   const totalWeight = entrants.reduce((sum, entrant) => sum + entrant.weight, 0)
   let cursor = 0
   const sectors = entrants.map((entrant, index) => {
@@ -96,7 +98,7 @@ export function RouletteWheel({ entrants, rotation, winnerId, animate, tracking,
   }, [tracking, onTick])
 
   return (
-    <div className="relative mx-auto h-80 w-80 shrink-0">
+    <div className="relative mx-auto shrink-0" style={{ height: size, width: size }}>
       <svg viewBox="0 0 200 200" className="h-full w-full">
         <g
           ref={groupRef}

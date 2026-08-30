@@ -152,6 +152,67 @@ export const SAMPLE_AUDIO_VARS = { artist: 'Sample Artist', title: 'Sample Track
 
 
 /**
+ * Sample round for previewing a Roulette node's Content/Event outputs (see
+ * ROULETTE_OUTPUTS in components/nodes/constants.ts) in the editor — same
+ * reasoning as SAMPLE_AUDIO_VARS above: there's no live roulette feed inside
+ * the builder (the real overlay gets one over the 'roulette-state' broadcast
+ * channel — see overlays/custom.html), so anything wired to Roulette always
+ * previews with this fixed sample instead. `entrants` doubles as
+ * RouletteWheelView's own wheel data (see overlays/views/index.tsx).
+ */
+export const SAMPLE_ROULETTE_STATE = {
+  phase: 'collecting' as const,
+  entrants: [
+    { id: 's1', name: 'Alice', source: 'chat' as const, weight: 1 },
+    { id: 's2', name: 'Bob', source: 'points' as const, weight: 2 },
+    { id: 's3', name: 'Carla', source: 'manual' as const, weight: 1 }
+  ],
+  winner: 'Alice'
+}
+
+/**
+ * {entrants, entrantsList, winner, timeLeft} sample vars for a Start-armed-
+ * by-Roulette process's own simulated Play/Test run (see
+ * handlePlay in hooks/useScenePlayback.ts) — lets a Task's own
+ * {title}/{artist}/{entrants}/{winner}/... placeholders preview as
+ * something other than literal text while the process is armed purely by
+ * Roulette (no real alert type). Unrelated to a plain Text's own Content
+ * wire — see rouletteEntrantsTextValue below for how a Roulette Entrants
+ * node feeds one of THOSE instead (a full replacement, not a placeholder
+ * template these tokens fill into). `timeLeft` is a fixed sample string
+ * (no real countdown to simulate here, same reasoning as SAMPLE_AUDIO_VARS'
+ * own static values) — the real overlay computes and ticks its own live one
+ * instead (see rouletteStateVars in overlays/custom.html).
+ */
+export const SAMPLE_ROULETTE_VARS = {
+  entrants: SAMPLE_ROULETTE_STATE.entrants.map((entrant) => entrant.name).join(', '),
+  entrantsList: SAMPLE_ROULETTE_STATE.entrants.map((entrant) => entrant.name).join('\n'),
+  winner: SAMPLE_ROULETTE_STATE.winner,
+  timeLeft: '1:30'
+}
+
+/**
+ * One formatted row per entrant, for a Roulette Entrants list node's own
+ * `layout`/`rowTemplate`/`sortByChance` fields (see NODE_DEFAULTS.
+ * rouletteEntrants in components/nodes/constants.ts) — `rowTemplate`
+ * supports {name}/{chance}/{weight} tokens via the same interpolate() every
+ * other template field in this file already uses. `chance` is the same
+ * weighted-percentage formula RouletteWheel.tsx/RouletteToolPage.tsx use for
+ * their own wheel/entrant-list. Mirrors rouletteEntrantRows in
+ * overlays/custom.html.
+ */
+export function rouletteEntrantRows(entrants: { name: string; weight: number }[], data: Record<string, unknown>): string[] {
+  const totalWeight = entrants.reduce((sum, entrant) => sum + entrant.weight, 0)
+  const ordered = data.sortByChance ? [...entrants].sort((a, b) => b.weight - a.weight) : entrants
+  const template = (data.rowTemplate as string) || '{name}'
+  return ordered.map((entrant) => {
+    const chance = totalWeight > 0 ? Math.round((entrant.weight / totalWeight) * 100) : 0
+    return interpolate(template, { name: entrant.name, chance, weight: entrant.weight })
+  })
+}
+
+
+/**
  * { artist, title } from SAMPLE_AUDIO_VARS when Audio Player's Content
  * output (see TEXT_SOCKETS/AUDIO_PLAYER_OUTPUTS in components/nodes/
  * index.tsx) feeds this Text's own Content socket (id `content`), or null
@@ -166,6 +227,31 @@ export const SAMPLE_AUDIO_VARS = { artist: 'Sample Artist', title: 'Sample Track
 export function audioContentValues(nodeId: string, edges: Edge[], map: NodeMap): { artist?: string; title?: string } | null {
   const hasAudioContent = edges.some((e) => e.target === nodeId && e.targetHandle === 'content' && map[e.source]?.type === 'audioPlayer')
   return hasAudioContent ? { artist: SAMPLE_AUDIO_VARS.artist, title: SAMPLE_AUDIO_VARS.title } : null
+}
+
+
+/**
+ * The FULL text a Text node should show when its own Content socket is fed
+ * by a Roulette Entrants node's Content output (see ROULETTE_ENTRANTS_
+ * OUTPUTS in components/nodes/constants.ts) — null when it isn't wired in.
+ * Unlike audioContentValues above (which only ever SUPPLIES placeholder
+ * values a template still decides how to use), this REPLACES the Text's own
+ * template outright — same priority buildImage in overlays/custom.html
+ * already gives Audio Player's Content wire over a set URL — because a
+ * joined entrants list has no meaningful "template" of its own once
+ * rouletteEntrantRows has already formatted every row (see TextNode.tsx's
+ * own doc comment for why its textarea goes read-only once this is wired).
+ * Reads the CONNECTED ENTRANTS NODE's own rowTemplate/layout/sortByChance/
+ * separator fields, not this Text's. Mirrors rouletteEntrantsTextValue in
+ * overlays/custom.html, which instead reads the REAL live round.
+ */
+export function rouletteEntrantsTextValue(nodeId: string, edges: Edge[], map: NodeMap): string | null {
+  const edge = edges.find((e) => e.target === nodeId && e.targetHandle === 'content' && map[e.source]?.type === 'rouletteEntrants')
+  if (!edge) return null
+  const entrantsData = map[edge.source]?.data ?? {}
+  const rows = rouletteEntrantRows(SAMPLE_ROULETTE_STATE.entrants, entrantsData)
+  const layout = (entrantsData.layout as string) || 'list'
+  return layout === 'inline' ? rows.join((entrantsData.separator as string) ?? ', ') : rows.join('\n')
 }
 
 
@@ -222,6 +308,8 @@ export function sceneAudioTrigger(nodes: Node[], edges: Edge[]): boolean {
   const map = buildNodeMap(nodes)
   return incoming(scene.id, edges, map).some((n) => n.type === 'audioPlayer')
 }
+
+
 
 
 /** Duration (ms) for one Animation modifier — mirrors the CSS fallback each [data-animation] rule in animations.css falls back to when the node's own Duration field is unset. */
@@ -321,7 +409,36 @@ export function modifierStyle(mods: Node[], baseMods?: Node[]): React.CSSPropert
     if (targetSize?.data.width != null) style.width = targetSize.data.width as number
     if (targetSize?.data.height != null) style.height = targetSize.data.height as number
   }
-  
+
+  const overflow = lastOfType(mods, 'overflow')
+  const baseOverflow = baseMods && lastOfType(baseMods, 'overflow')
+  if (overflow || baseOverflow) {
+    const targetOverflow = overflow || baseOverflow
+    if (targetOverflow?.data.overflowX) style.overflowX = targetOverflow.data.overflowX as React.CSSProperties['overflowX']
+    if (targetOverflow?.data.overflowY) style.overflowY = targetOverflow.data.overflowY as React.CSSProperties['overflowY']
+    if (targetOverflow?.data.hideScrollbar) {
+      style.scrollbarWidth = 'none'
+      style.msOverflowStyle = 'none'
+    }
+    // Auto-scroll's whole illusion depends on the scrolling axis actually
+    // clipping (see AutoScrollTrack's own doc comment) — a track sliding
+    // around inside an axis left 'visible' just shows BOTH duplicated
+    // copies fully unfolded with no windowing at all, which reads as
+    // "doesn't scroll through properly, jumps around" (the exact bug this
+    // was built to prevent — it's easy to flip Auto-scroll on without also
+    // remembering to set that SAME axis's own Overflow X/Y to hidden/auto).
+    // Force it here rather than trusting the separate dropdown to already
+    // agree with it.
+    if (targetOverflow?.data.autoScroll) {
+      const scrollDirection = (targetOverflow.data.scrollDirection as string) || 'up'
+      if (scrollDirection === 'left' || scrollDirection === 'right') {
+        if (style.overflowX === 'visible' || style.overflowX == null) style.overflowX = 'hidden'
+      } else {
+        if (style.overflowY === 'visible' || style.overflowY == null) style.overflowY = 'hidden'
+      }
+    }
+  }
+
   let transformStr = ''
   
   const transform = lastOfType(mods, 'transform')
@@ -463,6 +580,41 @@ export function animationAttrs(mods: Node[]): Anim {
 
 
 /**
+ * An Overflow modifier's `autoScroll` fields resolved into a render
+ * directive, or null when off/absent — mirrors overflowAutoScroll in
+ * overlays/custom.html. `axis`/`reverse` pick which keyframe
+ * (ov-autoscroll-x/-y, defined identically in overlays/animations.css and
+ * scene-preview-animations.css) and animation-direction to use.
+ *
+ * `speed` is px/second, NOT a fixed loop duration — the caller (AutoScrollTrack
+ * here, applyAutoScrollContent in custom.html) measures its own rendered
+ * copy's actual size and divides by this to get the CSS animation-duration.
+ * A fixed duration-per-loop was tried first and looked "jerky"/incomplete
+ * for a long entrants list: the same 20s that reads fine for 5 rows blows
+ * through 40 rows so fast they're unreadable, which feels like it's cutting
+ * content off rather than genuinely showing every row. Pinning px/second
+ * instead keeps the READING pace constant regardless of how many rows there
+ * are — a longer list just takes proportionally longer per loop, exactly
+ * matching what "slow scroll" should mean here. Unlike modifierStyle, this
+ * doesn't fall back to a Task's own baseMods parameter — a Task never wires
+ * its own Overflow (TASK_SOCKETS' style socket doesn't accept it, same as
+ * Hide), so the target's own base wiring is always what `mods` already is
+ * regardless of whether a Process is driving it.
+ */
+export type OverflowAutoScroll = { axis: 'x' | 'y'; speed: number; reverse: boolean } | null
+
+export function overflowAutoScroll(mods: Node[]): OverflowAutoScroll {
+  const overflow = lastOfType(mods, 'overflow')
+  if (!overflow || !overflow.data.autoScroll) return null
+  const direction = (overflow.data.scrollDirection as string) || 'up'
+  const axis = direction === 'left' || direction === 'right' ? 'x' : 'y'
+  const reverse = direction === 'down' || direction === 'right'
+  const speed = Math.max(5, (overflow.data.scrollSpeed as number) ?? 40)
+  return { axis, speed, reverse }
+}
+
+
+/**
  * Start/Task/Wait/End form a SECOND kind of edge in the same graph —
  * sequence flow ("then"), separate from the data/composition edges
  * (Text/Image → Box → Scene, modifier → component) everything else in this
@@ -479,7 +631,7 @@ export function nextProcessNode(nodeId: string, edges: Edge[], map: NodeMap): No
 }
 
 
-export const CONTENT_TYPES = new Set(['text', 'image', 'video', 'box', 'group'])
+export const CONTENT_TYPES = new Set(['text', 'image', 'video', 'box', 'group', 'rouletteWidget'])
 
 /** Box and Group — the two node types that can nest one another via their shared `children` socket (see BOX_SOCKETS' own doc comment in components/nodes/index.tsx), and so are the only ones isValidConnection's cycle guard needs to walk. */
 export const CONTAINER_TYPES = new Set(['box', 'group'])
@@ -488,7 +640,7 @@ export const CONTAINER_TYPES = new Set(['box', 'group'])
 export const CONTENT_TYPES_WITH_SCENE = new Set([...CONTENT_TYPES, 'scene'])
 
 /** Position/Size/Transform/Animation/Hide/Display/Ordering — see NodeCategory's 'style' bucket in components/nodes/index.tsx. */
-export const STYLE_TYPES = new Set(['position', 'size', 'transform', 'opacity', 'shadow', 'animation', 'hide', 'ordering'])
+export const STYLE_TYPES = new Set(['position', 'size', 'transform', 'opacity', 'shadow', 'animation', 'hide', 'overflow', 'ordering'])
 
 /** Event/Sound/Timer/Background FX/Random/Roulette/Audio Player/Range/Roulette Settings — see NodeCategory's 'data' bucket. */
 export const DATA_TYPES = new Set(['event', 'sound', 'timer', 'backgroundAnimation', 'randomSource', 'rouletteSource', 'audioPlayer'])
@@ -997,15 +1149,17 @@ export function processExitBufferMs(schedule: ScheduledTask[], totalMs: number):
 /** Whether Scene's process is armed by an Event node wired into its Start node — the process equivalent of sceneTrigger. Takes priority over sceneTrigger wherever both are checked. */
 /**
  * Whether Scene's process is armed — either by a DataSource(alert) wired
- * into its Start node (`alertTypes`, matched against a real alert), or by
- * an Audio Player wired into Start (`audioArmed` — a track-change trigger
- * instead of a type match, only meaningful in the real overlay since the
- * editor has no live now-playing feed to react to — see processTrigger in
- * overlays/custom.html). Either one alone makes `active` true.
+ * into its Start node (`alertTypes`, matched against a real alert), by an
+ * Audio Player wired into Start (`audioArmed` — a track-change trigger
+ * instead of a type match), or by a Roulette node wired into Start
+ * (`rouletteArmed` — fires the moment a round starts collecting). All three
+ * are only meaningful in the real overlay since the editor has no live
+ * now-playing/roulette feed to react to — see processTrigger in
+ * overlays/custom.html. Any one alone makes `active` true.
  */
-export function processTrigger(nodes: Node[], edges: Edge[]): { active: boolean; alertTypes: string[]; audioArmed: boolean } {
+export function processTrigger(nodes: Node[], edges: Edge[]): { active: boolean; alertTypes: string[]; audioArmed: boolean; rouletteArmed: boolean } {
   const start = nodes.find((n) => n.type === 'start')
-  if (!start) return { active: false, alertTypes: [], audioArmed: false }
+  if (!start) return { active: false, alertTypes: [], audioArmed: false, rouletteArmed: false }
   const map = buildNodeMap(nodes)
   const members = incoming(start.id, edges, map)
   const alertTypes = [
@@ -1017,7 +1171,8 @@ export function processTrigger(nodes: Node[], edges: Edge[]): { active: boolean;
     )
   ]
   const audioArmed = members.some((n) => n.type === 'audioPlayer')
-  return { active: alertTypes.length > 0 || audioArmed, alertTypes, audioArmed }
+  const rouletteArmed = members.some((n) => n.type === 'rouletteSource')
+  return { active: alertTypes.length > 0 || audioArmed || rouletteArmed, alertTypes, audioArmed, rouletteArmed }
 }
 
 

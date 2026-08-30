@@ -79,7 +79,7 @@ export type InputSocket = {
  */
 export const MODIFIER_SOCKETS: InputSocket[] = [
   { id: 'transform', label: 'Transform', accepts: ['position', 'size', 'transform'], kind: 'style', multi: true },
-  { id: 'style', label: 'Style', accepts: ['opacity', 'shadow', 'animation', 'hide'], kind: 'style', multi: true }
+  { id: 'style', label: 'Style', accepts: ['opacity', 'shadow', 'animation', 'hide', 'overflow'], kind: 'style', multi: true }
 ]
 
 // Lets an Audio Player's Content output (see AUDIO_PLAYER_OUTPUTS below) be
@@ -89,13 +89,42 @@ export const MODIFIER_SOCKETS: InputSocket[] = [
 // supplies the values Content's OWN {artist}/{title} placeholders resolve
 // to for this node (see buildText's own doc comment in overlays/
 // custom.html), so the field you actually edit is still Content's textarea.
-// `multi: true` for future producers beyond Audio Player's own single wire —
-// one Content wire already carries both artist and title bundled together.
-// kind 'content' (not 'data'), despite only ever accepting Audio Player
-// today — this socket IS content (a value feeding Content's own template),
-// same family as Box's 'children'/Scene's own 'content' socket, so its dot
-// reads green like theirs instead of the data-source violet/sky-blue tint.
-export const TEXT_SOCKETS: InputSocket[] = [{ id: 'content', label: 'Content', accepts: ['audioPlayer'], kind: 'content', multi: true }, ...MODIFIER_SOCKETS]
+// `multi: true` since more than one producer can genuinely feed this at
+// once — Roulette Entrants (a full REPLACE, see rouletteEntrantsTextValue in
+// overlays/sceneUtils.tsx) alongside Audio Player (a placeholder MERGE) is
+// an unusual combination but not a meaningless one. kind 'content' (not
+// 'data') despite only ever accepting data-category nodes — this socket IS
+// content (a value feeding Content's own template/replacement), same family
+// as Box's 'children'/Scene's own 'content' socket, so its dot reads green
+// like theirs instead of the data-source violet/sky-blue tint.
+export const TEXT_SOCKETS: InputSocket[] = [
+  { id: 'content', label: 'Content', accepts: ['audioPlayer', 'rouletteEntrants'], kind: 'content', multi: true },
+  ...MODIFIER_SOCKETS
+]
+// The mandatory Roulette Widget's own two inputs — Source (accepts ONLY
+// 'rouletteSource', single-value: exactly the ONE Roulette node it was
+// auto-paired with — see addNode's own doc comment in hooks/useSceneGraph.ts)
+// and Visibility (optional — Roulette's own Event output, see
+// ROULETTE_OUTPUTS below). kind 'content' for Source (same reasoning as
+// TEXT_SOCKETS' own Content socket above — it IS the content this node
+// renders, despite only ever accepting a 'data'-category node); kind 'data'
+// for Visibility (a trigger/state signal, not a value).
+export const ROULETTE_WIDGET_SOCKETS: InputSocket[] = [
+  { id: 'source', label: 'Source', accepts: ['rouletteSource'], kind: 'content' },
+  { id: 'visible', label: 'Visibility', accepts: ['rouletteSource'], kind: 'data' },
+  ...MODIFIER_SOCKETS
+]
+// A Roulette Entrants list's own single input — same `source` id/shape as
+// the Widget's above, but this node is a totally ordinary, optional,
+// user-placed DATA node (see NODE_CATEGORY.rouletteEntrants below), not a
+// structural one — no Transform/Style sockets, it has nothing of its own to
+// position: its formatted rows feed straight into a Text node's own Content
+// socket instead (see ROULETTE_ENTRANTS_OUTPUTS below), which is what
+// actually gets positioned/styled. No `visible` socket either, no locked/
+// mandatory pairing — deleting it just deletes it (see addNode's own doc
+// comment in hooks/useSceneGraph.ts for how its creation differs from the
+// Widget's).
+export const ROULETTE_ENTRANTS_SOCKETS: InputSocket[] = [{ id: 'source', label: 'Source', accepts: ['rouletteSource'], kind: 'content' }]
 // Same "Content" concept as TEXT_SOCKETS' own socket above, but for Image:
 // wiring Audio Player's Content output in shows the live now-playing album
 // art unconditionally (see buildImage's own doc comment), taking priority
@@ -119,13 +148,13 @@ export const VIDEO_SOCKETS: InputSocket[] = MODIFIER_SOCKETS
  * nested, same as at the top level.
  */
 export const BOX_SOCKETS: InputSocket[] = [
-  { id: 'children', label: 'Children', accepts: ['text', 'image', 'video', 'box', 'group'], kind: 'content', multi: true },
+  { id: 'children', label: 'Children', accepts: ['text', 'image', 'video', 'box', 'group', 'rouletteWidget'], kind: 'content', multi: true },
   ...MODIFIER_SOCKETS,
   { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' }
 ]
 
 export const SCENE_SOCKETS: InputSocket[] = [
-  { id: 'content', label: 'Content', accepts: ['box', 'group', 'text', 'image', 'video'], kind: 'content', multi: true },
+  { id: 'content', label: 'Content', accepts: ['box', 'group', 'text', 'image', 'video', 'rouletteWidget'], kind: 'content', multi: true },
   // kind 'data', not 'style' — Background FX is category 'data' (see its own
   // doc comment below), so this socket's dot/wire should match ITS color,
   // not the per-component style modifiers (Position/Animation/...) it has
@@ -144,7 +173,10 @@ export const SCENE_SOCKETS: InputSocket[] = [
   // also want the whole scene to show/hide by playback state. Single-value
   // like Start's, so an Event node and Audio Player can't both drive Scene
   // at once — wiring the second replaces the first, same as everywhere else
-  // a socket isn't `multi`.
+  // a socket isn't `multi`. Roulette deliberately does NOT get the same
+  // scene-wide entry here — its own Widget shows unconditionally by default
+  // (see NODE_SOCKETS.rouletteWidget's own `visible` socket) rather than
+  // hiding the whole scene until a round starts.
   { id: 'event', label: 'Event', accepts: ['event', 'audioPlayer'], kind: 'data' },
   { id: 'timer', label: 'Timer', accepts: ['timer'], kind: 'data' }
 ]
@@ -156,13 +188,13 @@ export const START_SOCKETS: InputSocket[] = [
   // AUDIO_PLAYER_OUTPUTS below) — an alternative to an Event node for
   // arming a process: fires on a track change instead of matching a real
   // alert's type. See processTrigger's audioArmed in overlays/custom.html.
-  { id: 'event', label: 'Event', accepts: ['event', 'audioPlayer'], kind: 'data' },
+  { id: 'event', label: 'Event', accepts: ['event', 'audioPlayer', 'rouletteSource'], kind: 'data' },
   { id: 'sound', label: 'Sound', accepts: ['sound'], kind: 'data' },
   { id: 'backgroundFx', label: 'Background FX', accepts: ['backgroundAnimation'], kind: 'data' }
 ]
 
 export const TASK_SOCKETS: InputSocket[] = [
-  { id: 'target', label: 'Target', accepts: ['text', 'image', 'box', 'group', 'video'], kind: 'content' },
+  { id: 'target', label: 'Target', accepts: ['text', 'image', 'box', 'group', 'video', 'rouletteWidget'], kind: 'content' },
   // Same Transform/Style grouping as MODIFIER_SOCKETS, minus Hide (a Task's
   // visibility is already its own show/hide Action field, not a separate
   // modifier) — these are what THIS step changes, layered on top of the
@@ -188,7 +220,9 @@ export const NODE_SOCKETS: Record<string, InputSocket[]> = {
   scene: SCENE_SOCKETS,
   backgroundAnimation: BACKGROUND_FX_SOCKETS,
   start: START_SOCKETS,
-  task: TASK_SOCKETS
+  task: TASK_SOCKETS,
+  rouletteWidget: ROULETTE_WIDGET_SOCKETS,
+  rouletteEntrants: ROULETTE_ENTRANTS_SOCKETS
 }
 
 /**
@@ -292,6 +326,82 @@ export const AUDIO_PLAYER_OUTPUTS: OutputSocket[] = [
   }
 ]
 
+/**
+ * Roulette's two roles for its single live feed — same "one wire, meaning
+ * depends on where it lands" idea as AUDIO_PLAYER_OUTPUTS above, but Content
+ * here is NOT itself a placeable structural component, and doesn't feed a
+ * Text node directly either — Roulette stays a pure data/control node, same
+ * family as Audio Player/Event. Rendering is instead handled by two separate
+ * downstream nodes, both auto-created and paired the moment a Roulette node
+ * is placed (see addNode's own doc comment in hooks/useSceneGraph.ts): the
+ * mandatory Roulette Widget (the wheel — see NODE_SOCKETS.rouletteWidget/
+ * ROULETTE_WIDGET_OUTPUTS below), and the optional Roulette Entrants list
+ * (see NODE_SOCKETS.rouletteEntrants/ROULETTE_ENTRANTS_OUTPUTS below) — an
+ * ordinary, freely deletable node whose OWN Content output in turn feeds a
+ * Text node (see ROULETTE_ENTRANTS_OUTPUTS' own doc comment). Content here
+ * only ever feeds that shared `source` pairing socket — the Widget's link is
+ * permanent, the Entrants list's isn't. Event carries the round's phase
+ * signal: wired into a Start node's own Event socket it arms a process the
+ * moment a round starts collecting (the "launch" trigger, for e.g. playing a
+ * sound/animation elsewhere — NOT the wheel itself, which shows
+ * unconditionally by default); wired into a Roulette Widget's own `visible`
+ * socket instead, it hides that SPECIFIC widget outside an active round
+ * instead of showing it unconditionally. Both at once is fine — they're
+ * independent sockets on independent nodes, same as Audio Player's own two.
+ */
+export const ROULETTE_OUTPUTS: OutputSocket[] = [
+  {
+    id: 'content',
+    label: 'Content',
+    kind: 'content',
+    feeds: ['source'],
+    help: "Feeds this Roulette's own paired Widget and Entrants list (the `source` socket both use) — that's all it's for. The Widget's link is permanent, the Entrants list's isn't."
+  },
+  {
+    id: 'event',
+    label: 'Event',
+    kind: 'data',
+    feeds: ['event', 'visible'],
+    help: "The round's phase signal. Wire into a Start node's own Event socket to arm a process the moment a round starts collecting. Wire into a Roulette Widget's own Visibility socket to hide THAT widget outside an active round instead of it always showing — both at once is fine."
+  }
+]
+
+/**
+ * A Roulette Widget's own single Structural/Target role — plain reuse of
+ * STRUCTURAL_OUTPUT/TARGET_OUTPUT, same shape as TEXT_OUTPUTS/IMAGE_OUTPUTS/
+ * VIDEO_OUTPUTS/BOX_OUTPUTS above. Nothing Roulette-specific about the
+ * OUTPUT side — what's special is entirely on the INPUT side (its own
+ * `source`/`visible` sockets, see NODE_SOCKETS.rouletteWidget above) and in
+ * how the node itself comes to exist (auto-paired, never placed by hand from
+ * the palette — see addNode's own doc comment in hooks/useSceneGraph.ts).
+ */
+export const ROULETTE_WIDGET_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
+
+/**
+ * A Roulette Entrants list's own single output — unlike the Widget's above,
+ * this ISN'T Structural/Target (it's not independently placeable in Scene/a
+ * Box/a Task) — it's a Content feed, same family as AUDIO_PLAYER_OUTPUTS'
+ * own `content` role: wire it into a Text node's own Content socket to
+ * REPLACE that Text's template outright with the formatted, joined entrants
+ * list (see rouletteEntrantsTextValue in overlays/sceneUtils.tsx) — that
+ * Text's own textarea goes read-only while connected, same as ImageNode's
+ * URL field does for Audio Player's Content (see TextNode.tsx's own doc
+ * comment), since there's no template left for it to contribute; Color/
+ * Size/Font/Align/... all stay that Text's own normal fields — this node
+ * only owns the row-by-row FORMATTING decisions (rowTemplate/layout/
+ * sortByChance/separator, see NODE_DEFAULTS.rouletteEntrants), not how it
+ * LOOKS once shown.
+ */
+export const ROULETTE_ENTRANTS_OUTPUTS: OutputSocket[] = [
+  {
+    id: 'content',
+    label: 'Content',
+    kind: 'content',
+    feeds: ['content'],
+    help: "Wire into a Text node's own Content socket to replace its template outright with this list's formatted rows — that Text's own textarea goes read-only while connected. Color/Size/Font/etc. stay the Text's own fields; only the row formatting (template/layout/sort/separator) lives here."
+  }
+]
+
 /** Every node type's OUTPUT sockets, keyed by node `type` — analogous to NODE_SOCKETS. Node types absent here (the large majority) render the single generic "output" handle unchanged. */
 export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
   text: TEXT_OUTPUTS,
@@ -299,7 +409,10 @@ export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
   video: VIDEO_OUTPUTS,
   box: BOX_OUTPUTS,
   group: BOX_OUTPUTS,
-  audioPlayer: AUDIO_PLAYER_OUTPUTS
+  audioPlayer: AUDIO_PLAYER_OUTPUTS,
+  rouletteSource: ROULETTE_OUTPUTS,
+  rouletteWidget: ROULETTE_WIDGET_OUTPUTS,
+  rouletteEntrants: ROULETTE_ENTRANTS_OUTPUTS
 }
 
 /**
@@ -308,7 +421,7 @@ export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
  * a glance instead of every node looking the same:
  *  - process: Start/Task/Wait/End — the sequence-flow chain.
  *  - content: Scene/Text/Image/Box — what exists and how it's nested.
- *  - style: Position/Size/Transform/Animation/Hide/Display/Ordering —
+ *  - style: Position/Size/Transform/Animation/Hide/Overflow/Display/Ordering —
  *    per-component modifiers, wired into a SPECIFIC Text/Image/Box/Task.
  *  - data: Event/Random/Roulette/Audio Player/Sound/Timer/Range/Roulette
  *    Settings/Background FX — scene/process-level accessories (event feeds,
@@ -357,9 +470,12 @@ export const NODE_CATEGORY: Record<string, NodeCategory> = {
   animation: 'style',
   ordering: 'style',
   hide: 'style',
+  overflow: 'style',
   event: 'data',
   randomSource: 'data',
   rouletteSource: 'data',
+  rouletteWidget: 'content',
+  rouletteEntrants: 'data',
   audioPlayer: 'data',
   sound: 'data',
   timer: 'data',
@@ -396,8 +512,15 @@ export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
   event: { kind: 'alert', platform: 'twitch', alertType: ALERT_TYPES_BY_PLATFORM.twitch[0] },
   ordering: { layout: 'vertical', direction: 'direct', gap: 8 },
   hide: { hidden: true },
+  overflow: { overflowX: 'hidden', overflowY: 'hidden', hideScrollbar: true, autoScroll: false, scrollDirection: 'up', scrollSpeed: 40 },
   task: { action: 'show' },
-  wait: { delay: 1000 }
+  wait: { delay: 1000 },
+  // rowTemplate tokens: {name}/{chance}/{weight} — see rouletteEntrantRows'
+  // own doc comment in overlays/sceneUtils.tsx. layout 'list' = one entrant
+  // per line, 'inline' joins them with `separator` instead. No color/
+  // fontSize/etc. here — those are whichever Text node this feeds into's
+  // own fields (see ROULETTE_ENTRANTS_OUTPUTS' own doc comment above).
+  rouletteEntrants: { layout: 'list', rowTemplate: '{name}', sortByChance: false, separator: ', ' }
 }
 
 export const SOCKET_DOT: Record<InputSocket['kind'], string> = {

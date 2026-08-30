@@ -119,3 +119,28 @@
     transform: scale(1);
   }
 }
+
+/*
+  Overflow node's auto-scroll (see overflowAutoScroll/applyAutoScrollContent
+  in custom.html) — mirrors ov-autoscroll-x/-y in
+  pages/overlays/scene-preview-animations.css exactly, same hand-kept-in-sync
+  reasoning as every other rule in this file. -50% always lands on the
+  identical-content SECOND copy applyAutoScrollContent renders, which is what
+  makes the loop seamless.
+*/
+@keyframes ov-autoscroll-y {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+@keyframes ov-autoscroll-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}

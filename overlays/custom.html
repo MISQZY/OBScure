@@ -46,6 +46,31 @@
         height: 100%;
         object-fit: cover;
       }
+      #scene .roulette-wheel-node {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+      #scene .roulette-wheel-svg {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+      }
+      #scene .roulette-wheel-badge {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        border-radius: 9999px;
+        background: #f4f4f5;
+        color: #18181b;
+        padding: 4px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+      }
       #scene .text-node {
         display: flex;
         flex-direction: column;
@@ -115,6 +140,40 @@
       // alert-specific (a fixed durationMs); Now Playing has no such timer,
       // it stays up for as long as isPlaying does.
       let audioVisible = false
+      // Last payload seen on the 'roulette-state' channel — see
+      // rouletteEntrantsTextValue/rouletteWidgetVisible/buildRouletteWheel.
+      // Defaults to idle/no entrants; immediately overwritten with the
+      // CURRENT snapshot (if any) by the roulette-state.json fetch below,
+      // same as latestNowPlaying above.
+      let latestRouletteState = { phase: 'idle', entrants: [], winner: null }
+
+      // Per auto-scrolling node (keyed by node id): when its loop FIRST
+      // started, and the measured size/duration its CURRENT pace is based
+      // on — deliberately module-level (survives renderStatic's own
+      // sceneEl.innerHTML = '' wipe-and-rebuild), NOT reset per render. A
+      // live-data tick (ensureRouletteCountdownTicking's 1s poll while a
+      // Roulette round is collecting, or a plain content Save) calls
+      // render()->renderStatic() far more often than one auto-scroll loop
+      // takes to complete, tearing down and rebuilding the whole #scene DOM
+      // each time.
+      //
+      // `startedAt` alone isn't enough: without also PINNING `durationSec`
+      // once measured, applyAutoScrollContent recomputed it fresh from a
+      // brand-new getBoundingClientRect() on every single rebuild — and
+      // real layout isn't perfectly bit-identical rebuild to rebuild (a
+      // fraction-of-a-pixel difference is enough), so the modulo phase math
+      // (elapsedSec % durationSec) was landing at a SLIGHTLY different point
+      // than where the torn-down track visually actually was each time.
+      // Individually invisible, but compounding once a second for the
+      // length of a whole loop reliably drifted enough to show up as a
+      // visible snap right around when a lap would otherwise complete —
+      // exactly the "jumps to the start" symptom. Pinning `size`/
+      // `durationSec` the first time and only ever touching them again when
+      // the measured size ACTUALLY changes by a whole pixel (a real content
+      // change — e.g. Roulette Entrants gaining a row — not layout noise)
+      // keeps the phase math exact across every rebuild in between. See
+      // applyAutoScrollContent's own use of this.
+      const autoScrollState = {}
 
       /**
        * `animate` distinguishes a silent content update (a scene save —
@@ -259,7 +318,9 @@
             atMs += current.data.delay || 1000
           } else if (current.type === 'task') {
             const incomingNodes = incoming(current.id, edges, map)
-            const target = incomingNodes.find((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group')
+            const target = incomingNodes.find(
+              (n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group' || n.type === 'rouletteWidget'
+            )
             if (target) {
               schedule.push({
                 atMs,
@@ -298,7 +359,7 @@
         const edges = overlay?.edges || []
         const map = nodeMap(nodes)
         const start = nodes.find((n) => n.type === 'start')
-        if (!start) return { active: false, alertTypes: new Set(), audioArmed: false }
+        if (!start) return { active: false, alertTypes: new Set(), audioArmed: false, rouletteArmed: false }
         const members = incoming(start.id, edges, map)
         const alertTypes = new Set(
           members
@@ -307,7 +368,11 @@
             .filter(Boolean)
         )
         const audioArmed = members.some((n) => n.type === 'audioPlayer')
-        return { active: alertTypes.size > 0 || audioArmed, alertTypes, audioArmed }
+        // A round starting collecting (see the 'roulette-state' WS handler
+        // below) arms this the same way a track change arms audioArmed —
+        // "the round just started", not a type match.
+        const rouletteArmed = members.some((n) => n.type === 'rouletteSource')
+        return { active: alertTypes.size > 0 || audioArmed || rouletteArmed, alertTypes, audioArmed, rouletteArmed }
       }
 
       /**
@@ -587,6 +652,127 @@
         return edges.some((e) => (e.targetHandle === 'content' || e.targetHandle === 'imageContent') && map[e.source] && map[e.source].type === 'audioPlayer')
       }
 
+      // Mirrors RouletteToolPage.tsx's own formatCountdown exactly — days
+      // only shown once genuinely relevant, minutes:seconds otherwise.
+      function formatRouletteCountdown(totalSeconds) {
+        const total = Math.max(0, Math.trunc(totalSeconds))
+        const days = Math.floor(total / 86400)
+        const hours = Math.floor((total % 86400) / 3600)
+        const minutes = Math.floor((total % 3600) / 60)
+        const seconds = total % 60
+        const pad = (n) => String(n).padStart(2, '0')
+        if (days > 0) return `${days}:${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
+        if (hours > 0) return `${hours}:${pad(minutes)}:${pad(seconds)}`
+        return `${minutes}:${pad(seconds)}`
+      }
+
+      // { entrants, entrantsList, winner, timeLeft } sourced straight from
+      // `latestRouletteState` (the always-current global, NOT this render's
+      // own `vars`) when a Roulette node's Content output feeds this Text's
+      // own Content socket, or null when it isn't wired in — mirrors
+      // audioContentValues above (own doc comment there covers the shared
+      // reasoning). `entrants` is comma-joined (an inline sentence like
+      // "Playing: {entrants}"); `entrantsList` is newline-joined instead,
+      // for a Text node whose ENTIRE content is just "{entrantsList}" — the
+      // `.text-node` CSS class already preserves literal line breaks (see
+      // buildText's own doc comment), so that alone renders one entrant per
+      // line with no extra template work. `winner` only resolves once
+      // `phase === 'result'` — RouletteEngine already knows the winner the
+      // INSTANT a round starts spinning, well before the wheel visually
+      // stops, so revealing it any earlier here would spoil the wheel
+      // widget's own suspense (see buildRouletteWheel's own doc comment for
+      // the matching fix on the wheel/sector-dimming side). `timeLeft` is
+      // the formatted countdown while 'collecting', blank otherwise — kept
+      // ticking every second by ensureRouletteCountdownTicking below.
+      function rouletteStateVars(state) {
+        return {
+          entrants: (state.entrants || []).map((entrant) => entrant.name).join(', '),
+          entrantsList: (state.entrants || []).map((entrant) => entrant.name).join('\n'),
+          winner: state.phase === 'result' && state.winner ? state.winner.name : '',
+          timeLeft: state.phase === 'collecting' && state.endsAt ? formatRouletteCountdown((state.endsAt - Date.now()) / 1000) : ''
+        }
+      }
+
+      // 'roulette-state' only broadcasts on an actual STATE change (a new
+      // entrant, a phase change, ...), not once a second — so {timeLeft}
+      // (and the wheel widget's own countdown badge) would otherwise only
+      // update whenever someone happens to join, not tick down live. This
+      // runs a self-clearing 1s poll for exactly as long as a round is
+      // 'collecting', silently refreshing anything roulette-dependent (see
+      // hasRouletteContentDeps) each tick — same shape as
+      // RouletteToolPage.tsx's own setInterval while phase === 'collecting'.
+      let rouletteCountdownIntervalId = null
+      function ensureRouletteCountdownTicking() {
+        if (latestRouletteState.phase === 'collecting') {
+          if (rouletteCountdownIntervalId != null) return
+          rouletteCountdownIntervalId = setInterval(() => {
+            if (latestRouletteState.phase !== 'collecting') {
+              clearInterval(rouletteCountdownIntervalId)
+              rouletteCountdownIntervalId = null
+              return
+            }
+            if (hasRouletteContentDeps(latestOverlay)) render(latestOverlay, false)
+          }, 1000)
+        } else if (rouletteCountdownIntervalId != null) {
+          clearInterval(rouletteCountdownIntervalId)
+          rouletteCountdownIntervalId = null
+        }
+      }
+
+      // The FULL text a Text node should show when its own Content socket is
+      // fed by a Roulette Entrants node's Content output — null when it
+      // isn't wired in. Unlike audioContentValues (which only ever SUPPLIES
+      // placeholder values a template still decides how to use), this
+      // REPLACES the Text's template outright, same priority buildImage
+      // gives Audio Player's Content wire over a set URL — see
+      // rouletteEntrantRows' own doc comment for the row-formatting tokens,
+      // and TextNode.tsx's own doc comment for why its textarea goes
+      // read-only once this is wired. Reads the CONNECTED ENTRANTS NODE's
+      // own rowTemplate/layout/sortByChance/separator fields, not this
+      // Text's. Mirrors rouletteEntrantsTextValue in overlays/sceneUtils.tsx,
+      // which instead reads the fixed SAMPLE_ROULETTE_STATE for the editor.
+      function rouletteEntrantsTextValue(nodeId, edges, map) {
+        const edge = edges.find((e) => e.target === nodeId && e.targetHandle === 'content' && map[e.source] && map[e.source].type === 'rouletteEntrants')
+        if (!edge) return null
+        const entrantsData = (map[edge.source] && map[edge.source].data) || {}
+        const rows = rouletteEntrantRows(latestRouletteState.entrants || [], entrantsData)
+        const layout = entrantsData.layout || 'list'
+        return layout === 'inline' ? rows.join(entrantsData.separator ?? ', ') : rows.join('\n')
+      }
+
+      // Whether ANY node in the graph has a live-data dependency on Roulette
+      // — mirrors hasAudioContentDeps' own reasoning exactly, just for the
+      // 'roulette-state' channel instead of 'now-playing'. Two shapes: a
+      // Roulette Widget's own `source`/`visible` socket (source is a
+      // 'rouletteSource' — its actual live wheel data, or whether it should
+      // be showing at all right now, see rouletteWidgetVisible below), or a
+      // Text node's own `content` socket fed by a Roulette Entrants node
+      // (source is 'rouletteEntrants' — see rouletteEntrantsTextValue
+      // above). Either means SOMETHING needs a live refresh on every tick.
+      function hasRouletteContentDeps(overlay) {
+        const edges = overlay?.edges || []
+        const nodes = overlay?.nodes || []
+        const map = nodeMap(nodes)
+        return edges.some((e) => {
+          const src = map[e.source]
+          if (!src) return false
+          if (src.type === 'rouletteSource' && (e.targetHandle === 'source' || e.targetHandle === 'visible')) return true
+          if (src.type === 'rouletteEntrants' && e.targetHandle === 'content') return true
+          return false
+        })
+      }
+
+      // Whether a Roulette Widget node should currently be rendered at all —
+      // true unconditionally unless its own `visible` socket is wired to a
+      // Roulette (see ROULETTE_WIDGET_SOCKETS in components/nodes/
+      // constants.ts), in which case it follows that round's own phase:
+      // visible for as long as it isn't 'idle'. Mirrors RouletteWidgetNode's
+      // own doc comment in components/nodes/RouletteWidgetNode.tsx.
+      function rouletteWidgetVisible(nodeId, edges, map) {
+        const wired = edges.some((e) => e.target === nodeId && e.targetHandle === 'visible' && map[e.source] && map[e.source].type === 'rouletteSource')
+        return !wired || latestRouletteState.phase !== 'idle'
+      }
+
       // Ordering modifier wired into a target (Box or Scene) — mirrors
       // orderingClass in SceneBuilderPage.tsx, just returning a real
       // flex-direction value instead of a Tailwind class name (applied as
@@ -683,6 +869,33 @@
           if (d.height != null) el.style.height = `${d.height}px`
         }
 
+        const overflow = lastOfType(mods, 'overflow')
+        if (overflow) {
+          const d = overflow.data || {}
+          if (d.overflowX) el.style.overflowX = d.overflowX
+          if (d.overflowY) el.style.overflowY = d.overflowY
+          if (d.hideScrollbar) {
+            el.style.scrollbarWidth = 'none'
+            el.style.msOverflowStyle = 'none'
+          }
+          // Auto-scroll's whole illusion depends on the scrolling axis
+          // actually clipping (see applyAutoScrollContent's own doc
+          // comment) — an axis left 'visible' just shows BOTH duplicated
+          // copies fully unfolded with no windowing at all, which reads as
+          // "doesn't scroll through properly, jumps around". Force it here
+          // rather than trusting Overflow X/Y to already agree with it —
+          // easy to flip Auto-scroll on without also remembering to set
+          // that SAME axis's own dropdown to hidden/auto.
+          if (d.autoScroll) {
+            const scrollDirection = d.scrollDirection || 'up'
+            if (scrollDirection === 'left' || scrollDirection === 'right') {
+              if (!el.style.overflowX || el.style.overflowX === 'visible') el.style.overflowX = 'hidden'
+            } else if (!el.style.overflowY || el.style.overflowY === 'visible') {
+              el.style.overflowY = 'hidden'
+            }
+          }
+        }
+
         const opacity = lastOfType(mods, 'opacity')
         if (opacity) {
           el.style.opacity = ((opacity.data && opacity.data.value) ?? 100) / 100
@@ -702,6 +915,112 @@
         const hide = lastOfType(mods, 'hide')
         if (hide && (!hide.data || hide.data.hidden !== false)) {
           el.style.display = 'none'
+        }
+      }
+
+      // An Overflow modifier's `autoScroll` fields resolved into a render
+      // directive, or null when off/absent — mirrors overflowAutoScroll in
+      // pages/overlays/sceneUtils.tsx. `axis`/`reverse` pick which keyframe
+      // (ov-autoscroll-x/-y, in animations.css) and animation-direction to
+      // use. `speed` is px/second, NOT a fixed loop duration — see that
+      // function's own doc comment for why a fixed duration read as
+      // jerky/incomplete for a long entrants list (races through unreadably
+      // fast) while being too slow for a short one.
+      function overflowAutoScroll(mods) {
+        const overflow = lastOfType(mods, 'overflow')
+        if (!overflow || !overflow.data || !overflow.data.autoScroll) return null
+        const direction = overflow.data.scrollDirection || 'up'
+        const axis = direction === 'left' || direction === 'right' ? 'x' : 'y'
+        const reverse = direction === 'down' || direction === 'right'
+        const speed = Math.max(5, overflow.data.scrollSpeed ?? 40)
+        return { axis, speed, reverse }
+      }
+
+      // Appends `buildContent()`'s result into `el` directly, or — when
+      // `mods` carries an autoScroll Overflow modifier — twice back-to-back
+      // inside an animated track (ov-autoscroll-x/-y in animations.css), the
+      // standard seamless-marquee trick: translating the track by exactly
+      // -50% of its own size always lands on the SECOND copy's start, pixel-
+      // identical to the first copy's start (both copies are the same
+      // content), so the loop never visibly snaps. `flex-shrink: 0` on the
+      // track itself (not just the two copies) defends against the flexbox
+      // "min-height:auto" shrink trap — a flex item can otherwise be
+      // squeezed below its content size by a fixed-size ancestor with no
+      // visible symptom except silently-wrong content. `el` itself still
+      // needs its own overflow:hidden/auto — that's applyModifierStyle's
+      // job, already called by every caller of this.
+      //
+      // `scroll.speed` is px/second, so animation-duration is worked out
+      // from the FIRST copy's actual measured size, not guessed — a
+      // ResizeObserver (so it re-measures if content/fonts reflow after
+      // this first runs) rather than a one-shot getBoundingClientRect,
+      // since `first` isn't necessarily attached to the live document (and
+      // therefore has a real layout size) at the moment this function
+      // builds it — renderStatic appends the whole tree to #scene only
+      // after every buildX() call in it has already returned.
+      //
+      // Mirrors AutoScrollTrack in pages/overlays/views/index.tsx, except
+      // the second copy here is a cloneNode(true) of the first rather than
+      // a second independent build — cheaper, and avoids double-registering
+      // the same node id in `registry` — at the cost of the clone not
+      // reflecting a LATER in-place update (a Task retargeting this same
+      // node, a live Audio Player tick) until the next full scene rebuild.
+      // A cosmetic ticker combined with that kind of live per-node patching
+      // is a rare combination, so this trade-off is left undocumented
+      // anywhere but here.
+      //
+      // `nodeId` keys autoScrollState (see its own doc comment above) — a
+      // NEGATIVE animation-delay equal to how long this node's loop has
+      // already been running (mod one full loop) makes the freshly built
+      // track pick up exactly where the torn-down one left off, instead of
+      // restarting at 0% on every rebuild a live-data tick causes. The
+      // duration that modulo is taken against is pinned in that same state
+      // the first time it's measured, and only ever re-pinned when the
+      // measured size genuinely changes by a whole pixel — see
+      // autoScrollState's own doc comment for why re-deriving it fresh from
+      // every rebuild's own measurement (even though each one is "correct")
+      // was itself the bug: tiny inter-rebuild layout differences drifted
+      // the phase out of sync with what was actually on screen a moment
+      // before.
+      function applyAutoScrollContent(el, mods, buildContent, nodeId) {
+        const scroll = overflowAutoScroll(mods)
+        if (!scroll) {
+          el.appendChild(buildContent())
+          return
+        }
+        const track = document.createElement('div')
+        track.style.display = 'flex'
+        track.style.flexDirection = scroll.axis === 'x' ? 'row' : 'column'
+        track.style.flexShrink = '0'
+        track.style.willChange = 'transform'
+        if (scroll.axis === 'x') track.style.width = 'max-content'
+        const first = buildContent()
+        first.style.flexShrink = '0'
+        const second = first.cloneNode(true)
+        track.appendChild(first)
+        track.appendChild(second)
+        el.appendChild(track)
+        const setDuration = () => {
+          const rect = first.getBoundingClientRect()
+          const size = scroll.axis === 'x' ? rect.width : rect.height
+          if (size <= 0) return
+          const rounded = Math.round(size)
+          let state = autoScrollState[nodeId]
+          if (!state) {
+            state = { startedAt: Date.now(), size: rounded, durationSec: rounded / scroll.speed }
+            autoScrollState[nodeId] = state
+          } else if (state.size !== rounded) {
+            state.size = rounded
+            state.durationSec = rounded / scroll.speed
+          }
+          const elapsedSec = (Date.now() - state.startedAt) / 1000
+          const delaySec = -(elapsedSec % state.durationSec)
+          track.style.animation = `ov-autoscroll-${scroll.axis} ${state.durationSec}s linear ${delaySec}s infinite${scroll.reverse ? ' reverse' : ''}`
+        }
+        if (window.ResizeObserver) {
+          new ResizeObserver(setDuration).observe(first)
+        } else {
+          setDuration()
         }
       }
 
@@ -764,18 +1083,28 @@
       // pixel-identical to before this existed. Skipped when the caller
       // never wired an Ordering-bearing parent (`crossAxis` omitted — the
       // legacy pre-Scene fallback below).
-      function buildText(node, mods, animate, vars, registry, crossAxis, audioValues) {
+      function buildText(node, mods, animate, vars, registry, crossAxis, contentValues, replaceText) {
         const d = node.data || {}
         const el = document.createElement('div')
         el.className = 'text-node'
-        // Content still interpolates the SAME placeholder template it
-        // always has — audioValues (from audioContentValues, Audio Player's
-        // Content wire into this node's own Content socket) just adds
-        // {artist}/{title} to whatever vars this render already carries, so
-        // Content's own "{artist} — {title}" keeps working whether that
-        // data comes from an Audio-Player-triggered Scene's vars, a direct
-        // Content wire, or (typically) not at all.
-        el.textContent = interpolate(d.text ?? '', audioValues ? { ...vars, ...audioValues } : vars)
+        // Roulette Entrants' Content output REPLACES the template outright
+        // (see rouletteEntrantsTextValue above) — unlike contentValues
+        // below, which only ever supplies values a template still
+        // interpolates. Mirrors ImageNode's own read-only-URL priority for
+        // Audio Player's Content wire (see buildImage). Content still
+        // interpolates the SAME placeholder template it always has —
+        // contentValues (audioContentValues' own {artist}/{title}) just adds
+        // whichever of those is actually wired in to whatever vars this
+        // render already carries, so a template like "{user}: {artist} —
+        // {title}" keeps working whether that data comes from an
+        // Event/Audio-Player-triggered Scene's vars, a direct Content wire,
+        // or (typically) not at all.
+        const text = replaceText != null ? replaceText : interpolate(d.text ?? '', contentValues ? { ...vars, ...contentValues } : vars)
+        applyAutoScrollContent(el, mods, () => {
+          const span = document.createElement('span')
+          span.textContent = text
+          return span
+        }, node.id)
         el.style.color = d.color || '#ffffff'
         const align = d.align || 'left'
         const verticalAlign = d.verticalAlign || 'top'
@@ -791,8 +1120,23 @@
         el.style.letterSpacing = `${d.letterSpacing ?? 0}px`
         if (d.lineHeight != null) el.style.lineHeight = d.lineHeight
         if (d.fontSize) el.style.fontSize = `${d.fontSize}px`
-        if (verticalAlign === 'middle') el.style.justifyContent = 'center'
-        else if (verticalAlign === 'bottom') el.style.justifyContent = 'flex-end'
+        // Auto-scroll's keyframes (ov-autoscroll-y) assume the track starts
+        // flush against this element's OWN top edge — translateY(0) IS "show
+        // the very top of copy1". Vertical/'middle' or 'bottom' instead
+        // CENTERS/bottom-aligns the (always taller, by design) track within
+        // this box before the animation ever runs, offsetting that starting
+        // point by however much the track overflows — which silently breaks
+        // the translateY(0)->(-50%) math (derived assuming a flex-start base
+        // position), showing an arbitrary slice of the middle of the list
+        // and skipping the rest on each loop instead of sweeping through all
+        // of it. Vertical Align is about placing SHORT, non-overflowing
+        // content within its box — meaningless once autoScroll guarantees
+        // the content always overflows, so it's skipped here rather than
+        // fought elsewhere.
+        if (!overflowAutoScroll(mods)) {
+          if (verticalAlign === 'middle') el.style.justifyContent = 'center'
+          else if (verticalAlign === 'bottom') el.style.justifyContent = 'flex-end'
+        }
         if ((crossAxis === 'horizontal' && align !== 'left') || (crossAxis === 'vertical' && verticalAlign !== 'top')) {
           el.style.alignSelf = 'stretch'
         }
@@ -905,6 +1249,306 @@
         return wrap
       }
 
+      // --- Roulette wheel widget --------------------------------------------
+      // Ports the SVG sector/label math from pages/tools/RouletteWheel.tsx
+      // (the same component the standalone Roulette tool page itself
+      // renders) into plain DOM/SVG calls — this file has no React runtime,
+      // same reasoning every other build* function here already follows.
+
+      const ROULETTE_WHEEL_LABEL_INNER_RADIUS = 18
+      const ROULETTE_WHEEL_LABEL_OUTER_RADIUS = 88
+      const ROULETTE_WHEEL_LABEL_FONT_SIZE = 7.5
+      const ROULETTE_WHEEL_LABEL_CHAR_WIDTH_RATIO = 0.58
+      const ROULETTE_WHEEL_LABEL_PADDING = 3
+      // Must match RouletteEngine.SPIN_DURATION_MS / RouletteWheel.tsx's own SPIN_DURATION_MS/WHEEL_EXTRA_SPINS.
+      const ROULETTE_SPIN_DURATION_MS = 5000
+      const ROULETTE_WHEEL_EXTRA_SPINS = 6
+
+      function rouletteSectorColor(index) {
+        return `hsl(${(index * 137.508) % 360} 62% 54%)`
+      }
+
+      function roulettePolarToCartesian(cx, cy, r, angleDeg) {
+        const rad = ((angleDeg - 90) * Math.PI) / 180
+        return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }
+      }
+
+      function rouletteDescribeSector(cx, cy, r, startAngle, endAngle) {
+        if (endAngle - startAngle >= 360) endAngle = startAngle + 359.99
+        const start = roulettePolarToCartesian(cx, cy, r, endAngle)
+        const end = roulettePolarToCartesian(cx, cy, r, startAngle)
+        const largeArc = endAngle - startAngle <= 180 ? 0 : 1
+        return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y} Z`
+      }
+
+      function rouletteLabelFits(name, sweepDeg) {
+        const angularSpaceAtStart = ((sweepDeg * Math.PI) / 180) * ROULETTE_WHEEL_LABEL_INNER_RADIUS
+        if (angularSpaceAtStart < ROULETTE_WHEEL_LABEL_FONT_SIZE + ROULETTE_WHEEL_LABEL_PADDING) return false
+        const textWidth = name.length * ROULETTE_WHEEL_LABEL_FONT_SIZE * ROULETTE_WHEEL_LABEL_CHAR_WIDTH_RATIO
+        return textWidth + ROULETTE_WHEEL_LABEL_PADDING <= ROULETTE_WHEEL_LABEL_OUTER_RADIUS - ROULETTE_WHEEL_LABEL_INNER_RADIUS
+      }
+
+      // The RESTING rotation (deg) the wheel is parked at — persists across
+      // renders (this whole scene tree gets torn down and rebuilt on every
+      // render() call, so this can't just live as an element's own current
+      // style the way RouletteWheel.tsx's React state does). Mirrors
+      // RouletteToolPage.tsx's own wheelRotationRef.
+      let rouletteWheelRotationDeg = 0
+      // Set for exactly one render pass, by the 'roulette-state' WS handler,
+      // the instant a round transitions into 'spinning' — the rotation to
+      // animate FROM (rouletteWheelRotationDeg by then already holds the
+      // NEW target). buildRouletteWheel reads and immediately clears it, so
+      // an unrelated re-render mid-spin (there shouldn't be one — no other
+      // event fires during the 5s window) doesn't replay the animation.
+      let rouletteSpinFromDeg = null
+      // Cancels/invalidates the live pointer-tracking loop (see
+      // buildRouletteWheel's own tick() below) whenever a NEWER wheel build
+      // starts — otherwise a stale loop from a torn-down element would keep
+      // running (harmlessly, but pointlessly) forever.
+      let rouletteTrackingRafId = null
+      let rouletteTrackingToken = 0
+
+      // Same formula as RouletteToolPage.tsx's own winner-positioning effect:
+      // finds the winning sector's angular midpoint, then picks the shortest
+      // forward rotation that parks it under the pointer (12 o'clock),
+      // plus a few extra full spins for a satisfying spin-up.
+      function computeRouletteWinnerRotation(entrants, winnerId, currentDeg) {
+        const totalWeight = entrants.reduce((sum, entrant) => sum + entrant.weight, 0)
+        let cursor = 0
+        let winnerMid = 0
+        for (const entrant of entrants) {
+          const sweep = totalWeight > 0 ? (entrant.weight / totalWeight) * 360 : 0
+          if (entrant.id === winnerId) {
+            winnerMid = cursor + sweep / 2
+            break
+          }
+          cursor += sweep
+        }
+        const currentMod = ((currentDeg % 360) + 360) % 360
+        const delta = (360 - winnerMid - currentMod + 360) % 360
+        return currentDeg + delta + ROULETTE_WHEEL_EXTRA_SPINS * 360
+      }
+
+      // What a Roulette Widget node renders — see NODE_SOCKETS.
+      // rouletteWidget/ROULETTE_WIDGET_OUTPUTS in components/nodes/
+      // constants.ts. Called only when rouletteWidgetVisible(...) is true
+      // (see buildContent's own dispatch) — this function itself doesn't
+      // gate on that. Reads the always-current `latestRouletteState` global
+      // (not `vars`), same reasoning as buildImage's forceAudioCover branch
+      // — this stays live with no Scene wiring needed beyond the mandatory
+      // `source` pairing. No own Width/Height field (same reasoning as
+      // buildImage/buildVideo above) — 240x240 here is only the fallback,
+      // it's always square regardless of which axis a Size modifier sets.
+      //
+      // Includes the same status badge RouletteToolPage.tsx shows above its
+      // own wheel: the countdown while 'collecting', whoever's CURRENTLY
+      // under the pointer while 'spinning' (tracked live, see the tick()
+      // loop below — NOT the true winner, which RouletteEngine already knows
+      // the instant the spin starts, well before it visually stops), and
+      // only the real winner once 'result'. Sector dimming (the
+      // opacity=0.4 fade on every non-winning slice) follows the exact same
+      // rule — only once `phase === 'result'` — so neither one spoils the
+      // outcome early.
+      function buildRouletteWheel(node, mods, animate, registry) {
+        const wrap = document.createElement('div')
+        wrap.className = 'roulette-wheel-node'
+        wrap.style.width = '240px'
+        applyModifierStyle(wrap, mods)
+        // A Size modifier may have set only HEIGHT — the wheel is always
+        // square and sized by WIDTH alone (see the aspect-ratio rule on
+        // .roulette-wheel-svg below, which the badge sits above rather than
+        // inside — a fixed wrap height would squash the two together), so
+        // fall back to whichever axis actually got a value and always clear
+        // height afterward so the column can size itself to badge + wheel.
+        if (!wrap.style.width) wrap.style.width = wrap.style.height || '240px'
+        wrap.style.height = ''
+
+        const entrants = latestRouletteState.entrants || []
+        const winnerId = (latestRouletteState.winner && latestRouletteState.winner.id) || null
+        const phase = latestRouletteState.phase
+
+        const badge = document.createElement('div')
+        badge.className = 'roulette-wheel-badge'
+        if (phase === 'idle' || entrants.length === 0) {
+          badge.style.display = 'none'
+        } else if (phase === 'collecting') {
+          badge.textContent = latestRouletteState.endsAt ? formatRouletteCountdown((latestRouletteState.endsAt - Date.now()) / 1000) : ''
+        } else if (phase === 'result') {
+          badge.textContent = (latestRouletteState.winner && latestRouletteState.winner.name) || ''
+        } else {
+          // 'spinning': parked here until the tick() loop below starts
+          // updating it with whoever's actually under the pointer.
+          badge.textContent = ''
+        }
+        wrap.appendChild(badge)
+
+        const svgBox = document.createElement('div')
+        svgBox.className = 'roulette-wheel-svg'
+
+        const svgNS = 'http://www.w3.org/2000/svg'
+        const svg = document.createElementNS(svgNS, 'svg')
+        svg.setAttribute('viewBox', '0 0 200 200')
+        svg.style.width = '100%'
+        svg.style.height = '100%'
+
+        const group = document.createElementNS(svgNS, 'g')
+        group.style.transformOrigin = '100px 100px'
+        // See rouletteSpinFromDeg's own doc comment above for why this reads
+        // (and clears) it instead of always just rouletteWheelRotationDeg.
+        const fromDeg = rouletteSpinFromDeg
+        rouletteSpinFromDeg = null
+        group.style.transform = `rotate(${(fromDeg != null ? fromDeg : rouletteWheelRotationDeg)}deg)`
+
+        // Populated below as each sector is built — reused by the tick()
+        // pointer-tracking loop further down, same data tick() in
+        // RouletteWheel.tsx's own React effect reads off its own `sectors`.
+        const sectors = []
+        if (entrants.length === 0) {
+          const circle = document.createElementNS(svgNS, 'circle')
+          circle.setAttribute('cx', '100')
+          circle.setAttribute('cy', '100')
+          circle.setAttribute('r', '92')
+          circle.setAttribute('fill', '#27272a')
+          circle.setAttribute('stroke', '#3f3f46')
+          circle.setAttribute('stroke-width', '1')
+          group.appendChild(circle)
+        } else {
+          const totalWeight = entrants.reduce((sum, entrant) => sum + entrant.weight, 0)
+          let cursor = 0
+          entrants.forEach((entrant, index) => {
+            const sweep = totalWeight > 0 ? (entrant.weight / totalWeight) * 360 : 0
+            const start = cursor
+            const end = cursor + sweep
+            cursor = end
+            sectors.push({ entrant, start, end })
+            const path = document.createElementNS(svgNS, 'path')
+            path.setAttribute('d', rouletteDescribeSector(100, 100, 92, start, end))
+            path.setAttribute('fill', rouletteSectorColor(index))
+            path.setAttribute('stroke', '#18181b')
+            path.setAttribute('stroke-width', '1.5')
+            // Only dim non-winning sectors once the round has actually
+            // landed — dimming (or not) during 'spinning' would itself give
+            // the outcome away before the wheel visually stops.
+            if (phase === 'result' && winnerId && entrant.id !== winnerId) path.setAttribute('opacity', '0.4')
+            group.appendChild(path)
+            if (rouletteLabelFits(entrant.name, end - start)) {
+              const mid = (start + end) / 2
+              const flip = mid > 180 && mid < 360
+              const rotateAngle = flip ? mid - 270 : mid - 90
+              const anchorX = flip ? 100 - ROULETTE_WHEEL_LABEL_INNER_RADIUS : 100 + ROULETTE_WHEEL_LABEL_INNER_RADIUS
+              const text = document.createElementNS(svgNS, 'text')
+              text.setAttribute('x', String(anchorX))
+              text.setAttribute('y', '100')
+              text.setAttribute('transform', `rotate(${rotateAngle} 100 100)`)
+              text.setAttribute('text-anchor', flip ? 'end' : 'start')
+              text.setAttribute('dominant-baseline', 'middle')
+              text.setAttribute('font-size', String(ROULETTE_WHEEL_LABEL_FONT_SIZE))
+              text.setAttribute('fill', '#ffffff')
+              text.style.pointerEvents = 'none'
+              text.textContent = entrant.name
+              group.appendChild(text)
+            }
+          })
+        }
+        const outerCircle = document.createElementNS(svgNS, 'circle')
+        outerCircle.setAttribute('cx', '100')
+        outerCircle.setAttribute('cy', '100')
+        outerCircle.setAttribute('r', '94')
+        outerCircle.setAttribute('fill', 'none')
+        outerCircle.setAttribute('stroke', '#ffffff')
+        outerCircle.setAttribute('stroke-width', '2')
+        group.appendChild(outerCircle)
+        svg.appendChild(group)
+
+        const pointer = document.createElementNS(svgNS, 'polygon')
+        pointer.setAttribute('points', '100,4 91,21 109,21')
+        pointer.setAttribute('fill', '#ffffff')
+        pointer.setAttribute('stroke', '#000000')
+        pointer.setAttribute('stroke-width', '1')
+        pointer.setAttribute('stroke-linejoin', 'round')
+        svg.appendChild(pointer)
+
+        const hub = document.createElementNS(svgNS, 'circle')
+        hub.setAttribute('cx', '100')
+        hub.setAttribute('cy', '100')
+        hub.setAttribute('r', '9')
+        hub.setAttribute('fill', '#18181b')
+        hub.setAttribute('stroke', '#3f3f46')
+        hub.setAttribute('stroke-width', '1.5')
+        svg.appendChild(hub)
+
+        svgBox.appendChild(svg)
+        wrap.appendChild(svgBox)
+        applyAnimation(wrap, mods, animate)
+        if (registry) registry[node.id] = wrap
+
+        // Spin-up: the group was just inserted parked at the OLD rotation
+        // with no transition (so that state actually paints); deferring the
+        // transition + new rotation to the next frame is what makes the
+        // browser animate the change instead of jumping straight to it.
+        if (fromDeg != null) {
+          requestAnimationFrame(() => {
+            group.style.transition = `transform ${ROULETTE_SPIN_DURATION_MS}ms cubic-bezier(0.12, 0.72, 0.15, 1)`
+            group.style.transform = `rotate(${rouletteWheelRotationDeg}deg)`
+          })
+        }
+
+        // Live pointer tracking while spinning — exact port of
+        // RouletteWheel.tsx's own tick() effect: reads the wheel's live CSS
+        // transform (which keeps updating every frame during the CSS
+        // transition triggered just above) each frame, works out which
+        // sector is CURRENTLY under the 12-o'clock pointer, and updates the
+        // badge to match. `rouletteTrackingToken` invalidates any PREVIOUS
+        // loop (from a torn-down wheel) the instant a new one starts, so at
+        // most one is ever running.
+        rouletteTrackingToken += 1
+        const myTrackingToken = rouletteTrackingToken
+        if (rouletteTrackingRafId != null) cancelAnimationFrame(rouletteTrackingRafId)
+        if (phase === 'spinning' && sectors.length > 0) {
+          let lastName = null
+          const tick = () => {
+            if (rouletteTrackingToken !== myTrackingToken) return
+            let angleDeg = 0
+            const transform = window.getComputedStyle(group).transform
+            if (transform && transform !== 'none') {
+              try {
+                const matrix = new DOMMatrixReadOnly(transform)
+                angleDeg = (Math.atan2(matrix.b, matrix.a) * 180) / Math.PI
+              } catch {
+                angleDeg = 0
+              }
+            }
+            const normalized = ((angleDeg % 360) + 360) % 360
+            const pointerAngle = (360 - normalized) % 360
+            const sector = sectors.find((s) => pointerAngle >= s.start && pointerAngle < s.end)
+            const name = (sector && sector.entrant.name) || null
+            if (name !== lastName) {
+              lastName = name
+              badge.textContent = name || ''
+            }
+            rouletteTrackingRafId = requestAnimationFrame(tick)
+          }
+          rouletteTrackingRafId = requestAnimationFrame(tick)
+        } else {
+          rouletteTrackingRafId = null
+        }
+        return wrap
+      }
+
+      // One formatted row per entrant — mirrors rouletteEntrantRows in
+      // overlays/sceneUtils.tsx (own doc comment there covers the shared
+      // reasoning; {name}/{chance}/{weight} tokens via the same interpolate()
+      // every other template field here already uses).
+      function rouletteEntrantRows(entrants, data) {
+        const totalWeight = entrants.reduce((sum, entrant) => sum + entrant.weight, 0)
+        const ordered = data.sortByChance ? [...entrants].sort((a, b) => b.weight - a.weight) : entrants
+        const template = data.rowTemplate || '{name}'
+        return ordered.map((entrant) => {
+          const chance = totalWeight > 0 ? Math.round((entrant.weight / totalWeight) * 100) : 0
+          return interpolate(template, { name: entrant.name, chance, weight: entrant.weight })
+        })
+      }
+
       // Nesting can go as deep as the graph wants (see BOX_SOCKETS' own doc
       // comment in components/nodes/index.tsx) — this cap is only a safety
       // net against a cycle slipping past isValidConnection's own guard in
@@ -921,9 +1565,14 @@
       // OWN children below.
       function buildContent(node, edges, map, animate, vars, registry, depth = 0, crossAxis) {
         const mods = incoming(node.id, edges, map)
-        if (node.type === 'text') return buildText(node, mods, animate, vars, registry, crossAxis, audioContentValues(node.id, edges, map))
+        if (node.type === 'text') {
+          const audioValues = audioContentValues(node.id, edges, map)
+          const replaceText = rouletteEntrantsTextValue(node.id, edges, map)
+          return buildText(node, mods, animate, vars, registry, crossAxis, audioValues, replaceText)
+        }
         if (node.type === 'image') return buildImage(node, mods, animate, vars, registry, hasAudioCover(node.id, edges, map))
         if (node.type === 'video') return buildVideo(node, mods, animate, registry)
+        if (node.type === 'rouletteWidget') return rouletteWidgetVisible(node.id, edges, map) ? buildRouletteWheel(node, mods, animate, registry) : null
         // A nested Box or Group (see BOX_SOCKETS' own doc comment in
         // components/nodes/index.tsx) — buildBox is defined below but
         // function declarations are hoisted, so this forward reference
@@ -941,7 +1590,9 @@
         const children =
           depth >= MAX_BOX_DEPTH
             ? []
-            : incomingNodes.filter((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group')
+            : incomingNodes.filter(
+                (n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group' || n.type === 'rouletteWidget'
+              )
         const childCrossAxis = crossAxisFor(incomingNodes)
         const d = node.data || {}
         const container = document.createElement('div')
@@ -1045,7 +1696,9 @@
         applyBackgroundFx(bgFxNode, animate, backgroundFxLabel(bgFxNode, edges, map))
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
-        const renderable = members.filter((n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+        const renderable = members.filter(
+          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget'
+        )
         const crossAxis = crossAxisFor(members)
 
         for (const n of renderable) {
@@ -1078,7 +1731,9 @@
         applyBackgroundFx(bgFxNode, true, backgroundFxLabel(bgFxNode, edges, map, vars))
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
-        const renderable = members.filter((n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+        const renderable = members.filter(
+          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget'
+        )
         const crossAxis = crossAxisFor(members)
         for (const n of renderable) {
           const el = n.type === 'box' || n.type === 'group' ? buildBox(n, edges, map, true, vars) : buildContent(n, edges, map, true, vars, undefined, 0, crossAxis)
@@ -1125,7 +1780,9 @@
         const members = scene ? incoming(scene.id, edges, map) : []
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
-        const renderable = members.filter((n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+        const renderable = members.filter(
+          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget'
+        )
         const crossAxis = crossAxisFor(members)
         const registry = {}
         // animate=true: a component with no Task ever targeting it should
@@ -1258,7 +1915,9 @@
         applyBackgroundFx(bgFxNode, animate, backgroundFxLabel(bgFxNode, edges, map, vars))
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
-        const renderable = members.filter((n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+        const renderable = members.filter(
+          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget'
+        )
         const crossAxis = crossAxisFor(members)
         for (const n of renderable) {
           const el = n.type === 'box' || n.type === 'group' ? buildBox(n, edges, map, animate, vars) : buildContent(n, edges, map, animate, vars, undefined, 0, crossAxis)
@@ -1373,17 +2032,41 @@
             const built = buildProcessSchedule(overlay.nodes || [], overlay.edges || [])
             // Sample data shaped to whichever trigger is actually armed —
             // an alert-shaped vars object would leave a Task's own
-            // {title}/{artist} placeholders literal (nothing wrong with
-            // that, just not a useful Test preview) on a process armed
-            // purely by Audio Player (see processTrigger's audioArmed), so
-            // that case gets Now-Playing-shaped sample vars instead,
-            // mirroring the non-process isAudioTrigger simulateTest branch
-            // below. alertTypes wins when both are wired to the same Start.
+            // {title}/{artist}/{entrants}/{winner} placeholders literal
+            // (nothing wrong with that, just not a useful Test preview) on a
+            // process armed purely by Audio Player/Roulette (see
+            // processTrigger's audioArmed/rouletteArmed), so those get
+            // Now-Playing/round-shaped sample vars instead, mirroring the
+            // non-process isAudioTrigger simulateTest branch above (Roulette
+            // has no scene-wide equivalent of its own — only this
+            // process-armed case). alertTypes wins over audio, which wins
+            // over roulette, when more than one is wired to the same Start.
             const vars =
               proc.alertTypes.size > 0
                 ? { type: [...proc.alertTypes][0], user: 'Viewer', amount: 25, message: 'Sample message', source: 'twitch' }
-                : { source: 'spotify', title: 'Sample Track', artist: 'Sample Artist', albumArt: '', isPlaying: true }
+                : proc.audioArmed
+                  ? { source: 'spotify', title: 'Sample Track', artist: 'Sample Artist', albumArt: '', isPlaying: true }
+                  : { entrants: 'Alice, Bob, Carla', winner: 'Alice' }
             if (built) showProcessContent(overlay, vars, built.schedule, built.totalMs)
+            return
+          }
+          // A process armed PURELY by Roulette (no real alert type, no
+          // Audio Player) does NOT hide the rest of the scene between
+          // individual roulette-state ticks — see ROULETTE_OUTPUTS' own doc
+          // comment in components/nodes/constants.ts: the Widget/Entrants
+          // list show unconditionally regardless of this wiring; only the
+          // Task-driven one-shot cue itself (fired directly via
+          // showProcessContent, from the 'roulette-state' WS handler's own
+          // justStartedCollecting branch) is actually gated by "did a round
+          // just start collecting". Falling through to the plain static
+          // render here is what keeps the wheel visible — and its own spin
+          // animation actually playing — on every LATER tick, instead of it
+          // vanishing the instant render() is next called for any other
+          // reason (this was the "spin animation disappeared" bug: every
+          // 'roulette-state' tick after the first ended up here and wiped
+          // sceneEl since `hideTimer` is never set by the process path).
+          if (proc.rouletteArmed && !proc.audioArmed && proc.alertTypes.size === 0) {
+            renderStatic(overlay, animate)
             return
           }
           if (!hideTimer) {
@@ -1444,15 +2127,23 @@
         // opened/reloaded mid-track would otherwise show nothing (or a
         // Content-wired Text/Image would show blank) until the NEXT track.
         // A failed fetch here just keeps that default rather than failing
-        // the whole page load — see the now-playing.json .catch below.
+        // the whole page load — see the now-playing.json .catch below. Same
+        // reasoning for roulette-state.json: a page opened/reloaded mid-round
+        // would otherwise show nothing (or a Content-wired Text/wheel widget
+        // would show empty) until the round's NEXT state change.
         Promise.all([
           fetch(`/overlays/config/custom.json?key=${encodeURIComponent(key)}`).then((res) => res.json()),
           fetch('/overlays/config/now-playing.json')
             .then((res) => res.json())
+            .catch(() => null),
+          fetch('/overlays/config/roulette-state.json')
+            .then((res) => res.json())
             .catch(() => null)
         ])
-          .then(([overlay, nowPlaying]) => {
+          .then(([overlay, nowPlaying, rouletteState]) => {
             if (nowPlaying) latestNowPlaying = nowPlaying
+            if (rouletteState) latestRouletteState = rouletteState
+            ensureRouletteCountdownTicking()
             render(overlay, true)
           })
           .catch(() => render(null))
@@ -1513,6 +2204,63 @@
               // replaying entrance animations here would be constant and
               // wrong (same reasoning as showAudioContent's own animate arg).
               if (!audioTriggered && hasAudioContentDeps(latestOverlay)) render(latestOverlay, false)
+            } else if (type === 'roulette-state') {
+              // Reused both to decide whether to fire a Start-wired
+              // Roulette's own Process trigger (see processTrigger's
+              // rouletteArmed, just below) and to gate the silent refresh
+              // further down — only the moment a round actually starts
+              // collecting, not on every entrant.
+              const justStartedCollecting = payload.phase === 'collecting' && latestRouletteState.phase !== 'collecting'
+              // The winner-rotation target, computed the moment a round
+              // transitions into 'spinning' — see rouletteSpinFromDeg/
+              // computeRouletteWinnerRotation's own doc comments.
+              // rouletteWheelRotationDeg is updated to the NEW target here
+              // (before latestRouletteState is overwritten below) so
+              // whichever render below actually runs picks it up uniformly
+              // through buildRouletteWheel.
+              if (payload.phase === 'spinning' && latestRouletteState.phase !== 'spinning' && payload.winner) {
+                rouletteSpinFromDeg = rouletteWheelRotationDeg
+                rouletteWheelRotationDeg = computeRouletteWinnerRotation(payload.entrants || [], payload.winner.id, rouletteWheelRotationDeg)
+              }
+              latestRouletteState = payload
+              const vars = rouletteStateVars(payload)
+
+              // Fires the SAME Start->Task->...->End sequence a real alert
+              // would (see handleAlert's own matchesProcess branch) whenever
+              // Start is wired to Roulette (processTrigger's rouletteArmed)
+              // — an alternative arming condition, for a process that should
+              // play some animation/sound/update the moment a round starts
+              // collecting (NOT the wheel widget itself, which shows on its
+              // own regardless — see ROULETTE_OUTPUTS' own doc comment in
+              // components/nodes/constants.ts). NOT queued behind
+              // alertActive, same reasoning as the 'now-playing' branch's
+              // own trackChanged handling above.
+              let processArmedThisTick = false
+              if (justStartedCollecting && !alertActive) {
+                const proc = processTrigger(latestOverlay)
+                if (proc.rouletteArmed) {
+                  const built = buildProcessSchedule(latestOverlay.nodes || [], latestOverlay.edges || [])
+                  if (built) {
+                    alertActive = true
+                    processArmedThisTick = true
+                    showProcessContent(latestOverlay, vars, built.schedule, built.totalMs)
+                  }
+                }
+              }
+              // A Text wired straight into Roulette's own Content socket,
+              // or a Widget wired straight into Scene/a Box, needs a live
+              // refresh on every tick to keep tracking the round — see
+              // hasRouletteContentDeps. Skipped when THIS SAME tick already
+              // fired the process above: showProcessContent just rendered
+              // the whole scene fresh, so rendering it again right after
+              // would tear the wheel widget down and rebuild it a SECOND
+              // time in the same instant — it'd visibly flash/restart, as
+              // if another wheel had launched. `animate` is true only when a
+              // spin just armed (rouletteSpinFromDeg != null) so the widget
+              // still picks up its spin-up transition; otherwise false, same
+              // reasoning as showAudioContent's own animate arg.
+              if (!processArmedThisTick && hasRouletteContentDeps(latestOverlay)) render(latestOverlay, rouletteSpinFromDeg != null)
+              ensureRouletteCountdownTicking()
             }
           }
           ws.onclose = () => setTimeout(connect, 1000)

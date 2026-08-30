@@ -11,18 +11,21 @@ import {
   processExitBufferMs,
   maxExitDurationMs,
   SAMPLE_ALERT_VARS,
-  SAMPLE_AUDIO_VARS
+  SAMPLE_AUDIO_VARS,
+  SAMPLE_ROULETTE_VARS
 } from '../sceneUtils'
 
 /**
- * Drives the local Play/Test simulation — the same "an event/track-change
- * just arrived" preview whether triggered by the panel's own Play button or
- * by Test (which additionally broadcasts to any real connected Browser
- * Source; see handleTest below). A Start node (processTrigger) takes
- * priority over the plain Event+Timer→Scene model (sceneTrigger), which
- * itself takes priority over Audio-Player-driven visibility
- * (sceneAudioTrigger) — see the doc comment on nodeTypes in
- * components/nodes/index.tsx.
+ * Drives the local Play/Test simulation — the same "an event/track-change/
+ * round-start just arrived" preview whether triggered by the panel's own
+ * Play button or by Test (which additionally broadcasts to any real
+ * connected Browser Source; see handleTest below). A Start node
+ * (processTrigger) takes priority over the plain Event+Timer→Scene model
+ * (sceneTrigger), which itself takes priority over Audio-Player-driven
+ * visibility (sceneAudioTrigger) — see the doc comment on nodeTypes in
+ * components/nodes/index.tsx. Roulette has no scene-wide equivalent of its
+ * own (see ROULETTE_OUTPUTS' own doc comment in components/nodes/
+ * constants.ts) — only `proc.rouletteArmed` below, for a Start-armed process.
  */
 export function useScenePlayback({
   overlay,
@@ -111,12 +114,21 @@ export function useScenePlayback({
       // Sample data shaped to whichever trigger is actually armed — mirrors
       // render()'s own simulateTest branch in overlays/custom.html: a
       // process armed purely by Audio Player (proc.audioArmed, no Event —
-      // see processTrigger) gets Now-Playing-shaped sample vars instead of
-      // alert-shaped ones, or a Task's own {title}/{artist} placeholders
-      // would just preview as literal text. alertTypes wins when both are
-      // wired to the same Start.
+      // see processTrigger) gets Now-Playing-shaped sample vars, one armed
+      // purely by Roulette (proc.rouletteArmed) gets round-shaped sample
+      // vars, or a Task's own {title}/{artist}/{entrants}/{winner}
+      // placeholders would just preview as literal text. alertTypes wins
+      // over audio, which wins over roulette, when more than one is wired
+      // to the same Start.
       const alertTypes = proc.active ? proc.alertTypes : trigger!.alertTypes
-      setEventVars(alertTypes.length > 0 ? { type: alertTypes[0], ...SAMPLE_ALERT_VARS } : { ...SAMPLE_AUDIO_VARS, source: 'spotify', isPlaying: true })
+      const audioArmed = proc.active ? proc.audioArmed : audioTrigger
+      setEventVars(
+        alertTypes.length > 0
+          ? { type: alertTypes[0], ...SAMPLE_ALERT_VARS }
+          : audioArmed
+            ? { ...SAMPLE_AUDIO_VARS, source: 'spotify', isPlaying: true }
+            : { ...SAMPLE_ROULETTE_VARS }
+      )
       setEventPhase('showing')
       if (proc.active) {
         const built = buildProcessSchedule(nodes, edges)

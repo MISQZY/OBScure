@@ -104,7 +104,11 @@ export function SceneBuilderPage({
   // A Start node (processTrigger) takes priority over the plain
   // Event+Timer→Scene model (sceneTrigger), which itself takes priority
   // over Audio-Player-driven visibility (sceneAudioTrigger) — see the doc
-  // comment on nodeTypes in components/nodes/index.tsx.
+  // comment on nodeTypes in components/nodes/index.tsx. Roulette has no
+  // scene-wide equivalent of its own — its Widget shows unconditionally by
+  // default, optionally gated per-widget via its own Visibility socket
+  // instead (see ROULETTE_OUTPUTS' own doc comment in components/nodes/
+  // constants.ts).
   const proc = processTrigger(nodes, edges)
   const trigger = proc.active ? null : sceneTrigger(nodes, edges)
   const audioTrigger = !proc.active && !trigger?.active && sceneAudioTrigger(nodes, edges)

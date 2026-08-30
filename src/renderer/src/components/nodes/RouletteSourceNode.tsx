@@ -32,19 +32,39 @@ import { useIntegrationsStatus } from '@/hooks/use-integration-status'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { HexColorPicker, HexColorInput } from 'react-colorful'
 
-import { 
+import {
   NodeCategory, InputSocket, OutputSocket,
   TEXT_SOCKETS, IMAGE_SOCKETS, VIDEO_SOCKETS, BOX_SOCKETS, SCENE_SOCKETS, BACKGROUND_FX_SOCKETS, START_SOCKETS, TASK_SOCKETS,
-  TEXT_OUTPUTS, IMAGE_OUTPUTS, VIDEO_OUTPUTS, BOX_OUTPUTS, AUDIO_PLAYER_OUTPUTS,
+  TEXT_OUTPUTS, IMAGE_OUTPUTS, VIDEO_OUTPUTS, BOX_OUTPUTS, AUDIO_PLAYER_OUTPUTS, ROULETTE_OUTPUTS,
 } from './constants'
 import {
-  useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect, PlaceholderPicker, 
+  useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect, PlaceholderPicker,
   numberInputClass, textInputClass, textAreaClass, selectClass,
   SYSTEM_DEFAULT_FONT, TEXT_ALIGN_BUTTONS, TEXT_VERTICAL_BUTTONS, IconToggleGroup, UploadRow,
   ANIMATION_SUB_TYPES, BOX_SHAPE_IDS, EVENT_KINDS, ALERT_PLATFORM_LABELS, inferAlertPlatform, TASK_ACTIONS,
   useHasIncomingEdge, useAvailablePlaceholders
 } from './utils'
 
+/**
+ * Live entrants/phase from the Roulette tool (RouletteEngine, driven by the
+ * !roulette chat command / points redemptions / manual entries on the
+ * Roulette settings page — see RouletteToolPage.tsx). Placing this ALSO
+ * places a permanently-paired Roulette Widget (see addNode's own doc
+ * comment in hooks/useSceneGraph.ts) — that's the node you actually wire
+ * into Scene to show the wheel; this one stays a pure data/control node,
+ * same family as Audio Player/Event. See ROULETTE_OUTPUTS' own doc comment
+ * in constants.ts for exactly what each output does and where to wire it;
+ * that's also surfaced here as each row's own "?" help.
+ */
 export function RouletteSourceNode({ id, data }: NodeProps) {
-  return <BaseNode id={id} data={data} title="Roulette" category="data" soon help="Reserved for a Roulette feed — entrants would join via a Command-kind Event node." />
+  return (
+    <BaseNode
+      id={id}
+      data={data}
+      title="Roulette"
+      category="data"
+      outputSockets={ROULETTE_OUTPUTS}
+      help="Live entrants/phase from the Roulette tool. Auto-paired with its own Roulette Widget — that's the node to wire into Scene. See each output's own ? for exactly what it does and where to wire it."
+    />
+  )
 }

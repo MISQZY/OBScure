@@ -15,6 +15,7 @@ import type {
   NowPlayingPayload,
   OverlayAddress,
   OverlayUrls,
+  RouletteStatePayload,
 } from "../shared/types";
 
 const MIME_TYPES: Record<string, string> = {
@@ -64,6 +65,9 @@ export class OverlayServer {
 
   private latestNowPlaying: NowPlayingPayload | null = null;
 
+  /** Latest Roulette round state, broadcast to every connected overlay client the moment it changes — see the `roulette-state` subscription below and RouletteEngine. Served to a freshly-loaded overlay page (before any WS message arrives) via /overlays/config/roulette-state.json, mirroring latestNowPlaying's own now-playing.json. */
+  private latestRouletteState: RouletteStatePayload | null = null;
+
   constructor(options: OverlayServerOptions) {
     this.host = options.host;
     this.port = options.port;
@@ -79,6 +83,10 @@ export class OverlayServer {
     );
 
     this.eventBus.on("alert", (payload) => this.broadcast("alert", payload));
+    this.eventBus.on("roulette-state", (payload) => {
+      this.latestRouletteState = payload;
+      this.broadcast("roulette-state", payload);
+    });
   }
 
   pushNowPlaying(payload: NowPlayingPayload | null): void {
@@ -197,6 +205,15 @@ export class OverlayServer {
         "Cache-Control": "no-store",
       });
       res.end(JSON.stringify(this.latestNowPlaying));
+      return;
+    }
+
+    if (pathname === `${OVERLAYS_PREFIX}/config/roulette-state.json`) {
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+      });
+      res.end(JSON.stringify(this.latestRouletteState));
       return;
     }
 
