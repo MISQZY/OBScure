@@ -2142,7 +2142,29 @@
         ])
           .then(([overlay, nowPlaying, rouletteState]) => {
             if (nowPlaying) latestNowPlaying = nowPlaying
-            if (rouletteState) latestRouletteState = rouletteState
+            if (rouletteState) {
+              latestRouletteState = rouletteState
+              // A page opened/reloaded mid-round (or after one already
+              // finished) starts rouletteWheelRotationDeg at its plain 0
+              // default — only the 'roulette-state' WS handler's own
+              // collecting->spinning transition (below) ever moves it.
+              // Without this, the wheel would render un-rotated while the
+              // badge/dimming still show the real winner, i.e. the pointer
+              // wouldn't line up with the highlighted sector. Mirrors
+              // RouletteToolPage.tsx's own winner-positioning effect, which
+              // re-derives the target rotation on MOUNT for any
+              // spinning/result state, not just a live transition. No
+              // rouletteSpinFromDeg set here — this is a first paint, so it
+              // should snap straight to the target with no spin-up
+              // animation, same as that effect's animateWheel=false path.
+              if ((rouletteState.phase === 'spinning' || rouletteState.phase === 'result') && rouletteState.winner) {
+                rouletteWheelRotationDeg = computeRouletteWinnerRotation(
+                  rouletteState.entrants || [],
+                  rouletteState.winner.id,
+                  rouletteWheelRotationDeg
+                )
+              }
+            }
             ensureRouletteCountdownTicking()
             render(overlay, true)
           })
