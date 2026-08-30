@@ -3,6 +3,12 @@ productName: OBScure
 directories:
   output: dist
 
+# CI builds artifacts on tag push and uploads them via actions/upload-artifact
+# (see .github/workflows/ci.yml) instead of an electron-builder GitHub
+# Release. Without this, electron-builder auto-detects "CI + version tag" and
+# implicitly tries to publish a release, failing without a GH_TOKEN.
+publish: null
+
 icon: build/icon.ico
 
 files:
