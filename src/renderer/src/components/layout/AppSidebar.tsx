@@ -243,10 +243,7 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <button
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                }}
+                onClick={(e) => e.stopPropagation()}
                 className="flex items-center justify-center p-1 rounded opacity-0 group-hover/folder:opacity-100 hover:bg-destructive/10 hover:text-destructive shrink-0"
                 title="Delete folder"
               >
