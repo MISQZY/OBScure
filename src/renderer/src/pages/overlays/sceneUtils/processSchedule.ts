@@ -89,12 +89,15 @@ export function handleScreenCenter(nodeId: string, handleId: string): { x: numbe
  * buildProcessSchedule, whose exact accumulation this mirrors) at the
  * moment the token reaches each one — used by processTokenPosition to
  * interpolate between whichever two checkpoints bracket the current
- * clockMs. Every Wait node's delay is spent traveling the EDGE leading INTO
- * it (so the token visibly slides toward a Wait for its own delay, arriving
- * exactly as it elapses) rather than pausing once there — Start/Task/End
- * checkpoints themselves take no time to pass through, matching how
- * buildProcessSchedule only ever advances `atMs` on a Wait. Returns an
- * empty list when there's no Start node.
+ * clockMs. Every Wait node's delay is spent traveling the EDGE leading OUT
+ * of it (so the token arrives at a Wait instantly and then slides away from
+ * it for its own delay, only reaching the next node once it elapses) rather
+ * than pausing before it — Start/Task/End checkpoints themselves take no
+ * time to pass through, matching how buildProcessSchedule only ever
+ * advances `atMs` on a Wait (a Task immediately after a Wait still lands on
+ * the same post-delay atMs buildProcessSchedule gives it — only the Wait
+ * node's own checkpoint here is pre-delay). Returns an empty list when
+ * there's no Start node.
  */
 export function processChainNodes(nodes: Node[], edges: Edge[]): { node: Node; atMs: number }[] {
   const map = buildNodeMap(nodes)
@@ -104,8 +107,8 @@ export function processChainNodes(nodes: Node[], edges: Edge[]): { node: Node; a
   let atMs = 0
   let current = nextProcessNode(start.id, edges, map)
   while (current) {
-    if (current.type === 'wait') atMs += (current.data.delay as number) || 1000
     chain.push({ node: current, atMs })
+    if (current.type === 'wait') atMs += (current.data.delay as number) || 1000
     if (current.type === 'end') break
     current = nextProcessNode(current.id, edges, map)
   }
@@ -225,19 +228,25 @@ export function processTokenPosition(nodes: Node[], edges: Edge[], clockMs: numb
  * animation plays a single frame: handlePlay used to flip eventPhase to
  * 'idle' — which immediately hides ScenePreview's content — at totalMs
  * itself, the SAME instant those Tasks' animation would just be starting.
- * Only the final wave needs this; anything earlier already has the time
- * until the NEXT scheduled moment to play out naturally.
+ *
+ * Checks EVERY Task, not just ones exactly at totalMs: a Task earlier in
+ * the chain (typically a `hide`) still needs its own atMs + duration to
+ * fit before the run ends, same as a final-wave one — a short Wait right
+ * after it doesn't guarantee that on its own (e.g. a 250ms Wait following
+ * an 800ms exit animation used to let the scene tear down 550ms before
+ * that Task's own Animation had actually finished, cutting it off mid-play
+ * instead of hiding only once it's done).
  */
 export function processExitBufferMs(schedule: ScheduledTask[], totalMs: number): number {
-  let max = 0
+  let latestEndMs = totalMs
   for (const s of schedule) {
-    if (s.atMs !== totalMs) continue
     const animAttrs = animationAttrs(s.mods)
     if (!animAttrs) continue
     const duration = animAttrs.duration || animationFallbackMs(animAttrs.type)
-    if (duration > max) max = duration
+    const endMs = s.atMs + duration
+    if (endMs > latestEndMs) latestEndMs = endMs
   }
-  return max
+  return latestEndMs - totalMs
 }
 
 

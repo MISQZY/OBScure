@@ -561,22 +561,29 @@
        * exactly totalMs, the schedule's own final moment) has its
        * animation cut off before a single frame plays: showProcessContent
        * used to tear the DOM down at totalMs itself, the SAME instant those
-       * Tasks' entrance/exit animation would just be starting. Only the
-       * final wave needs this — anything earlier already has the time
-       * until the NEXT scheduled moment to play out naturally.
+       * Tasks' entrance/exit animation would just be starting.
+       *
+       * Checks EVERY Task, not just ones exactly at totalMs: a Task earlier
+       * in the chain (typically a `hide`) still needs its own atMs +
+       * duration to fit before the run ends, same as a final-wave one — a
+       * short Wait right after it doesn't guarantee that on its own (e.g. a
+       * 250ms Wait following an 800ms exit animation used to let the scene
+       * tear down 550ms before that Task's own Animation had actually
+       * finished, cutting it off mid-play instead of hiding only once it's
+       * done).
        */
       function processExitBufferMs(schedule, totalMs) {
-        let max = 0
+        let latestEndMs = totalMs
         for (const s of schedule) {
-          if (s.atMs !== totalMs) continue
           const anim = lastOfType(s.mods, 'animation')
           if (!anim) continue
           const type = anim.data.type || 'fade'
           if (type === 'none') continue
           const duration = anim.data.duration || (type === 'slide' ? 300 : type === 'bounce' ? 500 : 250)
-          if (duration > max) max = duration
+          const endMs = s.atMs + duration
+          if (endMs > latestEndMs) latestEndMs = endMs
         }
-        return max
+        return latestEndMs - totalMs
       }
 
       // Applies one computeTaskState result to an already-built element —
