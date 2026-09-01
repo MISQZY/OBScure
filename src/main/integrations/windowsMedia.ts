@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { BaseIntegration } from "./types";
+import { logWarn } from "../logger";
 
 const execFileAsync = promisify(execFile);
 const POLL_INTERVAL_MS = 3000;
@@ -74,6 +75,7 @@ if ($props.Thumbnail) {
 
 export class WindowsMediaIntegration extends BaseIntegration {
   private lastKey = "";
+  private lastLoggedFailure = false;
 
   start(): void {
     const enabled = this.config.getSetting<boolean>(
@@ -92,6 +94,7 @@ export class WindowsMediaIntegration extends BaseIntegration {
   stop(): void {
     this.stopPolling();
     this.setStatus("disconnected");
+    this.lastLoggedFailure = false;
   }
 
   private async poll(): Promise<void> {
@@ -113,7 +116,12 @@ export class WindowsMediaIntegration extends BaseIntegration {
       result = stdout.trim()
         ? (JSON.parse(stdout) as SmtcResult)
         : { isPlaying: false };
-    } catch {
+      this.lastLoggedFailure = false;
+    } catch (error) {
+      if (!this.lastLoggedFailure) {
+        this.lastLoggedFailure = true;
+        logWarn("windowsMedia", "SMTC PowerShell query failed, will keep retrying", error);
+      }
       result = { isPlaying: false };
     }
 

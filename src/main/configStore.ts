@@ -1,6 +1,7 @@
 import { safeStorage } from "electron";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { logError } from "./logger";
 
 interface StoredConfig {
   secrets: Record<string, string>;
@@ -51,7 +52,7 @@ export class ConfigStore {
     try {
       return safeStorage.decryptString(Buffer.from(blob, "base64"));
     } catch (error) {
-      console.error(`[configStore] failed to decrypt secret "${key}":`, error);
+      logError("configStore", `failed to decrypt secret "${key}"`, error);
       return null;
     }
   }

@@ -8,6 +8,7 @@ import { createReadStream, existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
 import { WebSocket, WebSocketServer } from "ws";
+import { logError } from "./logger";
 import type { EventBus } from "./eventBus";
 import type {
   AppEvents,
@@ -289,7 +290,8 @@ export class OverlayServer {
         res.writeHead(200, headers);
         res.end(data);
       }
-    } catch {
+    } catch (error) {
+      logError("overlayServer", `failed to serve ${pathname}`, error);
       res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
       res.end("Internal error");
     }

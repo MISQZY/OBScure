@@ -1,6 +1,7 @@
 import { app, ipcMain } from "electron";
 import type { BrowserWindow } from "electron";
 import { autoUpdater } from "electron-updater";
+import { logError, logInfo } from "./logger";
 import type { AppUpdaterStatus } from "../shared/types";
 
 /**
@@ -34,26 +35,30 @@ export function initUpdater(getMainWindow: () => BrowserWindow | null): void {
 
   autoUpdater.on("checking-for-update", () => setStatus({ state: "checking" }));
   autoUpdater.on("update-not-available", () => setStatus({ state: "not-available" }));
-  autoUpdater.on("update-available", (info) =>
-    setStatus({ state: "available", version: info.version }),
-  );
+  autoUpdater.on("update-available", (info) => {
+    logInfo("updater", `update available: ${info.version}`);
+    setStatus({ state: "available", version: info.version });
+  });
   autoUpdater.on("download-progress", (progress) =>
     setStatus({ state: "downloading", percent: Math.round(progress.percent) }),
   );
   autoUpdater.on("update-downloaded", (info) => {
+    logInfo("updater", `update ${info.version} downloaded, installing and relaunching`);
     setStatus({ state: "downloaded", version: info.version });
     autoUpdater.quitAndInstall(true, true);
   });
-  autoUpdater.on("error", (error) =>
-    setStatus({ state: "error", message: error.message }),
-  );
+  autoUpdater.on("error", (error) => {
+    logError("updater", "autoUpdater error", error);
+    setStatus({ state: "error", message: error.message });
+  });
 
   ipcMain.handle("updater:download", async (): Promise<void> => {
     if (status.state !== "available") return;
     await autoUpdater.downloadUpdate();
   });
 
-  void autoUpdater
-    .checkForUpdates()
-    .catch((error: Error) => setStatus({ state: "error", message: error.message }));
+  void autoUpdater.checkForUpdates().catch((error: Error) => {
+    logError("updater", "checkForUpdates failed", error);
+    setStatus({ state: "error", message: error.message });
+  });
 }

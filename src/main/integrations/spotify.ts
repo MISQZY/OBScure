@@ -1,7 +1,7 @@
 import { net, shell } from "electron";
 import { BaseIntegration } from "./types";
 import { waitForRedirect } from "../oauth/callbackServer";
-import { logError } from "../logger";
+import { logError, logInfo, logWarn } from "../logger";
 import {
   generateCodeChallenge,
   generateCodeVerifier,
@@ -126,7 +126,7 @@ export class SpotifyIntegration extends BaseIntegration {
         } else if (body?.item) {
           if (!this.lastLoggedNoTrackItem) {
             this.lastLoggedNoTrackItem = true;
-            logError(
+            logInfo(
               "spotify",
               `now-playing item has no usable track data (currently_playing_type=${body.currently_playing_type}) — likely an ad break or podcast episode, will retry next poll`,
             );
@@ -138,7 +138,7 @@ export class SpotifyIntegration extends BaseIntegration {
         if (response.status !== this.lastLoggedStatus) {
           this.lastLoggedStatus = response.status;
           const bodyText = await response.text().catch(() => "");
-          logError(
+          logWarn(
             "spotify",
             `now-playing poll got HTTP ${response.status} instead of 200 — track will stay frozen until this clears. Body: ${bodyText.slice(0, 500)}`,
           );

@@ -2,6 +2,7 @@ import { net, shell } from "electron";
 import { BaseIntegration } from "./types";
 import { waitForRedirect } from "../oauth/callbackServer";
 import { generateState } from "../oauth/pkce";
+import { logError } from "../logger";
 
 const REDIRECT_PORT = 47891;
 const REDIRECT_PATH = "/callback/youtube";
@@ -51,7 +52,8 @@ export class YoutubeIntegration extends BaseIntegration {
     try {
       await this.refreshAccessToken(clientId, clientSecret, refreshToken);
       this.setStatus("connected");
-    } catch {
+    } catch (error) {
+      logError("youtube", "failed to refresh access token on startup", error);
       this.setStatus("error");
     }
   }

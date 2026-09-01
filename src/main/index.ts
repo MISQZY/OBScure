@@ -21,6 +21,7 @@ import { registerEventsHandlers } from "./ipc/eventsHandlers";
 import { registerProfileHandlers } from "./ipc/profileHandlers";
 import { registerIntegrationsHandlers } from "./ipc/integrationsHandlers";
 import { initUpdater } from "./updater";
+import { initLogger, logError, logInfo, logWarn } from "./logger";
 import type { CustomOverlay, NowPlayingPayload } from "../shared/types";
 import type { CustomLocalePack, CustomThemePack } from "../shared/customConfig";
 import {
@@ -36,6 +37,16 @@ import {
   normalizeCanvasConfig,
   type CanvasConfig,
 } from "../shared/canvasConfig";
+
+initLogger();
+logInfo("main", `Starting OBScure v${app.getVersion()} (${process.platform})`);
+
+process.on("uncaughtException", (error) => {
+  logError("main", "uncaught exception", error);
+});
+process.on("unhandledRejection", (reason) => {
+  logError("main", "unhandled promise rejection", reason);
+});
 
 if (!app.requestSingleInstanceLock()) {
   process.exit(0);
@@ -263,8 +274,7 @@ function disableWindowTransitionAnimations(win: BrowserWindow): void {
     ],
     { windowsHide: true },
     (error) => {
-      if (error)
-        console.error("Failed to disable window transition animations:", error);
+      if (error) logWarn("main", "failed to disable window transition animations", error);
     },
   );
 }

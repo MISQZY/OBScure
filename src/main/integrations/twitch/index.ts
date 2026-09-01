@@ -1,5 +1,6 @@
 import { shell } from "electron";
 import { BaseIntegration } from "../types";
+import { logInfo, logWarn } from "../../logger";
 import type { EventBus } from "../../eventBus";
 import type { ConfigStore } from "../../configStore";
 import type {
@@ -47,10 +48,10 @@ export class TwitchIntegration extends BaseIntegration {
     const clientId = getClientId(this.config);
     const refreshToken = this.config.getSecret("twitch.refreshToken");
     if (!clientId || !refreshToken) {
-      console.error("[twitch] start() found nothing to reconnect with:", {
-        hasClientId: !!clientId,
-        hasRefreshToken: !!refreshToken,
-      });
+      logInfo(
+        "twitch",
+        `start() found nothing to reconnect with (hasClientId=${!!clientId}, hasRefreshToken=${!!refreshToken})`,
+      );
       this.setStatus("disconnected");
       return;
     }
@@ -97,10 +98,7 @@ export class TwitchIntegration extends BaseIntegration {
 
   private handleConnectFailure(error: unknown): void {
     if (error instanceof TwitchAuthError) {
-      console.error(
-        "[twitch] refresh token rejected, dropping to disconnected:",
-        error.message,
-      );
+      logWarn("twitch", "refresh token rejected, dropping to disconnected", error);
       this.config.deleteSecret("twitch.refreshToken");
       this.accessToken = null;
       this.accessTokenExpiresAt = 0;
@@ -108,10 +106,7 @@ export class TwitchIntegration extends BaseIntegration {
       this.setStatus("disconnected");
       return;
     }
-    console.error(
-      "[twitch] connect failed, will retry:",
-      error instanceof Error ? error.message : error,
-    );
+    logWarn("twitch", "connect failed, will retry", error);
     this.setStatus("error");
     this.twitchSocket.scheduleReconnect();
   }
