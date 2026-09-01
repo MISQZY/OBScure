@@ -6,6 +6,7 @@ import type { Dictionary } from '@/lib/i18n/types'
 import { LOCALES } from '@/lib/i18n/locales'
 import en from '@/localization/en.json'
 import { slugify, uniqueUrlKey } from '@/lib/custom-overlays'
+import { deriveTitleBarOverlay } from '@/lib/color'
 
 const THEME_CACHE_KEY = 'maddoner:customThemeCache'
 const LOCALE_CACHE_KEY = 'maddoner:customLocaleCache'
@@ -56,15 +57,32 @@ function deepMerge<T extends Record<string, unknown>>(base: T, patch: Record<str
   return result as T
 }
 
+/**
+ * Recomputes a pack's titleBarOverlay from its own colors rather than trusting
+ * whatever hex value was last saved with it — so a theme edited (or hand-
+ * written) to change --sidebar/--muted-foreground can't leave the native
+ * titlebar buttons pointing at a stale color. Falls back to the saved value,
+ * then the built-in default, only if the colors can't be parsed.
+ */
+function normalizeThemePack(pack: CustomThemePack): CustomThemePack {
+  const base = BUILTIN_THEMES.find((theme) => theme.mode === pack.mode) ?? BUILTIN_THEMES[0]
+  const mergedColors = deepMerge(base.colors, pack.colors ?? {})
+  return {
+    ...pack,
+    titleBarOverlay: deriveTitleBarOverlay(mergedColors, pack.titleBarOverlay ?? base.titleBarOverlay)
+  }
+}
+
 function packToThemeDefinition(pack: CustomThemePack): ThemeDefinition {
   const base = BUILTIN_THEMES.find((theme) => theme.mode === pack.mode) ?? BUILTIN_THEMES[0]
+  const normalized = normalizeThemePack(pack)
   return {
-    id: pack.id,
-    name: pack.name,
+    id: normalized.id,
+    name: normalized.name,
     icon: Palette,
-    mode: pack.mode,
-    titleBarOverlay: pack.titleBarOverlay ?? base.titleBarOverlay,
-    colors: deepMerge(base.colors, pack.colors ?? {})
+    mode: normalized.mode,
+    titleBarOverlay: normalized.titleBarOverlay ?? base.titleBarOverlay,
+    colors: deepMerge(base.colors, normalized.colors ?? {})
   }
 }
 
@@ -100,10 +118,18 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
     readCache<CustomLocalePack>(LOCALE_CACHE_KEY).map(packToLocaleEntry)
   )
 
+  // Re-derives titleBarOverlay before caching so theme-init.js's bootstrap
+  // cache — which applies a custom theme's overlay directly, with no
+  // conversion logic of its own — never reads a stale/hand-authored value.
+  const cacheThemePacks = (packs: CustomThemePack[]): CustomThemePack[] => {
+    const normalized = packs.map(normalizeThemePack)
+    writeCache(THEME_CACHE_KEY, normalized)
+    return normalized
+  }
+
   useEffect(() => {
     window.maddoner.getCustomThemes().then((packs) => {
-      writeCache(THEME_CACHE_KEY, packs)
-      setCustomThemes(packs.map(packToThemeDefinition))
+      setCustomThemes(cacheThemePacks(packs).map(packToThemeDefinition))
     })
     window.maddoner.getCustomLocales().then((packs) => {
       writeCache(LOCALE_CACHE_KEY, packs)
@@ -113,8 +139,7 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
 
   const deleteCustomTheme = async (id: string): Promise<void> => {
     const packs = await window.maddoner.deleteCustomTheme(id)
-    writeCache(THEME_CACHE_KEY, packs)
-    setCustomThemes(packs.map(packToThemeDefinition))
+    setCustomThemes(cacheThemePacks(packs).map(packToThemeDefinition))
   }
 
   const deleteCustomLocale = async (id: string): Promise<void> => {
@@ -146,16 +171,16 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
         ? payload.id
         : uniqueUrlKey(name, existingIds)
     const base = BUILTIN_THEMES.find((t) => t.mode === mode) ?? BUILTIN_THEMES[0]
+    const colors = deepMerge(base.colors, (payload.colors as Record<string, string>) ?? {})
     const pack: CustomThemePack = {
       id,
       name,
       mode,
-      colors: deepMerge(base.colors, (payload.colors as Record<string, string>) ?? {}),
-      titleBarOverlay: payload.titleBarOverlay ?? base.titleBarOverlay
+      colors,
+      titleBarOverlay: deriveTitleBarOverlay(colors, payload.titleBarOverlay ?? base.titleBarOverlay)
     }
     const packs = await window.maddoner.saveCustomTheme(pack)
-    writeCache(THEME_CACHE_KEY, packs)
-    setCustomThemes(packs.map(packToThemeDefinition))
+    setCustomThemes(cacheThemePacks(packs).map(packToThemeDefinition))
     return 'ok'
   }
 
@@ -198,24 +223,26 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
 
   const downloadExampleTheme = async (): Promise<boolean> => {
     const lightTheme = BUILTIN_THEMES.find((t) => t.id === 'light') ?? BUILTIN_THEMES[0]
+    // titleBarOverlay is deliberately omitted: it's derived from --sidebar /
+    // --muted-foreground in `colors` on upload, so the example doesn't need
+    // (and shouldn't show) a hex duplicate that could drift out of sync.
     const payload: CustomThemePack = {
-      id: 'my-custom-theme',
-      name: 'My custom theme (based on Light)',
+      id: 'example-theme',
+      name: 'Example theme',
       mode: lightTheme.mode,
-      colors: lightTheme.colors,
-      titleBarOverlay: lightTheme.titleBarOverlay
+      colors: lightTheme.colors
     }
-    return window.maddoner.saveConfigFile('maddoner-theme-example.json', JSON.stringify(payload, null, 2))
+    return window.maddoner.saveConfigFile('example-theme.json', JSON.stringify(payload, null, 2))
   }
 
   const downloadExampleLocale = async (): Promise<boolean> => {
     const payload: CustomLocalePack = {
-      id: 'my-custom-language',
-      name: 'My custom language (based on English)',
+      id: 'example-lang',
+      name: 'Example language',
       shortLabel: 'XX',
       dictionary: en
     }
-    return window.maddoner.saveConfigFile('maddoner-locale-example.json', JSON.stringify(payload, null, 2))
+    return window.maddoner.saveConfigFile('example-lang.json', JSON.stringify(payload, null, 2))
   }
 
   return (
