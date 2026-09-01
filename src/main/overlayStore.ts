@@ -1,4 +1,4 @@
-﻿import {
+import {
   existsSync,
   mkdirSync,
   readdirSync,
@@ -15,73 +15,16 @@ const FOLDERS_FILE = "folders.json";
  * Persists CustomOverlay scenes as individual JSON files inside
  * `<profileDir>/overlays/<id>.json`, and OverlayFolder list as a single
  * `<profileDir>/overlays/folders.json`.
- *
- * On construction it auto-migrates legacy data that may still live in
- * `config.json` under the keys `customOverlays` / `customOverlayFolders`.
  */
 export class OverlayStore {
   private readonly dir: string;
   private readonly foldersPath: string;
 
-  constructor(profileDir: string, legacyConfigPath?: string) {
+  constructor(profileDir: string) {
     this.dir = join(profileDir, "overlays");
     this.foldersPath = join(this.dir, FOLDERS_FILE);
 
     if (!existsSync(this.dir)) mkdirSync(this.dir, { recursive: true });
-
-    if (legacyConfigPath) this.migrateFromConfig(legacyConfigPath);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Migration
-  // ---------------------------------------------------------------------------
-
-  /**
-   * One-shot migration: reads `customOverlays` / `customOverlayFolders` from
-   * the legacy `config.json` and writes them into the new per-file layout.
-   * Removes the migrated keys from `config.json` so the migration does not run
-   * again on the next start.
-   */
-  private migrateFromConfig(configPath: string): void {
-    if (!existsSync(configPath)) return;
-
-    let raw: Record<string, unknown>;
-    try {
-      raw = JSON.parse(readFileSync(configPath, "utf-8")) as Record<
-        string,
-        unknown
-      >;
-    } catch {
-      return;
-    }
-
-    const overlays = raw["customOverlays"];
-    const folders = raw["customOverlayFolders"];
-
-    if (!Array.isArray(overlays) && !Array.isArray(folders)) return;
-
-    // Write overlays only if they do not already exist on disk (so we never
-    // clobber newer data with stale config.json content).
-    if (Array.isArray(overlays)) {
-      for (const overlay of overlays as CustomOverlay[]) {
-        const dest = this.pathFor(overlay.id);
-        if (!existsSync(dest)) {
-          writeFileSync(dest, JSON.stringify(overlay, null, 2), "utf-8");
-        }
-      }
-    }
-
-    if (Array.isArray(folders) && !existsSync(this.foldersPath)) {
-      writeFileSync(
-        this.foldersPath,
-        JSON.stringify(folders, null, 2),
-        "utf-8",
-      );
-    }
-
-    // Strip migrated keys from config.json so this branch never fires again.
-    const { customOverlays: _co, customOverlayFolders: _cf, ...rest } = raw;
-    writeFileSync(configPath, JSON.stringify(rest, null, 2), "utf-8");
   }
 
   // ---------------------------------------------------------------------------

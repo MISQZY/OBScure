@@ -8,6 +8,8 @@ import { OverlayServer } from "./overlayServer";
 import { ConfigStore } from "./configStore";
 import { ProfileManager } from "./profileStore";
 import { OverlayStore } from "./overlayStore";
+import { ThemeStore } from "./themeStore";
+import { runAllMigrations } from "./migrations";
 import { buildAppShellCsp } from "./csp";
 import { NowPlayingCache } from "./nowPlayingCache";
 import { SpotifyIntegration } from "./integrations/spotify";
@@ -24,7 +26,7 @@ import { registerIntegrationsHandlers } from "./ipc/integrationsHandlers";
 import { initUpdater } from "./updater";
 import { initLogger, logError, logInfo, logWarn } from "./logger";
 import type { NowPlayingPayload } from "../shared/types";
-import type { CustomLocalePack, CustomThemePack } from "../shared/customConfig";
+import type { CustomLocalePack } from "../shared/customConfig";
 import {
   DEFAULT_EVENTS_CONFIGS,
   normalizeRandomConfig,
@@ -70,6 +72,8 @@ if (
   renameSync(oldUserDataDir, newUserDataDir);
 }
 
+runAllMigrations(app.getPath("userData"));
+
 const DEFAULT_OVERLAY_HOST = "127.0.0.1";
 const DEFAULT_OVERLAY_PORT = 47890;
 
@@ -94,10 +98,8 @@ if (!existsSync(customImagesDir))
 
 const profileManager = new ProfileManager(app.getPath("userData"));
 let config = new ConfigStore(profileManager.getActiveProfileDir());
-let overlayStore = new OverlayStore(
-  profileManager.getActiveProfileDir(),
-  join(profileManager.getActiveProfileDir(), "config.json"),
-);
+let overlayStore = new OverlayStore(profileManager.getActiveProfileDir());
+const themeStore = new ThemeStore(app.getPath("userData"));
 
 function getStoredCanvasConfig(): CanvasConfig {
   return normalizeCanvasConfig(
@@ -121,10 +123,6 @@ function getStoredRouletteConfig(): RouletteConfig {
       DEFAULT_EVENTS_CONFIGS.roulette,
     ),
   );
-}
-
-function getStoredCustomThemes(): CustomThemePack[] {
-  return config.getSetting<CustomThemePack[]>("customThemes", []);
 }
 
 function getStoredCustomLocales(): CustomLocalePack[] {
@@ -235,10 +233,7 @@ async function reinitializeForActiveProfile(): Promise<void> {
 
   const profileDir = profileManager.getActiveProfileDir();
   config = new ConfigStore(profileDir);
-  overlayStore = new OverlayStore(
-    profileDir,
-    join(profileDir, "config.json"),
-  );
+  overlayStore = new OverlayStore(profileDir);
 
   integrations = {
     spotify: new SpotifyIntegration("spotify", eventBus, config),
@@ -317,9 +312,9 @@ function createMainWindow(): void {
 registerOverlayHandlers({
   config: () => config,
   overlayStore: () => overlayStore,
+  themeStore,
   overlayServer,
   mainWindow: () => mainWindow,
-  getStoredCustomThemes,
   getStoredCustomLocales,
 });
 

@@ -139,7 +139,6 @@ export type SettingKey =
   | 'overlay.port'
   | 'customOverlays'
   | 'customOverlayFolders'
-  | 'customThemes'
   | 'customLocales'
 
 export interface ConnectResult {

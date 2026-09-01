@@ -4,6 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import type { ConfigStore } from "../configStore";
 import type { OverlayStore } from "../overlayStore";
+import type { ThemeStore } from "../themeStore";
 import type { OverlayServer } from "../overlayServer";
 import type {
   CustomOverlay,
@@ -20,9 +21,9 @@ import type {
 interface OverlayHandlersDeps {
   config: () => ConfigStore;
   overlayStore: () => OverlayStore;
+  themeStore: ThemeStore;
   overlayServer: OverlayServer;
   mainWindow: () => BrowserWindow | null;
-  getStoredCustomThemes: () => CustomThemePack[];
   getStoredCustomLocales: () => CustomLocalePack[];
 }
 
@@ -30,9 +31,9 @@ export function registerOverlayHandlers(deps: OverlayHandlersDeps): void {
   const {
     config,
     overlayStore,
+    themeStore,
     overlayServer,
     mainWindow,
-    getStoredCustomThemes,
     getStoredCustomLocales,
   } = deps;
 
@@ -122,7 +123,32 @@ export function registerOverlayHandlers(deps: OverlayHandlersDeps): void {
   );
 
   // ---------------------------------------------------------------------------
-  // Themes & locales — still live in config.json (small, rarely change)
+  // Themes — per-file storage via ThemeStore (userData/themes/, not profile-scoped)
+  // ---------------------------------------------------------------------------
+
+  ipcMain.handle(
+    "theme:getCustomThemes",
+    (): CustomThemePack[] => themeStore.listThemes(),
+  );
+
+  ipcMain.handle(
+    "theme:saveCustomTheme",
+    (_event, theme: CustomThemePack): CustomThemePack[] => {
+      themeStore.saveTheme(theme);
+      return themeStore.listThemes();
+    },
+  );
+
+  ipcMain.handle(
+    "theme:deleteCustomTheme",
+    (_event, id: string): CustomThemePack[] => {
+      themeStore.deleteTheme(id);
+      return themeStore.listThemes();
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // Locales — still live in config.json (small, rarely change)
   // ---------------------------------------------------------------------------
 
   function registerCustomPackHandlers<T extends { id: string }>(
@@ -152,13 +178,6 @@ export function registerOverlayHandlers(deps: OverlayHandlersDeps): void {
     });
   }
 
-  registerCustomPackHandlers(
-    "theme:getCustomThemes",
-    "theme:saveCustomTheme",
-    "theme:deleteCustomTheme",
-    "customThemes",
-    getStoredCustomThemes,
-  );
   registerCustomPackHandlers(
     "locale:getCustomLocales",
     "locale:saveCustomLocale",
