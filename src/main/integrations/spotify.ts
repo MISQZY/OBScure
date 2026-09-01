@@ -1,6 +1,7 @@
 import { net, shell } from "electron";
 import { BaseIntegration } from "./types";
 import { waitForRedirect } from "../oauth/callbackServer";
+import { logError } from "../logger";
 import {
   generateCodeChallenge,
   generateCodeVerifier,
@@ -38,10 +39,12 @@ interface SpotifyTokenResponse {
 
 interface SpotifyCurrentlyPlaying {
   is_playing: boolean;
+  /** Only 'track' has `artists`/`album` — an ad break or a podcast episode still populates `item` but with a different shape, so those fields must be treated as optional rather than assumed present. */
+  currently_playing_type: "track" | "episode" | "ad" | "unknown";
   item: {
     name: string;
-    artists: Array<{ name: string }>;
-    album: { images: Array<{ url: string }> };
+    artists?: Array<{ name: string }>;
+    album?: { images: Array<{ url: string }> };
   } | null;
 }
 
@@ -50,6 +53,7 @@ export class SpotifyIntegration extends BaseIntegration {
   private accessTokenExpiresAt = 0;
   private lastKey = "";
   private lastLoggedStatus = 0;
+  private lastLoggedNoTrackItem = false;
 
   async start(): Promise<void> {
     const clientId = this.config.getSetting<string | null>(
@@ -66,7 +70,8 @@ export class SpotifyIntegration extends BaseIntegration {
       await this.refreshAccessToken(clientId, refreshToken);
       this.setStatus("connected");
       this.startPolling(() => this.poll(), POLL_INTERVAL_MS);
-    } catch {
+    } catch (error) {
+      logError("spotify", "failed to refresh access token on startup", error);
       this.setStatus("error");
     }
   }
@@ -74,6 +79,7 @@ export class SpotifyIntegration extends BaseIntegration {
   stop(): void {
     this.stopPolling();
     this.lastKey = "";
+    this.lastLoggedNoTrackItem = false;
   }
 
   private async poll(): Promise<void> {
@@ -107,16 +113,34 @@ export class SpotifyIntegration extends BaseIntegration {
       let artist = "";
       let albumArt: string | undefined;
       if (response.status === 200) {
-        const body = (await response.json()) as SpotifyCurrentlyPlaying;
-        isPlaying = body.is_playing;
-        title = body.item?.name ?? "";
-        artist = body.item?.artists.map((a) => a.name).join(", ") ?? "";
-        albumArt = body.item?.album.images[0]?.url;
+        const bodyText = await response.text();
+        const body = bodyText ? (JSON.parse(bodyText) as SpotifyCurrentlyPlaying) : null;
+        isPlaying = body?.is_playing ?? false;
+        // Ads and podcast episodes still populate `item`, just without `artists`/`album` —
+        // treat anything that isn't a plain track as "nothing to show" instead of crashing.
+        if (body?.item && body.currently_playing_type === "track" && body.item.artists) {
+          title = body.item.name;
+          artist = body.item.artists.map((a) => a.name).join(", ");
+          albumArt = body.item.album?.images[0]?.url;
+          this.lastLoggedNoTrackItem = false;
+        } else if (body?.item) {
+          if (!this.lastLoggedNoTrackItem) {
+            this.lastLoggedNoTrackItem = true;
+            logError(
+              "spotify",
+              `now-playing item has no usable track data (currently_playing_type=${body.currently_playing_type}) — likely an ad break or podcast episode, will retry next poll`,
+            );
+          }
+        } else {
+          this.lastLoggedNoTrackItem = false;
+        }
       } else {
         if (response.status !== this.lastLoggedStatus) {
           this.lastLoggedStatus = response.status;
-          console.error(
-            `[spotify] now-playing poll got HTTP ${response.status} instead of 200 — track will stay frozen until this clears`,
+          const bodyText = await response.text().catch(() => "");
+          logError(
+            "spotify",
+            `now-playing poll got HTTP ${response.status} instead of 200 — track will stay frozen until this clears. Body: ${bodyText.slice(0, 500)}`,
           );
         }
         return;
@@ -137,10 +161,7 @@ export class SpotifyIntegration extends BaseIntegration {
         isPlaying,
       });
     } catch (error) {
-      console.error(
-        "[spotify] now-playing poll failed:",
-        error instanceof Error ? error.message : error,
-      );
+      logError("spotify", "now-playing poll failed", error);
     }
   }
 
