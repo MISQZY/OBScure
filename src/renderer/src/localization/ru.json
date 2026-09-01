@@ -4,7 +4,8 @@
     "overlays": "Оверлеи",
     "tools": "Инструменты",
     "integrations": "Интеграции",
-    "settings": "Настройки"
+    "settings": "Настройки",
+    "releaseNotes": "Список изменений на GitHub"
   },
   "updater": {
     "update": "Обновить",

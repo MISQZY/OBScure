@@ -25,6 +25,8 @@ import { uniqueUrlKey } from '@/lib/custom-overlays'
 import { useAppUpdater } from '@/hooks/use-app-updater'
 import { interpolate } from '@/lib/i18n/interpolate'
 
+const RELEASES_URL = 'https://github.com/MISQZY/OBScure/releases'
+
 interface AppSidebarProps {
   active: NavKey
   onNavigate: (key: NavKey) => void
@@ -286,7 +288,18 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
           </button>
         )}
         <p className="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
-          {appVersion && `v${appVersion} `}by MISQZY
+          {appVersion && (
+            <>
+              <button
+                onClick={() => window.maddoner.openExternal(RELEASES_URL)}
+                className="hover:text-foreground hover:underline"
+                title={t.sidebar.releaseNotes}
+              >
+                v{appVersion}
+              </button>{' '}
+            </>
+          )}
+          by MISQZY
         </p>
       </SidebarFooter>
     </Sidebar>

@@ -20,6 +20,7 @@ import type { CustomLocalePack, CustomThemePack } from '../shared/customConfig'
 
 export interface MaddonerApi {
   getAppVersion: () => Promise<string>
+  openExternal: (url: string) => Promise<void>
   getOverlayUrls: () => Promise<OverlayUrls>
   updateOverlayAddress: (address: OverlayAddress) => Promise<OverlayUrls>
   getSystemFonts: () => Promise<string[]>

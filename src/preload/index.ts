@@ -21,6 +21,7 @@ import type { CustomLocalePack, CustomThemePack } from '../shared/customConfig'
 
 const api = {
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),
+  openExternal: (url: string): Promise<void> => ipcRenderer.invoke('app:openExternal', url),
   getOverlayUrls: (): Promise<OverlayUrls> => ipcRenderer.invoke('overlay:getUrls'),
   updateOverlayAddress: (address: OverlayAddress): Promise<OverlayUrls> =>
     ipcRenderer.invoke('overlay:updateAddress', address),

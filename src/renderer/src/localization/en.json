@@ -4,7 +4,8 @@
     "overlays": "Overlays",
     "tools": "Tools",
     "integrations": "Integrations",
-    "settings": "Settings"
+    "settings": "Settings",
+    "releaseNotes": "View release notes on GitHub"
   },
   "updater": {
     "update": "Update",

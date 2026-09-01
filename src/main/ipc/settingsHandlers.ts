@@ -1,4 +1,4 @@
-import { app, ipcMain } from "electron";
+import { app, ipcMain, shell } from "electron";
 import type { BrowserWindow } from "electron";
 import { getFonts } from "font-list";
 import type { ConfigStore } from "../configStore";
@@ -33,6 +33,11 @@ export function registerSettingsHandlers(deps: SettingsHandlersDeps): void {
   });
 
   ipcMain.handle("app:getVersion", (): string => app.getVersion());
+
+  ipcMain.handle("app:openExternal", (_event, url: string): void => {
+    if (!/^https:\/\//.test(url)) return;
+    void shell.openExternal(url);
+  });
 
   ipcMain.handle("canvas:getConfig", (): CanvasConfig =>
     getStoredCanvasConfig(),
