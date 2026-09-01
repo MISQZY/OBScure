@@ -3,6 +3,7 @@ import type { BrowserWindow } from "electron";
 import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import type { ConfigStore } from "../configStore";
+import type { OverlayStore } from "../overlayStore";
 import type { OverlayServer } from "../overlayServer";
 import type {
   CustomOverlay,
@@ -18,10 +19,9 @@ import type {
 
 interface OverlayHandlersDeps {
   config: () => ConfigStore;
+  overlayStore: () => OverlayStore;
   overlayServer: OverlayServer;
   mainWindow: () => BrowserWindow | null;
-  getStoredCustomOverlays: () => CustomOverlay[];
-  getStoredCustomOverlayFolders: () => OverlayFolder[];
   getStoredCustomThemes: () => CustomThemePack[];
   getStoredCustomLocales: () => CustomLocalePack[];
 }
@@ -29,10 +29,9 @@ interface OverlayHandlersDeps {
 export function registerOverlayHandlers(deps: OverlayHandlersDeps): void {
   const {
     config,
+    overlayStore,
     overlayServer,
     mainWindow,
-    getStoredCustomOverlays,
-    getStoredCustomOverlayFolders,
     getStoredCustomThemes,
     getStoredCustomLocales,
   } = deps;
@@ -50,6 +49,81 @@ export function registerOverlayHandlers(deps: OverlayHandlersDeps): void {
       return overlayServer.getOverlayUrls();
     },
   );
+
+  // ---------------------------------------------------------------------------
+  // Custom overlays — per-file storage via OverlayStore
+  // ---------------------------------------------------------------------------
+
+  ipcMain.handle(
+    "overlay:getCustomOverlays",
+    (): CustomOverlay[] => overlayStore().listOverlays(),
+  );
+
+  ipcMain.handle(
+    "overlay:saveCustomOverlay",
+    (_event, overlay: CustomOverlay): CustomOverlay[] => {
+      overlayStore().saveOverlay(overlay);
+      const next = overlayStore().listOverlays();
+      overlayServer.setCustomOverlays(next);
+      return next;
+    },
+  );
+
+  ipcMain.handle(
+    "overlay:deleteCustomOverlay",
+    (_event, id: string): CustomOverlay[] => {
+      overlayStore().deleteOverlay(id);
+      const next = overlayStore().listOverlays();
+      overlayServer.setCustomOverlays(next);
+      return next;
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // Overlay folders — stored in overlays/folders.json via OverlayStore
+  // ---------------------------------------------------------------------------
+
+  ipcMain.handle(
+    "overlay:getCustomOverlayFolders",
+    (): OverlayFolder[] => overlayStore().listFolders(),
+  );
+
+  ipcMain.handle(
+    "overlay:saveCustomOverlayFolder",
+    (_event, folder: OverlayFolder): OverlayFolder[] => {
+      const current = overlayStore().listFolders();
+      const exists = current.some((f) => f.id === folder.id);
+      const next = exists
+        ? current.map((f) => (f.id === folder.id ? folder : f))
+        : [...current, folder];
+      overlayStore().saveFolders(next);
+      return next;
+    },
+  );
+
+  ipcMain.handle(
+    "overlay:deleteCustomOverlayFolder",
+    (_event, id: string): OverlayFolder[] => {
+      const folders = overlayStore().listFolders();
+      const next = folders.filter((f) => f.id !== id);
+      overlayStore().saveFolders(next);
+
+      // Deleting a folder only ungroups its scenes — it never deletes them.
+      const overlays = overlayStore().listOverlays();
+      const affected = overlays.filter((o) => o.folderId === id);
+      if (affected.length > 0) {
+        for (const o of affected) {
+          overlayStore().saveOverlay({ ...o, folderId: undefined });
+        }
+        overlayServer.setCustomOverlays(overlayStore().listOverlays());
+      }
+      return next;
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // Themes & locales — still live in config.json (small, rarely change)
+  // ---------------------------------------------------------------------------
 
   function registerCustomPackHandlers<T extends { id: string }>(
     getKey: string,
@@ -78,48 +152,6 @@ export function registerOverlayHandlers(deps: OverlayHandlersDeps): void {
     });
   }
 
-  registerCustomPackHandlers(
-    "overlay:getCustomOverlays",
-    "overlay:saveCustomOverlay",
-    "overlay:deleteCustomOverlay",
-    "customOverlays",
-    getStoredCustomOverlays,
-    (next) => overlayServer.setCustomOverlays(next as CustomOverlay[]),
-  );
-
-  ipcMain.handle(
-    "overlay:getCustomOverlayFolders",
-    (): OverlayFolder[] => getStoredCustomOverlayFolders(),
-  );
-  ipcMain.handle(
-    "overlay:saveCustomOverlayFolder",
-    (_event, folder: OverlayFolder): OverlayFolder[] => {
-      const current = getStoredCustomOverlayFolders();
-      const exists = current.some((f) => f.id === folder.id);
-      const next = exists
-        ? current.map((f) => (f.id === folder.id ? folder : f))
-        : [...current, folder];
-      config().setSetting("customOverlayFolders", next);
-      return next;
-    },
-  );
-  ipcMain.handle(
-    "overlay:deleteCustomOverlayFolder",
-    (_event, id: string): OverlayFolder[] => {
-      const next = getStoredCustomOverlayFolders().filter((f) => f.id !== id);
-      config().setSetting("customOverlayFolders", next);
-      // Deleting a folder only ungroups its scenes — it never deletes them.
-      const overlays = getStoredCustomOverlays();
-      if (overlays.some((o) => o.folderId === id)) {
-        const nextOverlays = overlays.map((o) =>
-          o.folderId === id ? { ...o, folderId: undefined } : o,
-        );
-        config().setSetting("customOverlays", nextOverlays);
-        overlayServer.setCustomOverlays(nextOverlays);
-      }
-      return next;
-    },
-  );
   registerCustomPackHandlers(
     "theme:getCustomThemes",
     "theme:saveCustomTheme",

@@ -7,6 +7,7 @@ import { eventBus } from "./eventBus";
 import { OverlayServer } from "./overlayServer";
 import { ConfigStore } from "./configStore";
 import { ProfileManager } from "./profileStore";
+import { OverlayStore } from "./overlayStore";
 import { buildAppShellCsp } from "./csp";
 import { NowPlayingCache } from "./nowPlayingCache";
 import { SpotifyIntegration } from "./integrations/spotify";
@@ -22,7 +23,7 @@ import { registerProfileHandlers } from "./ipc/profileHandlers";
 import { registerIntegrationsHandlers } from "./ipc/integrationsHandlers";
 import { initUpdater } from "./updater";
 import { initLogger, logError, logInfo, logWarn } from "./logger";
-import type { CustomOverlay, OverlayFolder, NowPlayingPayload } from "../shared/types";
+import type { NowPlayingPayload } from "../shared/types";
 import type { CustomLocalePack, CustomThemePack } from "../shared/customConfig";
 import {
   DEFAULT_EVENTS_CONFIGS,
@@ -93,6 +94,10 @@ if (!existsSync(customImagesDir))
 
 const profileManager = new ProfileManager(app.getPath("userData"));
 let config = new ConfigStore(profileManager.getActiveProfileDir());
+let overlayStore = new OverlayStore(
+  profileManager.getActiveProfileDir(),
+  join(profileManager.getActiveProfileDir(), "config.json"),
+);
 
 function getStoredCanvasConfig(): CanvasConfig {
   return normalizeCanvasConfig(
@@ -118,14 +123,6 @@ function getStoredRouletteConfig(): RouletteConfig {
   );
 }
 
-function getStoredCustomOverlays(): CustomOverlay[] {
-  return config.getSetting<CustomOverlay[]>("customOverlays", []);
-}
-
-function getStoredCustomOverlayFolders(): OverlayFolder[] {
-  return config.getSetting<OverlayFolder[]>("customOverlayFolders", []);
-}
-
 function getStoredCustomThemes(): CustomThemePack[] {
   return config.getSetting<CustomThemePack[]>("customThemes", []);
 }
@@ -141,8 +138,9 @@ const overlayServer = new OverlayServer({
   overlaysDir,
   customSoundsDir,
   customImagesDir,
-  initialCustomOverlays: getStoredCustomOverlays(),
+  initialCustomOverlays: overlayStore.listOverlays(),
 });
+
 
 let integrations = {
   spotify: new SpotifyIntegration("spotify", eventBus, config),
@@ -235,7 +233,12 @@ async function reinitializeForActiveProfile(): Promise<void> {
   nowPlayingFileCache.reset();
   overlayServer.pushNowPlaying(null);
 
-  config = new ConfigStore(profileManager.getActiveProfileDir());
+  const profileDir = profileManager.getActiveProfileDir();
+  config = new ConfigStore(profileDir);
+  overlayStore = new OverlayStore(
+    profileDir,
+    join(profileDir, "config.json"),
+  );
 
   integrations = {
     spotify: new SpotifyIntegration("spotify", eventBus, config),
@@ -254,7 +257,7 @@ async function reinitializeForActiveProfile(): Promise<void> {
     await overlayServer.restart({ host, port });
   }
 
-  overlayServer.setCustomOverlays(getStoredCustomOverlays());
+  overlayServer.setCustomOverlays(overlayStore.listOverlays());
   mainWindow?.webContents.reload();
 }
 
@@ -313,10 +316,9 @@ function createMainWindow(): void {
 
 registerOverlayHandlers({
   config: () => config,
+  overlayStore: () => overlayStore,
   overlayServer,
   mainWindow: () => mainWindow,
-  getStoredCustomOverlays,
-  getStoredCustomOverlayFolders,
   getStoredCustomThemes,
   getStoredCustomLocales,
 });
