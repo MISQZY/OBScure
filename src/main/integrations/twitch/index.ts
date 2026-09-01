@@ -403,13 +403,24 @@ export class TwitchIntegration extends BaseIntegration {
       }),
     });
 
-    if (!response.ok && response.status !== 409) {
+    if (!response.ok) {
       // Same reasoning as fetchBroadcasterId: a 401 means the client
       // ID/token are invalid, not a transient failure — stop retrying.
       if (response.status === 401) {
         throw new TwitchAuthError(
           `Twitch rejected the Client ID or token while subscribing to ${type} (401)`,
         );
+      }
+      // 409 = duplicate (already subscribed, harmless).
+      // 429 = subscription unavailable for this channel tier (e.g. channel.subscribe
+      //        requires affiliate/partner status) — treat as a soft skip so the rest
+      //        of the subscriptions proceed and the reconnect loop is not triggered.
+      if (response.status === 409 || response.status === 429) {
+        logWarn(
+          "twitch",
+          `skipping subscription to ${type} (${response.status}) — not available for this channel`,
+        );
+        return;
       }
       throw new Error(
         `Twitch rejected the subscription to ${type} (${response.status})`,
