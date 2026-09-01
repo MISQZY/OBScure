@@ -5,6 +5,16 @@ import { CopyableUrl } from '@/components/CopyableUrl'
 import { slugify } from '@/lib/custom-overlays'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/providers/I18nProvider'
+import { interpolate } from '@/lib/i18n/interpolate'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from '@/components/ui/alert-dialog'
 import type { SaveStatus } from '../sceneUtils'
 
 /**
@@ -93,13 +103,27 @@ export function SceneBuilderToolbar({
           aria-label="Scene name"
           className="min-w-0 flex-1 bg-transparent text-lg font-semibold tracking-tight text-foreground outline-none border-b border-transparent rounded-sm px-0.5 -mx-0.5 hover:border-border focus:border-primary transition-colors"
         />
-        <button
-          onClick={onDelete}
-          title={t.sceneBuilder.nav.deleteScene}
-          className="flex items-center justify-center p-2 rounded-md border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors shrink-0"
-        >
-          <Trash2 className="size-4" />
-        </button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <button
+              title={t.sceneBuilder.nav.deleteScene}
+              className="flex items-center justify-center p-2 rounded-md border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+            >
+              <Trash2 className="size-4" />
+            </button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogTitle>
+              {interpolate(t.sceneBuilder.nav.deleteSceneConfirm, { name: overlay.name })}
+            </AlertDialogTitle>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+              <AlertDialogAction variant="destructive" onClick={onDelete}>
+                {t.common.delete}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       <div className="flex flex-col gap-1">

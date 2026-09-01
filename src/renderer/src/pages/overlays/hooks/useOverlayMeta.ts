@@ -100,7 +100,6 @@ export function useOverlayMeta({
 
   const handleDelete = async (): Promise<void> => {
     if (!overlay) return
-    if (!window.confirm(`Delete scene "${overlay.name}"? This cannot be undone.`)) return
     await deleteOverlay(overlay.id)
     onNavigate('dashboard')
   }

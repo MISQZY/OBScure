@@ -8,6 +8,15 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -62,8 +71,6 @@ export function ManageProfilesDialog({ open, onOpenChange }: ManageProfilesDialo
 
   const handleDelete = async (profile: Profile): Promise<void> => {
     if (profiles.length <= 1) return
-    const message = interpolate(t.profiles.deleteConfirm, { name: profile.name })
-    if (!window.confirm(message)) return
     setBusyId(profile.id)
     await window.maddoner.deleteProfile(profile.id)
     if (profile.id !== activeId) {
@@ -132,15 +139,29 @@ export function ManageProfilesDialog({ open, onOpenChange }: ManageProfilesDialo
                   </Button>
                 )}
 
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  title={t.profiles.deleteTooltip}
-                  disabled={profiles.length <= 1 || isBusy}
-                  onClick={() => void handleDelete(profile)}
-                >
-                  <Trash2 className={cn('text-destructive')} />
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      title={t.profiles.deleteTooltip}
+                      disabled={profiles.length <= 1 || isBusy}
+                    >
+                      <Trash2 className={cn('text-destructive')} />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogTitle>
+                      {interpolate(t.profiles.deleteConfirm, { name: profile.name })}
+                    </AlertDialogTitle>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+                      <AlertDialogAction variant="destructive" onClick={() => void handleDelete(profile)}>
+                        {t.common.delete}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )
           })}

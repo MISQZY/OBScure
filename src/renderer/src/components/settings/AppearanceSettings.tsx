@@ -4,6 +4,15 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { ThemeSelect } from '@/components/settings/ThemeSelect'
 import { LocaleSelect } from '@/components/settings/LocaleSelect'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from '@/components/ui/alert-dialog'
 import { useI18n } from '@/providers/I18nProvider'
 import { useCustomConfig } from '@/providers/CustomConfigProvider'
 import { interpolate } from '@/lib/i18n/interpolate'
@@ -23,12 +32,13 @@ export function AppearanceSettings() {
   } = useCustomConfig()
   const [uploadingTheme, setUploadingTheme] = useState(false)
   const [uploadingLocale, setUploadingLocale] = useState(false)
+  const [invalidFileNotice, setInvalidFileNotice] = useState<'theme' | 'locale' | null>(null)
 
   const handleUploadTheme = async (): Promise<void> => {
     setUploadingTheme(true)
     try {
       const result = await uploadTheme()
-      if (result === 'invalid') window.alert(s.invalidThemeFile)
+      if (result === 'invalid') setInvalidFileNotice('theme')
     } finally {
       setUploadingTheme(false)
     }
@@ -38,19 +48,17 @@ export function AppearanceSettings() {
     setUploadingLocale(true)
     try {
       const result = await uploadLocale()
-      if (result === 'invalid') window.alert(s.invalidLocaleFile)
+      if (result === 'invalid') setInvalidFileNotice('locale')
     } finally {
       setUploadingLocale(false)
     }
   }
 
-  const handleDeleteTheme = async (id: string, name: string): Promise<void> => {
-    if (!window.confirm(interpolate(s.deleteConfirm, { name }))) return
+  const handleDeleteTheme = async (id: string): Promise<void> => {
     await deleteCustomTheme(id)
   }
 
-  const handleDeleteLocale = async (id: string, name: string): Promise<void> => {
-    if (!window.confirm(interpolate(s.deleteConfirm, { name }))) return
+  const handleDeleteLocale = async (id: string): Promise<void> => {
     await deleteCustomLocale(id)
   }
 
@@ -77,15 +85,24 @@ export function AppearanceSettings() {
               {customThemes.map((theme) => (
                 <li key={theme.id} className="flex items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 text-sm">
                   <span>{theme.name}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={s.deleteCustom}
-                    onClick={() => void handleDeleteTheme(theme.id, theme.name ?? theme.id)}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button type="button" variant="ghost" size="icon" aria-label={s.deleteCustom}>
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogTitle>
+                        {interpolate(s.deleteConfirm, { name: theme.name ?? theme.id })}
+                      </AlertDialogTitle>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+                        <AlertDialogAction variant="destructive" onClick={() => void handleDeleteTheme(theme.id)}>
+                          {t.common.delete}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </li>
               ))}
             </ul>
@@ -114,21 +131,39 @@ export function AppearanceSettings() {
               {customLocales.map((entry) => (
                 <li key={entry.id} className="flex items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 text-sm">
                   <span>{entry.name}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={s.deleteCustom}
-                    onClick={() => void handleDeleteLocale(entry.id, entry.name)}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button type="button" variant="ghost" size="icon" aria-label={s.deleteCustom}>
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogTitle>{interpolate(s.deleteConfirm, { name: entry.name })}</AlertDialogTitle>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+                        <AlertDialogAction variant="destructive" onClick={() => void handleDeleteLocale(entry.id)}>
+                          {t.common.delete}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </li>
               ))}
             </ul>
           </div>
         )}
       </div>
+
+      <AlertDialog open={invalidFileNotice !== null} onOpenChange={(open) => !open && setInvalidFileNotice(null)}>
+        <AlertDialogContent>
+          <AlertDialogTitle>
+            {invalidFileNotice === 'theme' ? s.invalidThemeFile : s.invalidLocaleFile}
+          </AlertDialogTitle>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setInvalidFileNotice(null)}>{t.common.ok}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

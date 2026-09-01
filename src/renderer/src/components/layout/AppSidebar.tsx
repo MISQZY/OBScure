@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Download, LayoutDashboard, Layers, Plug, Settings, Workflow, Wrench, Plus, Trash2 } from 'lucide-react'
+import { ChevronRight, Download, LayoutDashboard, Layers, Plug, Settings, Workflow, Wrench, Plus } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -38,7 +38,7 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
   const [toolsOpen, setToolsOpen] = useState(true)
   const [integrationsOpen, setIntegrationsOpen] = useState(true)
   const [overlaysOpen, setOverlaysOpen] = useState(true)
-  const { overlays, saveOverlay, deleteOverlay } = useCustomOverlays()
+  const { overlays, saveOverlay } = useCustomOverlays()
 
   const isToolsActive = active.startsWith('tools/')
   const isIntegrationsActive = active.startsWith('integrations/')
@@ -145,10 +145,9 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
                       </SidebarMenuSubItem>
                     )}
                     {overlays.map((overlay) => (
-                      <SidebarMenuSubItem key={overlay.id} className="group/scene-item relative">
+                      <SidebarMenuSubItem key={overlay.id}>
                         <SidebarMenuSubButton
                           isActive={active === `overlays/custom/${overlay.id}`}
-                          className="pr-7"
                           onClick={(event) => {
                             event.preventDefault()
                             onNavigate(`overlays/custom/${overlay.id}` as NavKey)
@@ -157,19 +156,6 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
                           <Workflow />
                           <span>{overlay.name}</span>
                         </SidebarMenuSubButton>
-                        <button
-                          onClick={async (e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            if (!window.confirm(`Delete scene "${overlay.name}"?`)) return
-                            await deleteOverlay(overlay.id)
-                            if (active === `overlays/custom/${overlay.id}`) onNavigate('dashboard')
-                          }}
-                          className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center p-1 rounded opacity-0 group-hover/scene-item:opacity-100 hover:bg-sidebar-accent hover:text-destructive"
-                          title="Delete scene"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
                       </SidebarMenuSubItem>
                     ))}
                     {overlays.length === 0 && !isCreatingOverlay && (

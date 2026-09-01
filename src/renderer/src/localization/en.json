@@ -50,7 +50,10 @@
     "copy": "Copy",
     "copied": "Copied",
     "show": "Show",
-    "hide": "Hide"
+    "hide": "Hide",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "ok": "Got it"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -309,6 +312,7 @@
       "hidePalette": "Hide node palette",
       "dragToAdd": "Drag onto the canvas to add",
       "deleteScene": "Delete Scene",
+      "deleteSceneConfirm": "Delete scene \"{name}\"? This cannot be undone.",
       "urlKey": "URL key",
       "prettify": "Prettify — auto-arranges the node graph for readability. Only rearranges nodes locally; Save to keep it.",
       "save": "Save",
