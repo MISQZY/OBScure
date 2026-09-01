@@ -321,6 +321,8 @@
     "tooltip": {
       "expand": "Expand",
       "collapse": "Collapse",
+      "duplicate": "Duplicate",
+      "delete": "Delete",
       "help": "Help",
       "deleteNode": "Delete node",
       "notWired": "Not wired into rendering yet — this node can be placed and connected, but currently has no effect on the overlay.",

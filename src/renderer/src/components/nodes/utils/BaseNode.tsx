@@ -366,13 +366,13 @@ export function BaseNode({
         {canCollapse && (
           <ContextMenuItem onSelect={() => updateNodeData(id, { collapsed: !collapsed })}>
             {collapsed ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
-            {collapsed ? 'Expand' : 'Collapse'}
+            {collapsed ? t.sceneBuilder.tooltip.expand : t.sceneBuilder.tooltip.collapse}
           </ContextMenuItem>
         )}
         {deletable && (
           <ContextMenuItem onSelect={duplicateNode}>
             <Copy className="size-4" />
-            Duplicate
+            {t.sceneBuilder.tooltip.duplicate}
           </ContextMenuItem>
         )}
         {deletable && (
@@ -380,7 +380,7 @@ export function BaseNode({
             <ContextMenuSeparator />
             <ContextMenuItem variant="destructive" onSelect={() => deleteElements({ nodes: [{ id }] })}>
               <Trash2 className="size-4" />
-              Delete
+              {t.sceneBuilder.tooltip.delete}
             </ContextMenuItem>
           </>
         )}

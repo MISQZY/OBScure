@@ -140,16 +140,16 @@ export function FrameNode({ id, data, selected }: NodeProps) {
           <ContextMenuContent>
             <ContextMenuItem onSelect={toggleCollapse}>
               <ChevronDown className={cn('size-4', collapsed && '-rotate-90')} />
-              {collapsed ? 'Expand' : 'Collapse'}
+              {collapsed ? t.sceneBuilder.tooltip.expand : t.sceneBuilder.tooltip.collapse}
             </ContextMenuItem>
             <ContextMenuItem onSelect={duplicateNode}>
               <Copy className="size-4" />
-              Duplicate
+              {t.sceneBuilder.tooltip.duplicate}
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem variant="destructive" onSelect={() => deleteElements({ nodes: [{ id }] })}>
               <Trash2 className="size-4" />
-              Delete
+              {t.sceneBuilder.tooltip.delete}
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
