@@ -5,7 +5,8 @@
     "tools": "Инструменты",
     "integrations": "Интеграции",
     "settings": "Настройки",
-    "releaseNotes": "Список изменений на GitHub"
+    "releaseNotes": "Список изменений на GitHub",
+    "deleteFolderConfirm": "Удалить папку «{name}»? Оверлеи внутри не будут удалены."
   },
   "updater": {
     "update": "Обновить",

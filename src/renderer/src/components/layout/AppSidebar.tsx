@@ -253,7 +253,7 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
             </AlertDialogTrigger>
             <AlertDialogContent onClick={(e) => e.stopPropagation()}>
               <AlertDialogTitle>
-                {`Delete folder "${folder.name}"? Overlays inside will not be deleted.`}
+                {interpolate(t.sidebar.deleteFolderConfirm, { name: folder.name })}
               </AlertDialogTitle>
               <AlertDialogFooter>
                 <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>

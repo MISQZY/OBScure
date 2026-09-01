@@ -5,7 +5,8 @@
     "tools": "Tools",
     "integrations": "Integrations",
     "settings": "Settings",
-    "releaseNotes": "View release notes on GitHub"
+    "releaseNotes": "View release notes on GitHub",
+    "deleteFolderConfirm": "Delete folder \"{name}\"? Overlays inside will not be deleted."
   },
   "updater": {
     "update": "Update",
