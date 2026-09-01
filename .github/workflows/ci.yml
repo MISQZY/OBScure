@@ -47,9 +47,9 @@ jobs:
   # Windows target (NSIS/portable) is built on a GitHub-hosted windows-latest
   # runner rather than cross-compiled, so electron-builder's native NSIS
   # tooling and Electron's Windows binaries just work without extra setup.
-  # Both targets are built and published in one job (rather than two parallel
-  # jobs) so they publish to a single GitHub Release without racing each
-  # other to create it.
+  # Both targets are built and published in one job, as two sequential steps
+  # (see the comment below) so they land on a single GitHub Release without
+  # racing each other to create it.
   release:
     name: Build & publish release
     needs: [lint, typecheck]
@@ -74,7 +74,18 @@ jobs:
             ${{ runner.os }}-electron-builder-
       - run: npm ci
       - run: npm run build
-      - name: Build and publish (NSIS + portable)
+      # Built and published as two sequential invocations, not one
+      # `--win nsis portable`, because publishing both targets in the same
+      # electron-builder process races to create the GitHub Release for a
+      # tag that doesn't exist yet — each target's publisher can miss the
+      # other's in-flight draft and both end up creating one, leaving two
+      # duplicate releases. Running them one after another means the second
+      # invocation finds the release the first one already created.
+      - name: Build and publish (NSIS installer)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win --publish always
+        run: npx electron-builder --win nsis --publish always
+      - name: Build and publish (portable)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win portable --publish always
