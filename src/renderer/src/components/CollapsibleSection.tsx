@@ -18,6 +18,8 @@ interface CollapsibleSectionProps {
    * even while its content is collapsed.
    */
   tourId?: string
+  /** Indents content to align under the title text (skipping the chevron column). Default true. */
+  indentContent?: boolean
   children: ReactNode
 }
 
@@ -35,6 +37,7 @@ export function CollapsibleSection({
   className,
   headerExtra,
   tourId,
+  indentContent = true,
   children
 }: CollapsibleSectionProps) {
   const Heading = level
@@ -49,7 +52,7 @@ export function CollapsibleSection({
         {headerExtra}
       </div>
       <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
-        <div className="flex flex-col gap-3 pl-5.5">{children}</div>
+        <div className={cn('flex flex-col gap-3', indentContent && 'pl-5.5')}>{children}</div>
       </CollapsibleContent>
     </Collapsible>
   )

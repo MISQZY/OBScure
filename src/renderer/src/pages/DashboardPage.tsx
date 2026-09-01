@@ -1,35 +1,72 @@
-import { useEffect, useState } from 'react'
-import { Eye, Heart, Music2, Users } from 'lucide-react'
-import { CollapsibleSection } from '@/components/CollapsibleSection'
-import { INTEGRATION_KEYS, INTEGRATIONS_META } from '@/lib/integrations-meta'
-import { cn } from '@/lib/utils'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent
+} from '@dnd-kit/core'
+import { SortableContext, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable'
+import { Plus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { IntegrationsCard } from '@/components/dashboard/IntegrationsCard'
+import { NowPlayingCard } from '@/components/dashboard/NowPlayingCard'
+import { SortableCard } from '@/components/dashboard/SortableCard'
+import { TwitchStatsCard } from '@/components/dashboard/TwitchStatsCard'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import type { Dictionary } from '@/lib/i18n/types'
 import { useI18n } from '@/providers/I18nProvider'
 import type { IntegrationsStatusMap, NowPlayingPayload, TwitchChannelStats } from '@shared/types'
 
 /** Twitch's live status can flip and its stats drift while the dashboard sits open, so keep them fresh without a manual refresh. */
 const TWITCH_STATS_POLL_MS = 60_000
 
-function pad(value: number): string {
-  return value.toString().padStart(2, '0')
+const CARD_IDS = ['integrations', 'nowPlaying', 'twitchStats'] as const
+type CardId = (typeof CARD_IDS)[number]
+
+const CARD_TITLES: Record<CardId, (t: Dictionary) => string> = {
+  integrations: (t) => t.sidebar.integrations,
+  nowPlaying: (t) => t.dashboard.nowPlaying.title,
+  twitchStats: (t) => t.dashboard.twitchStats.title
 }
 
-/**
- * The host's local wall-clock time for `date`. Deliberately not
- * `toLocaleTimeString()` — that goes through Intl, which depends on full ICU
- * timezone data being available and has shown up rendering in UTC instead of
- * the system's zone. getHours()/getMinutes() are local time by spec
- * regardless of any ICU data, so they can't have the same failure mode.
- */
-function formatLocalTime(date: Date): string {
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`
+const LAYOUT_STORAGE_KEY = 'obscure:dashboard-layout'
+
+interface DashboardLayout {
+  /** Card order the user dragged into place. */
+  order: CardId[]
+  /** Cards the user removed via the card's trash button; brought back via the "+" menu. */
+  hidden: CardId[]
 }
 
-/** Live "stream has been running for" counter, same H:MM:SS shape as the roulette countdown (RouletteToolPage.tsx). */
-function formatElapsed(totalSeconds: number): string {
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`
+function isCardId(value: unknown): value is CardId {
+  return CARD_IDS.includes(value as CardId)
+}
+
+/** Purely a display preference, not app state — never blocks on it, always falls back to the default layout. */
+function readStoredLayout(): DashboardLayout {
+  try {
+    const raw = localStorage.getItem(LAYOUT_STORAGE_KEY)
+    const parsed: unknown = raw ? JSON.parse(raw) : null
+
+    // Legacy shape: a bare order array, from before cards could be hidden.
+    const orderSource = Array.isArray(parsed) ? parsed : (parsed as { order?: unknown })?.order
+    const hiddenSource = Array.isArray(parsed) ? [] : (parsed as { hidden?: unknown })?.hidden
+
+    const knownOrder = Array.isArray(orderSource) ? orderSource.filter(isCardId) : []
+    const missing = CARD_IDS.filter((id) => !knownOrder.includes(id))
+    const hidden = Array.isArray(hiddenSource) ? hiddenSource.filter(isCardId) : []
+
+    return { order: [...knownOrder, ...missing], hidden }
+  } catch {
+    return { order: [...CARD_IDS], hidden: [] }
+  }
 }
 
 export function DashboardPage() {
@@ -38,9 +75,11 @@ export function DashboardPage() {
   const [twitchStats, setTwitchStats] = useState<TwitchChannelStats | null>(null)
   const [nowPlaying, setNowPlaying] = useState<NowPlayingPayload | null>(null)
   const [now, setNow] = useState(() => Date.now())
+  const [layout, setLayout] = useState<DashboardLayout>(() => readStoredLayout())
   const twitchConnected = status?.twitch === 'connected'
   const nowPlayingAvailable = status?.spotify === 'connected' || status?.windowsMedia === 'connected'
-  const hasTrack = Boolean(nowPlaying && (nowPlaying.title || nowPlaying.artist))
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
 
   useEffect(() => {
     window.obscure.getIntegrationsStatus().then(setStatus)
@@ -80,168 +119,111 @@ export function DashboardPage() {
     return () => clearInterval(tick)
   }, [twitchStats?.isLive, twitchStats?.startedAt])
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout))
+    } catch {
+      // Layout just won't persist across restarts in this environment (e.g. private storage disabled).
+    }
+  }, [layout])
+
+  // A card only really exists once its integration is connected — hiding it is a user choice layered on top of that.
+  const available = useMemo<Record<CardId, boolean>>(
+    () => ({
+      integrations: true,
+      nowPlaying: nowPlayingAvailable,
+      twitchStats: twitchConnected
+    }),
+    [nowPlayingAvailable, twitchConnected]
+  )
+  const visibleOrder = useMemo(
+    () => layout.order.filter((id) => available[id] && !layout.hidden.includes(id)),
+    [layout, available]
+  )
+  const removableIds = useMemo(
+    () => layout.order.filter((id) => available[id] && layout.hidden.includes(id)),
+    [layout, available]
+  )
+
+  function handleDragEnd(event: DragEndEvent): void {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setLayout((prev) => {
+      const visible = prev.order.filter((id) => available[id] && !prev.hidden.includes(id))
+      const rest = prev.order.filter((id) => !visible.includes(id))
+      const oldIndex = visible.indexOf(active.id as CardId)
+      const newIndex = visible.indexOf(over.id as CardId)
+      if (oldIndex === -1 || newIndex === -1) return prev
+      return { ...prev, order: [...arrayMove(visible, oldIndex, newIndex), ...rest] }
+    })
+  }
+
+  function handleRemove(id: CardId): void {
+    setLayout((prev) => (prev.hidden.includes(id) ? prev : { ...prev, hidden: [...prev.hidden, id] }))
+  }
+
+  function handleAdd(id: CardId): void {
+    setLayout((prev) => ({ ...prev, hidden: prev.hidden.filter((hiddenId) => hiddenId !== id) }))
+  }
+
   return (
-    <div className="flex max-w-xl flex-col gap-8">
-      <div>
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold">{t.dashboard.title}</h1>
-        <p className="text-sm text-muted-foreground">{t.dashboard.description}</p>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              disabled={removableIds.length === 0}
+              aria-label={t.dashboard.addCard}
+              title={t.dashboard.addCard}
+            >
+              <Plus className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {removableIds.map((id) => (
+              <DropdownMenuItem key={id} onSelect={() => handleAdd(id)}>
+                {CARD_TITLES[id](t)}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      <CollapsibleSection
-        title={t.sidebar.integrations}
-        level="h2"
-        titleClassName="text-sm font-medium"
-        className="gap-2"
-        tourId="dashboard-integrations"
-      >
-        <div className="flex gap-3">
-          {INTEGRATION_KEYS.map((key) => {
-            const { label, icon: Icon } = INTEGRATIONS_META[key]
-            const connected = status?.[key] === 'connected'
-            return (
-              <div
-                key={key}
-                title={`${label}: ${connected ? t.status.connected : t.status.disconnected}`}
-                className={cn(
-                  'flex flex-col items-center gap-1.5 rounded-lg border p-3 transition-colors',
-                  connected
-                    ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                    : 'border-border bg-muted/40 text-muted-foreground'
-                )}
-              >
-                <Icon className="size-5" />
-                <span className="text-xs font-medium">{label}</span>
-              </div>
-            )
-          })}
-        </div>
-        <p className="text-xs text-muted-foreground">{t.dashboard.footerNote}</p>
-      </CollapsibleSection>
+      {visibleOrder.length === 0 && <p className="text-sm text-muted-foreground">{t.dashboard.noCards}</p>}
 
-      {nowPlayingAvailable && (
-        <CollapsibleSection
-          title={t.dashboard.nowPlaying.title}
-          level="h2"
-          titleClassName="text-sm font-medium"
-          className="gap-2"
-        >
-          <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 p-3">
-            <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-background">
-              {nowPlaying?.albumArt ? (
-                <img
-                  key={nowPlaying.albumArt}
-                  src={nowPlaying.albumArt}
-                  alt=""
-                  className="size-full object-cover"
-                  onError={(event) => {
-                    event.currentTarget.style.display = 'none'
-                  }}
-                />
-              ) : (
-                <Music2 className="size-5 text-muted-foreground" />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              {hasTrack && nowPlaying ? (
-                <>
-                  <p className="truncate text-sm font-medium">{nowPlaying.title || t.dashboard.nowPlaying.unknownTitle}</p>
-                  <p className="truncate text-xs text-muted-foreground">{nowPlaying.artist}</p>
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">{t.dashboard.nowPlaying.nothingPlaying}</p>
-              )}
-            </div>
-            {hasTrack && nowPlaying && (
-              <span
-                className={cn(
-                  'shrink-0 rounded-full px-2 py-0.5 text-xs font-medium',
-                  nowPlaying.isPlaying
-                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-muted text-muted-foreground'
-                )}
-              >
-                {nowPlaying.isPlaying ? t.dashboard.nowPlaying.playing : t.dashboard.nowPlaying.paused}
-              </span>
-            )}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={visibleOrder} strategy={rectSortingStrategy}>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] items-start gap-4">
+            {visibleOrder.map((id) => (
+              <SortableCard key={id} id={id} dragHandleLabel={t.dashboard.dragHandle}>
+                {(dragHandle) => {
+                  switch (id) {
+                    case 'integrations':
+                      return <IntegrationsCard status={status} dragHandle={dragHandle} onRemove={() => handleRemove(id)} />
+                    case 'nowPlaying':
+                      return (
+                        <NowPlayingCard nowPlaying={nowPlaying} dragHandle={dragHandle} onRemove={() => handleRemove(id)} />
+                      )
+                    case 'twitchStats':
+                      return (
+                        <TwitchStatsCard
+                          twitchStats={twitchStats}
+                          now={now}
+                          dragHandle={dragHandle}
+                          onRemove={() => handleRemove(id)}
+                        />
+                      )
+                  }
+                }}
+              </SortableCard>
+            ))}
           </div>
-        </CollapsibleSection>
-      )}
-
-      {twitchConnected && (
-        <CollapsibleSection
-          title={t.dashboard.twitchStats.title}
-          level="h2"
-          titleClassName="text-sm font-medium"
-          className="gap-2"
-        >
-          <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/40 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">
-                  {twitchStats?.isLive ? twitchStats.title || t.dashboard.twitchStats.title : t.dashboard.twitchStats.offline}
-                </p>
-                {twitchStats?.isLive && (
-                  <p className="text-xs text-muted-foreground">
-                    {twitchStats.gameName || t.dashboard.twitchStats.noCategory}
-                    {twitchStats.startedAt &&
-                      ` · ${t.dashboard.twitchStats.uptime} ${formatLocalTime(new Date(twitchStats.startedAt))} (${formatElapsed(
-                        Math.max(0, Math.floor((now - new Date(twitchStats.startedAt).getTime()) / 1000))
-                      )})`}
-                  </p>
-                )}
-              </div>
-              <span
-                className={cn(
-                  'shrink-0 rounded-full px-2 py-0.5 text-xs font-medium',
-                  twitchStats?.isLive
-                    ? 'bg-red-500/15 text-red-600 dark:text-red-400'
-                    : 'bg-muted text-muted-foreground'
-                )}
-              >
-                {twitchStats?.isLive ? t.dashboard.twitchStats.live : t.dashboard.twitchStats.offline}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <TwitchStatTile
-                icon={Eye}
-                label={t.dashboard.twitchStats.viewers}
-                value={twitchStats?.isLive ? twitchStats.viewerCount : null}
-                unavailable={t.dashboard.twitchStats.unavailable}
-              />
-              <TwitchStatTile
-                icon={Heart}
-                label={t.dashboard.twitchStats.followers}
-                value={twitchStats?.followerCount ?? null}
-                unavailable={t.dashboard.twitchStats.unavailable}
-              />
-              <TwitchStatTile
-                icon={Users}
-                label={t.dashboard.twitchStats.subscribers}
-                value={twitchStats?.subscriberCount ?? null}
-                unavailable={t.dashboard.twitchStats.unavailable}
-              />
-            </div>
-          </div>
-        </CollapsibleSection>
-      )}
-    </div>
-  )
-}
-
-interface TwitchStatTileProps {
-  icon: typeof Eye
-  label: string
-  value: number | null
-  unavailable: string
-}
-
-function TwitchStatTile({ icon: Icon, label, value, unavailable }: TwitchStatTileProps) {
-  return (
-    <div className="flex flex-col items-center gap-1 rounded-lg border border-border bg-background p-3 text-center">
-      <Icon className="size-4 text-muted-foreground" />
-      <span className="text-base font-semibold tabular-nums">{value === null ? '—' : value.toLocaleString()}</span>
-      <span className="text-xs text-muted-foreground">{value === null ? unavailable : label}</span>
+        </SortableContext>
+      </DndContext>
     </div>
   )
 }

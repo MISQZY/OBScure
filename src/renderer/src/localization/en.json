@@ -57,8 +57,11 @@
   },
   "dashboard": {
     "title": "Dashboard",
-    "description": "Overview of your overlays and integrations.",
     "footerNote": "Connection setup lives under \"Integrations\", overlay addresses and their customization under \"Overlays\".",
+    "dragHandle": "Drag to reorder",
+    "removeCard": "Remove card",
+    "addCard": "Add card",
+    "noCards": "All cards removed. Use the + button above to add one back.",
     "nowPlaying": {
       "title": "Now playing",
       "nothingPlaying": "Nothing playing",
