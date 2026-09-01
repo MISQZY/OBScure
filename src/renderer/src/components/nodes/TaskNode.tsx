@@ -1,6 +1,7 @@
 import React from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
 
+import { useI18n } from '@/providers/I18nProvider'
 import { TASK_SOCKETS } from './constants'
 import { BaseNode, Field, NodeSelect, TASK_ACTIONS } from './utils'
 
@@ -15,6 +16,7 @@ import { BaseNode, Field, NodeSelect, TASK_ACTIONS } from './utils'
  */
 export function TaskNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const { t } = useI18n()
   return (
     <BaseNode
       id={id}
@@ -24,7 +26,7 @@ export function TaskNode({ id, data }: NodeProps) {
       category="process"
       sockets={TASK_SOCKETS}
       sequenceIn
-      help="Wire the Target this step acts on, plus any modifiers into their own sockets. Sound needs a Target wired too (even an otherwise-inert Update step) — it's what anchors the sound to this moment."
+      help={t.sceneBuilder.tooltip.nodes.task}
     >
       <Field label="Action">
         <NodeSelect

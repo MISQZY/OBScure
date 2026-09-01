@@ -1,4 +1,5 @@
 import { Upload, X } from 'lucide-react'
+import { useI18n } from '@/providers/I18nProvider'
 
 /**
  * Upload/Remove row for a node-level file upload (ImageNode, SoundNode) —
@@ -22,6 +23,7 @@ export function UploadRow({
   onRemove: () => void
   label: string
 }) {
+  const { t } = useI18n()
   return (
     <div className="nodrag flex items-center gap-1.5">
       <button
@@ -37,7 +39,7 @@ export function UploadRow({
         <button
           type="button"
           onClick={onRemove}
-          title="Remove uploaded file"
+          title={t.sceneBuilder.tooltip.removeUploaded}
           className="flex items-center justify-center size-6 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
         >
           <X className="size-3.5" />

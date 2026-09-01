@@ -1,6 +1,7 @@
 import React from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
 import { Checkbox } from '@/components/ui/checkbox'
+import { useI18n } from '@/providers/I18nProvider'
 
 import { VIDEO_SOCKETS, VIDEO_OUTPUTS } from './constants'
 import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, numberInputClass, textInputClass } from './utils'
@@ -16,6 +17,7 @@ import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, numberInpu
  */
 export function VideoNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const { t } = useI18n()
   const saved = useSavedNodeData(id)
   const muted = data.muted !== false
   const loop = data.loop !== false
@@ -29,7 +31,7 @@ export function VideoNode({ id, data }: NodeProps) {
       category="content"
       sockets={VIDEO_SOCKETS}
       outputSockets={VIDEO_OUTPUTS}
-      help="Defaults to 320×180 — wire a Size node to override."
+      help={t.sceneBuilder.tooltip.nodes.video}
     >
       <div className="flex flex-col gap-1 text-xs">
         <label>Video URL</label>
@@ -48,7 +50,7 @@ export function VideoNode({ id, data }: NodeProps) {
         <Checkbox checked={loop} onCheckedChange={(checked) => updateNodeData(id, { loop: !!checked })} className="nodrag" />
       </Field>
       <Field label="Muted">
-        <Checkbox checked={muted} onCheckedChange={(checked) => updateNodeData(id, { muted: !!checked })} className="nodrag" title="Off relies on OBS/the browser allowing autoplaying audio — not guaranteed. Pair with a Sound node for reliable audio instead." />
+        <Checkbox checked={muted} onCheckedChange={(checked) => updateNodeData(id, { muted: !!checked })} className="nodrag" title={t.sceneBuilder.tooltip.nodes.videoAutoplay} />
       </Field>
       <Field label="Border">
         <Checkbox checked={borderEnabled} onCheckedChange={(checked) => updateNodeData(id, { borderEnabled: !!checked })} className="nodrag" />

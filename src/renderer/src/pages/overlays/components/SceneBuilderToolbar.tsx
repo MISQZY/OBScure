@@ -4,6 +4,7 @@ import type { CustomOverlay, OverlayUrls } from '@shared/types'
 import { CopyableUrl } from '@/components/CopyableUrl'
 import { slugify } from '@/lib/custom-overlays'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/providers/I18nProvider'
 import type { SaveStatus } from '../sceneUtils'
 
 /**
@@ -53,6 +54,7 @@ export function SceneBuilderToolbar({
   onTest: () => void
   onStartTour: () => void
 }) {
+  const { t } = useI18n()
   return (
     /*
       w-[27rem], not min-w: a shrink-to-fit (auto) width here made the
@@ -93,7 +95,7 @@ export function SceneBuilderToolbar({
         />
         <button
           onClick={onDelete}
-          title="Delete Scene"
+          title={t.sceneBuilder.nav.deleteScene}
           className="flex items-center justify-center p-2 rounded-md border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors shrink-0"
         >
           <Trash2 className="size-4" />
@@ -102,8 +104,8 @@ export function SceneBuilderToolbar({
 
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <label className="text-xs text-muted-foreground shrink-0" htmlFor="scene-url-key" title="URL key">
-            URL key:
+          <label className="text-xs text-muted-foreground shrink-0" htmlFor="scene-url-key" title={t.sceneBuilder.nav.urlKey}>
+            {t.sceneBuilder.nav.urlKey}:
           </label>
           <input
             id="scene-url-key"
@@ -130,7 +132,7 @@ export function SceneBuilderToolbar({
       <div className="flex items-center justify-between pt-2.5 border-t" data-tour="scene-builder-save">
         <button
           onClick={onPrettify}
-          title="Prettify — auto-arranges the node graph for readability (dagre layered layout). Only rearranges nodes locally; Save to keep it."
+          title={t.sceneBuilder.nav.prettify}
           className="flex items-center justify-center p-2 rounded-md border border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
         >
           <Sparkles className="size-4" />
@@ -148,12 +150,18 @@ export function SceneBuilderToolbar({
           >
             {saveStatus === 'saved' && <Check className="size-4" />}
             {saveStatus === 'error' && <X className="size-4" />}
-            {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : saveStatus === 'error' ? 'Save failed' : 'Save'}
+            {saveStatus === 'saving'
+              ? t.sceneBuilder.nav.saving
+              : saveStatus === 'saved'
+                ? t.sceneBuilder.nav.saved
+                : saveStatus === 'error'
+                  ? t.sceneBuilder.nav.saveFailed
+                  : t.sceneBuilder.nav.save}
           </button>
           <button
             onClick={onTest}
             disabled={testStatus === 'testing'}
-            title="Test — plays this scene (including unsaved changes) live in any connected Browser Source, without saving"
+            title={t.sceneBuilder.nav.test}
             className={cn(
               'flex items-center justify-center p-2 rounded-md border transition-colors disabled:cursor-wait',
               testStatus === 'error'
@@ -166,7 +174,7 @@ export function SceneBuilderToolbar({
         </div>
         <button
           onClick={onStartTour}
-          title="Tutorial — a detailed walkthrough of Scene Builder's own mechanics"
+          title={t.sceneBuilder.nav.tutorial}
           className="flex items-center justify-center p-2 rounded-md border border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
         >
           <HelpCircle className="size-4" />

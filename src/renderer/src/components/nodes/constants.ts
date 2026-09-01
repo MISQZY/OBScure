@@ -226,19 +226,20 @@ export const NODE_SOCKETS: Record<string, InputSocket[]> = {
  * see BaseNode's `outputSockets` prop, only set for the types below.
  * `feeds`: which target INPUT socket ids this output is meant to connect
  * to, enforced by isValidConnection in SceneBuilderPage.tsx exactly like
- * InputSocket.accepts is on the input side. `help`: an optional per-output
- * tooltip (a "?" popover on the row itself, same mechanism as BaseNode's own
- * header `help` — see OutputRow) for spelling out exactly what THIS output
- * does and where to wire it, so the node's header help can stay a short
- * one-liner about the node as a whole instead of cramming every output's
- * behavior into one popover.
+ * InputSocket.accepts is on the input side. `helpKey`: an optional key into
+ * the `sceneBuilder.tooltip.outputs` localization namespace (see
+ * localization/en.json) rendered as a "?" popover on the row itself, same
+ * mechanism as BaseNode's own header `help` — see OutputRow — for spelling
+ * out exactly what THIS output does and where to wire it, so the node's
+ * header help can stay a short one-liner about the node as a whole instead
+ * of cramming every output's behavior into one popover.
  */
 export type OutputSocket = {
   id: string
   label: string
   kind: 'content' | 'style' | 'data'
   feeds: string[]
-  help?: string
+  helpKey?: string
 }
 
 export const STRUCTURAL_OUTPUT: OutputSocket = {
@@ -246,21 +247,21 @@ export const STRUCTURAL_OUTPUT: OutputSocket = {
   label: 'Structural',
   kind: 'content',
   feeds: ['children', 'content'],
-  help: "Makes this part of what's actually rendered — wire it into a Box or Group's Children socket to nest it, or straight into Scene's own Content socket to place it at the top level."
+  helpKey: 'structural'
 }
 export const TARGET_OUTPUT: OutputSocket = {
   id: 'target',
   label: 'As Target',
   kind: 'content',
   feeds: ['target'],
-  help: "Wire into a Task's own Target socket to mark this as the thing that step shows, hides, or updates. Doesn't replace Structural — a component still needs that wire too, or it has nothing to render at all."
+  helpKey: 'target'
 }
 export const CAPTION_OUTPUT: OutputSocket = {
   id: 'caption',
   label: 'As Caption',
   kind: 'content',
   feeds: ['caption'],
-  help: "Wire into a Background FX node's own Caption socket to caption a paratrooper/airdrop drop with this text."
+  helpKey: 'caption'
 }
 
 export const TEXT_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT, CAPTION_OUTPUT]
@@ -304,7 +305,7 @@ export const AUDIO_PLAYER_OUTPUTS: OutputSocket[] = [
     label: 'Content',
     kind: 'content',
     feeds: ['content', 'imageContent'],
-    help: "Bundles Artist, Title, and Cover in one wire. Wire into a Text node's own Content socket to fill its {artist}/{title} placeholders, or into an Image node's own Content socket to show the live album art instead — which fields apply depends on where it lands, not on anything you choose here."
+    helpKey: 'audioContent'
   },
   // kind 'data': a trigger/state signal, not a value feeding a template.
   {
@@ -312,7 +313,7 @@ export const AUDIO_PLAYER_OUTPUTS: OutputSocket[] = [
     label: 'Event',
     kind: 'data',
     feeds: ['event'],
-    help: "The track-change/now-playing signal. Wire into a Start node's own Event socket to arm a process on track change, and/or into Scene's own Event socket to show/hide the whole scene by isPlaying — both at once is fine, they're independent sockets on independent nodes."
+    helpKey: 'audioEvent'
   }
 ]
 
@@ -345,14 +346,14 @@ export const ROULETTE_OUTPUTS: OutputSocket[] = [
     label: 'Content',
     kind: 'content',
     feeds: ['source'],
-    help: "Feeds this Roulette's own paired Widget and Entrants list (the `source` socket both use) — that's all it's for. The Widget's link is permanent, the Entrants list's isn't."
+    helpKey: 'rouletteContent'
   },
   {
     id: 'event',
     label: 'Event',
     kind: 'data',
     feeds: ['event', 'visible'],
-    help: "The round's phase signal. Wire into a Start node's own Event socket to arm a process the moment a round starts collecting. Wire into a Roulette Widget's own Visibility socket to hide THAT widget outside an active round instead of it always showing — both at once is fine."
+    helpKey: 'rouletteEvent'
   }
 ]
 
@@ -388,7 +389,7 @@ export const ROULETTE_ENTRANTS_OUTPUTS: OutputSocket[] = [
     label: 'Content',
     kind: 'content',
     feeds: ['content'],
-    help: "Wire into a Text node's own Content socket to replace its template outright with this list's formatted rows — that Text's own textarea goes read-only while connected. Color/Size/Font/etc. stay the Text's own fields; only the row formatting (template/layout/sort/separator) lives here."
+    helpKey: 'rouletteEntrantsContent'
   }
 ]
 
@@ -416,14 +417,14 @@ export const RANDOM_OUTPUTS: OutputSocket[] = [
     label: 'Content',
     kind: 'content',
     feeds: ['source', 'content'],
-    help: "Wire into this Random's own paired Widget's Source socket (permanent pairing), or into any Text node's own Content socket to fill its {number}/{numbers}/{hash}/{seed} placeholders — same merge behavior as Audio Player's own Content wire, template stays editable."
+    helpKey: 'randomContent'
   },
   {
     id: 'event',
     label: 'Event',
     kind: 'data',
     feeds: ['event', 'visible'],
-    help: "The roll's phase signal. Wire into a Start node's own Event socket to arm a process the moment a roll is committed (hash published, numbers still hidden). Wire into a Random Widget's own Visibility socket to hide THAT widget outside an active roll instead of it always showing — both at once is fine."
+    helpKey: 'randomEvent'
   }
 ]
 

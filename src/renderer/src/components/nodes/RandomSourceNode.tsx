@@ -1,6 +1,7 @@
 import React from 'react'
 import { NodeProps } from '@xyflow/react'
 
+import { useI18n } from '@/providers/I18nProvider'
 import { RANDOM_OUTPUTS } from './constants'
 import { BaseNode } from './utils'
 
@@ -16,6 +17,7 @@ import { BaseNode } from './utils'
  * that's also surfaced here as each row's own "?" help.
  */
 export function RandomSourceNode({ id, data }: NodeProps) {
+  const { t } = useI18n()
   return (
     <BaseNode
       id={id}
@@ -23,7 +25,7 @@ export function RandomSourceNode({ id, data }: NodeProps) {
       title="Random"
       category="data"
       outputSockets={RANDOM_OUTPUTS}
-      help="Live commit/reveal state from the Random tool. Auto-paired with its own Random Widget — that's the node to wire into Scene. See each output's own ? for exactly what it does and where to wire it."
+      help={t.sceneBuilder.tooltip.nodes.randomSource}
     />
   )
 }

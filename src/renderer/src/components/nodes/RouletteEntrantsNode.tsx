@@ -1,6 +1,7 @@
 import React, { useRef } from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
 import { Checkbox } from '@/components/ui/checkbox'
+import { useI18n } from '@/providers/I18nProvider'
 
 import { ROULETTE_ENTRANTS_SOCKETS, ROULETTE_ENTRANTS_OUTPUTS } from './constants'
 import { BaseNode, Field, NodeSelect, PlaceholderPicker, textInputClass } from './utils'
@@ -30,6 +31,7 @@ const ROULETTE_ENTRANT_ROW_TOKENS = ['name', 'chance', 'weight'] as const
  */
 export function RouletteEntrantsNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const { t } = useI18n()
   const templateRef = useRef<HTMLInputElement>(null)
   const rowTemplate = (data.rowTemplate as string) ?? '{name}'
   const layout = (data.layout as string) || 'list'
@@ -57,7 +59,7 @@ export function RouletteEntrantsNode({ id, data }: NodeProps) {
       category="data"
       sockets={ROULETTE_ENTRANTS_SOCKETS}
       outputSockets={ROULETTE_ENTRANTS_OUTPUTS}
-      help="Formats its paired Roulette's entrants into rows. Wire Content into a Text node's own Content socket to show them there (read-only, replacing that Text's own template) — Color/Size/etc. stay the Text's own fields. Delete freely — unlike the Widget, this one has no lock."
+      help={t.sceneBuilder.tooltip.nodes.rouletteEntrants}
     >
       <div className="flex flex-col gap-1 text-xs">
         <label>Row template</label>

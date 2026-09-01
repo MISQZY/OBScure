@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useI18n } from '@/providers/I18nProvider'
 
 /**
  * The {} button next to a text field — opens a list of AVAILABLE
@@ -13,6 +14,7 @@ import { createPortal } from 'react-dom'
  * silently un-clickable wherever a Panel happens to overlap it.
  */
 export function PlaceholderPicker({ tokens, onInsert }: { tokens: readonly string[]; onInsert: (token: string) => void }) {
+  const { t } = useI18n()
   const [anchor, setAnchor] = useState<{ right: number; top: number } | null>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -45,7 +47,7 @@ export function PlaceholderPicker({ tokens, onInsert }: { tokens: readonly strin
         type="button"
         onMouseDown={(e) => e.preventDefault()}
         onClick={toggle}
-        title="Insert placeholder"
+        title={t.sceneBuilder.tooltip.insertPlaceholder}
         className="nodrag h-6 px-1.5 rounded bg-muted hover:bg-accent border border-transparent hover:border-border text-[10px] font-mono text-muted-foreground hover:text-accent-foreground shrink-0"
       >
         {'{}'}

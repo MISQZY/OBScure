@@ -3,12 +3,14 @@ import { NodeProps, useReactFlow } from '@xyflow/react'
 import { Bold, Italic } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSystemFonts } from '@/hooks/use-system-fonts'
+import { useI18n } from '@/providers/I18nProvider'
 
 import { TEXT_SOCKETS, TEXT_OUTPUTS } from './constants'
 import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect, PlaceholderPicker, numberInputClass, textAreaClass, SYSTEM_DEFAULT_FONT, TEXT_ALIGN_BUTTONS, TEXT_VERTICAL_BUTTONS, IconToggleGroup, useHasIncomingEdgeFromType, useAvailablePlaceholders } from './utils'
 
 export function TextNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const { t } = useI18n()
   const saved = useSavedNodeData(id)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const text = (data.text as string) ?? ''
@@ -125,7 +127,7 @@ export function TextNode({ id, data }: NodeProps) {
         <div className="nodrag flex items-center gap-0.5 rounded-md border border-border bg-muted p-0.5 w-fit">
           <button
             type="button"
-            title="Bold"
+            title={t.sceneBuilder.tooltip.bold}
             onClick={() => updateNodeData(id, { bold: !bold })}
             className={cn(
               'flex items-center justify-center size-6 rounded transition-colors',
@@ -136,7 +138,7 @@ export function TextNode({ id, data }: NodeProps) {
           </button>
           <button
             type="button"
-            title="Italic"
+            title={t.sceneBuilder.tooltip.italic}
             onClick={() => updateNodeData(id, { italic: !italic })}
             className={cn(
               'flex items-center justify-center size-6 rounded transition-colors',

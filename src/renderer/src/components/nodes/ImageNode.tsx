@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
 import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
+import { useI18n } from '@/providers/I18nProvider'
 
 import { IMAGE_SOCKETS, IMAGE_OUTPUTS } from './constants'
 import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, numberInputClass, textInputClass, UploadRow, useHasIncomingEdge } from './utils'
@@ -9,6 +10,7 @@ import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, numberInpu
 /** A static image or (left blank) the live now-playing album art — see showAlbumArt. Connect into a Box/Group or straight into Scene. */
 export function ImageNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const { t } = useI18n()
   const saved = useSavedNodeData(id)
   const [uploading, setUploading] = useState(false)
   const customImageName = (data.customImageName as string) || null
@@ -44,7 +46,7 @@ export function ImageNode({ id, data }: NodeProps) {
       category="content"
       sockets={IMAGE_SOCKETS}
       outputSockets={IMAGE_OUTPUTS}
-      help="Leave URL empty for the live now-playing album art, or wire Audio Player's Content output into Content for the same thing made explicit (URL field goes read-only). Defaults to 96×96 — wire a Size node to override."
+      help={t.sceneBuilder.tooltip.nodes.image}
     >
       <div className="flex flex-col gap-1 text-xs">
         <label>Image URL</label>

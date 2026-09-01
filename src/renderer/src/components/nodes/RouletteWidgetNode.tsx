@@ -1,6 +1,7 @@
 import React from 'react'
 import { NodeProps } from '@xyflow/react'
 
+import { useI18n } from '@/providers/I18nProvider'
 import { ROULETTE_WIDGET_SOCKETS, ROULETTE_WIDGET_OUTPUTS } from './constants'
 import { BaseNode } from './utils'
 
@@ -36,6 +37,7 @@ import { BaseNode } from './utils'
  * RouletteEntrantsNode.tsx), which keeps its own delete button.
  */
 export function RouletteWidgetNode({ id, data }: NodeProps) {
+  const { t } = useI18n()
   return (
     <BaseNode
       id={id}
@@ -45,7 +47,7 @@ export function RouletteWidgetNode({ id, data }: NodeProps) {
       deletable={false}
       sockets={ROULETTE_WIDGET_SOCKETS}
       outputSockets={ROULETTE_WIDGET_OUTPUTS}
-      help="The actual spinning wheel — always paired 1:1 with its own Roulette node. Shows unconditionally unless you wire that Roulette's own Event output into this node's own Visibility socket. Delete its Roulette to remove both together."
+      help={t.sceneBuilder.tooltip.nodes.rouletteWidget}
     />
   )
 }

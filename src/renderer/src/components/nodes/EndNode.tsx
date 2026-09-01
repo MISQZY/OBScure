@@ -1,6 +1,7 @@
 import React from 'react'
 import { NodeProps } from '@xyflow/react'
 
+import { useI18n } from '@/providers/I18nProvider'
 import { BaseNode } from './utils'
 
 /**
@@ -13,6 +14,7 @@ import { BaseNode } from './utils'
  * degrades (the chain is walked until it runs out of next steps).
  */
 export function EndNode({ id, data }: NodeProps) {
+  const { t } = useI18n()
   return (
     <BaseNode
       id={id}
@@ -21,7 +23,7 @@ export function EndNode({ id, data }: NodeProps) {
       outputs={false}
       category="process"
       sequenceIn
-      help="Exit point — the process finishes and the scene clears here."
+      help={t.sceneBuilder.tooltip.nodes.end}
     />
   )
 }

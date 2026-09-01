@@ -3,6 +3,7 @@ import { Panel } from '@xyflow/react'
 import { ChevronRight, PanelLeft } from 'lucide-react'
 import { CATEGORY_STYLES, NODE_CATEGORY } from '@/components/nodes'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/providers/I18nProvider'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { NODE_PALETTE, PALETTE_GROUPS } from '../sceneBuilderConstants'
 
@@ -20,6 +21,7 @@ export function AddNodePalette({
   isNarrow: boolean
   onPaletteDragStart: (event: React.DragEvent, type: string) => void
 }) {
+  const { t } = useI18n()
   const [paletteOpen, setPaletteOpen] = useState(false)
   // Every Add Node group starts collapsed — the palette lists every node
   // type across every group up front otherwise, which is a lot to scan past
@@ -38,7 +40,7 @@ export function AddNodePalette({
         <button
           type="button"
           onClick={() => setPaletteOpen((open) => !open)}
-          title={paletteOpen ? 'Hide node palette' : 'Show node palette'}
+          title={paletteOpen ? t.sceneBuilder.nav.hidePalette : t.sceneBuilder.nav.showPalette}
           className="flex items-center justify-center p-2.5 rounded-lg border bg-card shadow-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
         >
           <PanelLeft className="size-4" />
@@ -47,7 +49,7 @@ export function AddNodePalette({
       {(!isNarrow || paletteOpen) && (
         <div className="bg-card border rounded-lg shadow-sm flex flex-col min-w-[170px] max-h-[min(28rem,calc(100%_-_9rem))] overflow-hidden">
           <div className="p-2.5 border-b bg-card shrink-0">
-            <h3 className="font-semibold text-sm text-center">Add Node</h3>
+            <h3 className="font-semibold text-sm text-center">{t.sceneBuilder.nav.addNode}</h3>
           </div>
           <ScrollArea className="flex-1 min-h-0 my-3">
             <div className="flex flex-col gap-1 px-3">
@@ -79,7 +81,7 @@ export function AddNodePalette({
                           type="button"
                           draggable
                           onDragStart={(e) => onPaletteDragStart(e, entry.type)}
-                          title="Drag onto the canvas to add"
+                          title={t.sceneBuilder.nav.dragToAdd}
                           className={cn(
                             'text-xs py-2 px-3 rounded border-l-4 transition-all text-left border border-transparent hover:border-border hover:brightness-110 cursor-grab active:cursor-grabbing',
                             categoryStyle.header,

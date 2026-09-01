@@ -1,6 +1,7 @@
 import React from 'react'
 import { NodeProps } from '@xyflow/react'
 
+import { useI18n } from '@/providers/I18nProvider'
 import { BOX_SOCKETS, BOX_OUTPUTS } from './constants'
 import { BaseNode } from './utils'
 
@@ -16,6 +17,7 @@ import { BaseNode } from './utils'
  * `node.type === 'box'` for the decorative styling this node skips).
  */
 export function GroupNode({ id, data }: NodeProps) {
+  const { t } = useI18n()
   return (
     <BaseNode
       id={id}
@@ -25,7 +27,7 @@ export function GroupNode({ id, data }: NodeProps) {
       category="content"
       sockets={BOX_SOCKETS}
       outputSockets={BOX_OUTPUTS}
-      help="An invisible wrapper — no background, padding, or border. Wire Text/Image/Video/Box/Group into it to arrange or move them as one unit."
+      help={t.sceneBuilder.tooltip.nodes.group}
     />
   )
 }

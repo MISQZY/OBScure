@@ -295,5 +295,71 @@
         "description": "Static — always on screen. Event-triggered (Event + Timer → Scene) — shows for a fixed duration when an alert fires. Process (Start → Task → Wait → End) — a step-by-step sequence with precise timing and its own animation per step. That's it — happy building!"
       }
     }
+  },
+  "sceneBuilder": {
+    "nav": {
+      "addNode": "Add Node",
+      "showPalette": "Show node palette",
+      "hidePalette": "Hide node palette",
+      "dragToAdd": "Drag onto the canvas to add",
+      "deleteScene": "Delete Scene",
+      "urlKey": "URL key",
+      "prettify": "Prettify — auto-arranges the node graph for readability. Only rearranges nodes locally; Save to keep it.",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "saveFailed": "Save failed",
+      "test": "Test — plays this scene, including unsaved changes, live in a connected Browser Source without saving.",
+      "tutorial": "Tutorial — a detailed walkthrough of Scene Builder."
+    },
+    "tooltip": {
+      "expand": "Expand",
+      "collapse": "Collapse",
+      "help": "Help",
+      "deleteNode": "Delete node",
+      "notWired": "Not wired into rendering yet — this node can be placed and connected, but currently has no effect on the overlay.",
+      "step": "Step {current} in the process sequence",
+      "priority": "Render priority {position} of {total} — click to move to end, right-click to set a specific position",
+      "socketIn": "{label} — input",
+      "socketInMulti": "{label} — input (multiple)",
+      "socketOut": "{label} — output",
+      "sequenceIn": "Sequence — previous step",
+      "output": "Output",
+      "incomingCollapsed": "Incoming connections (collapsed)",
+      "outgoingCollapsed": "Outgoing connections (collapsed)",
+      "bold": "Bold",
+      "italic": "Italic",
+      "removeUploaded": "Remove uploaded file",
+      "insertPlaceholder": "Insert placeholder",
+      "backgroundFxLoop": "Off (default): drops it once — use Play/Test to replay it. On: keeps dropping one at a time for as long as the scene is showing.",
+      "nodes": {
+        "group": "An invisible wrapper with no background, padding, or border — wire in other Content nodes to move or arrange them as one unit.",
+        "audioPlayer": "Live now-playing data from Spotify or Windows Media. Check each output's own help for exactly where to wire it.",
+        "randomSource": "Live commit/reveal state from the Random tool, auto-paired with its own display widget. Check each output's own help for where to wire it.",
+        "rouletteEntrants": "Formats its paired Roulette's entrants into rows — wire the output into another node's Content socket to display them, its own styling still applies. Unlike its paired display widget, this one can be deleted freely.",
+        "randomWidget": "Shows the rolling numbers, always paired 1:1 with its own source node and visible by default. Wire that source's Event output into this node's Visibility socket to hide it outside an active roll.",
+        "rouletteWidget": "The spinning wheel, always paired 1:1 with its own source node and visible by default. Wire that source's Event output into this node's Visibility socket to hide it outside an active round.",
+        "rouletteSource": "Live entrants and round phase from the Roulette tool, auto-paired with its own display widget. Check each output's own help for where to wire it.",
+        "start": "Entry point for the process — wire in a Data-section trigger to say what starts it.",
+        "task": "Wire in the Target this step acts on, plus any modifiers. A sound cue also needs a Target wired — even an otherwise-inert Update step — since that's what anchors it to this moment.",
+        "image": "Leave URL empty to show the live now-playing album art, or wire a Data-section node's Content output into Content for the same result, explicitly (the URL field goes read-only). Defaults to 96×96 — wire in a Transform-section node to override the size.",
+        "video": "Defaults to 320×180 — wire in a Transform-section node to override the size.",
+        "videoAutoplay": "Off relies on the browser allowing autoplay audio, which isn't guaranteed — pair with a Behavior-section node for reliable sound instead.",
+        "scene": "The output — only what's wired in here is rendered.",
+        "end": "Exit point — the process finishes and the scene clears here."
+      },
+      "outputs": {
+        "structural": "Makes this part of what's actually rendered — wire it into a Content-section container's Children socket to nest it, or straight into the top-level Content socket to place it directly.",
+        "target": "Wire into a Process-section step's Target socket to mark this as what that step shows, hides, or updates. This doesn't replace the Structural wire — a component still needs that too, or it won't render at all.",
+        "caption": "Wire into a Behavior-section effect's own Caption socket to caption its drop with this text.",
+        "audioContent": "Bundles Artist, Title, and Cover in one wire. Wire it into a Content-section node's own Content socket — which fields apply depends on where it lands.",
+        "audioEvent": "The track-change/now-playing signal. Wire into a Process-section entry point to arm it on track change, and/or into the scene-level Event socket to show or hide the whole scene by playback state — both at once is fine.",
+        "rouletteContent": "Feeds this node's own paired display widget and entrant list through their shared Source socket — that's all it's for. The widget's link is permanent, the entrant list's isn't.",
+        "rouletteEvent": "The round's phase signal. Wire into a Process-section entry point to arm it the moment a round starts, or into the paired widget's Visibility socket to hide it outside an active round — both at once is fine.",
+        "rouletteEntrantsContent": "Wire into a Content-section node's own Content socket to replace its template with this list's formatted rows — that node's own text field goes read-only while connected. Its styling fields stay its own; only row formatting lives here.",
+        "randomContent": "Wire into this node's own paired display widget's Source socket (a permanent pairing), or into any Content-section node's own Content socket to fill its placeholders — the template stays editable.",
+        "randomEvent": "The roll's phase signal. Wire into a Process-section entry point to arm it the moment a roll is committed, or into the paired widget's Visibility socket to hide it outside an active roll — both at once is fine."
+      }
+    }
   }
 }

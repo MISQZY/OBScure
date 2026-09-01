@@ -1,6 +1,7 @@
 import React from 'react'
 import { NodeProps } from '@xyflow/react'
 
+import { useI18n } from '@/providers/I18nProvider'
 import { START_SOCKETS } from './constants'
 import { BaseNode } from './utils'
 
@@ -14,6 +15,7 @@ import { BaseNode } from './utils'
  * Wait.
  */
 export function StartNode({ id, data }: NodeProps) {
+  const { t } = useI18n()
   return (
     <BaseNode
       id={id}
@@ -21,7 +23,7 @@ export function StartNode({ id, data }: NodeProps) {
       title="Start"
       category="process"
       sockets={START_SOCKETS}
-      help="Entry point — connect an Event to say which alert starts this process."
+      help={t.sceneBuilder.tooltip.nodes.start}
     />
   )
 }

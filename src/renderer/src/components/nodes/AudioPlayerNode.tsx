@@ -1,6 +1,7 @@
 import React from 'react'
 import { NodeProps } from '@xyflow/react'
 
+import { useI18n } from '@/providers/I18nProvider'
 import { AUDIO_PLAYER_OUTPUTS } from './constants'
 import { BaseNode } from './utils'
 
@@ -43,6 +44,7 @@ import { BaseNode } from './utils'
  *    its own).
  */
 export function AudioPlayerNode({ id, data }: NodeProps) {
+  const { t } = useI18n()
   return (
     <BaseNode
       id={id}
@@ -50,7 +52,7 @@ export function AudioPlayerNode({ id, data }: NodeProps) {
       title="Audio Player"
       category="data"
       outputSockets={AUDIO_PLAYER_OUTPUTS}
-      help="Live now-playing data from Spotify or Windows Media. See each output's own ? for exactly what it does and where to wire it."
+      help={t.sceneBuilder.tooltip.nodes.audioPlayer}
     />
   )
 }

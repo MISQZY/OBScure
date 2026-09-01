@@ -1,6 +1,7 @@
 import React from 'react'
 import { NodeProps } from '@xyflow/react'
 
+import { useI18n } from '@/providers/I18nProvider'
 import { RANDOM_WIDGET_SOCKETS, RANDOM_WIDGET_OUTPUTS } from './constants'
 import { BaseNode } from './utils'
 
@@ -37,6 +38,7 @@ import { BaseNode } from './utils'
  * doc comment in constants.ts for why).
  */
 export function RandomWidgetNode({ id, data }: NodeProps) {
+  const { t } = useI18n()
   return (
     <BaseNode
       id={id}
@@ -46,7 +48,7 @@ export function RandomWidgetNode({ id, data }: NodeProps) {
       deletable={false}
       sockets={RANDOM_WIDGET_SOCKETS}
       outputSockets={RANDOM_WIDGET_OUTPUTS}
-      help="The rolling numbers — always paired 1:1 with its own Random node. Shows unconditionally unless you wire that Random's own Event output into this node's own Visibility socket. Delete its Random to remove both together."
+      help={t.sceneBuilder.tooltip.nodes.randomWidget}
     />
   )
 }

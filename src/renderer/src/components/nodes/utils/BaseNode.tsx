@@ -4,6 +4,8 @@ import { Handle, Position, useReactFlow } from '@xyflow/react'
 import { Trash2, ChevronDown, ChevronUp, Copy, Pencil } from 'lucide-react'
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/providers/I18nProvider'
+import { interpolate } from '@/lib/i18n/interpolate'
 import { NodeCategory, InputSocket, OutputSocket, CATEGORY_STYLES, CATEGORY_DOT, SOCKET_DOT } from '../constants'
 import { usePriorityInfo, useSequenceInfo } from './hooks'
 import { NodePopover } from './NodePopover'
@@ -25,8 +27,10 @@ export function SocketRow({ id, label, dotClass, title }: { id: string; label: s
   )
 }
 
-/** One labeled output-socket row — the source-side mirror of SocketRow, dot on the right edge. Only rendered for node types with an `outputSockets` list (see OutputSocket/NODE_OUTPUTS above); every other node keeps the single generic "output" handle. `help` (optional — see OutputSocket's own doc comment) renders the same small "?" popover BaseNode's header uses, so a node's header help can stay a short one-liner while each output's own exact behavior lives on the row it belongs to. Placed AFTER the label (not before) so it sits flush against the row's right edge — the last child in a `justify-end` row lands at a fixed position regardless of the label's own width, so the "?" lines up identically across every output row instead of drifting with each label's length. */
-export function OutputRow({ id, label, dotClass, title, help }: { id: string; label: string; dotClass: string; title: string; help?: string }) {
+/** One labeled output-socket row — the source-side mirror of SocketRow, dot on the right edge. Only rendered for node types with an `outputSockets` list (see OutputSocket/NODE_OUTPUTS above); every other node keeps the single generic "output" handle. `helpKey` (optional — see OutputSocket's own doc comment) looks up `sceneBuilder.tooltip.outputs[helpKey]` and renders it in the same small "?" popover BaseNode's header uses, so a node's header help can stay a short one-liner while each output's own exact behavior lives on the row it belongs to. Placed AFTER the label (not before) so it sits flush against the row's right edge — the last child in a `justify-end` row lands at a fixed position regardless of the label's own width, so the "?" lines up identically across every output row instead of drifting with each label's length. */
+export function OutputRow({ id, label, dotClass, title, helpKey }: { id: string; label: string; dotClass: string; title: string; helpKey?: string }) {
+  const { t } = useI18n()
+  const help = helpKey ? (t.sceneBuilder.tooltip.outputs as Record<string, string>)[helpKey] : undefined
   return (
     <div className="relative flex items-center justify-end gap-1.5 pl-2 pr-3 h-5 text-[10px] text-muted-foreground">
       <span className="truncate">{label}</span>
@@ -38,7 +42,7 @@ export function OutputRow({ id, label, dotClass, title, help }: { id: string; la
             <button
               type="button"
               onClick={(e) => e.stopPropagation()}
-              title="Help"
+              title={t.sceneBuilder.tooltip.help}
               className="nodrag shrink-0 flex items-center justify-center size-3.5 rounded-full border border-muted-foreground/50 text-muted-foreground text-[9px] font-bold leading-none hover:bg-accent hover:text-accent-foreground hover:border-foreground/50 transition-colors cursor-pointer"
             >
               ?
@@ -105,6 +109,7 @@ export function BaseNode({
   outputSockets?: OutputSocket[]
 }) {
   const { deleteElements, updateNodeData, getEdges, getNodes, getNode, addNodes } = useReactFlow()
+  const { t } = useI18n()
   const collapsed = Boolean(data.collapsed)
   const priority = usePriorityInfo(id)
   const sequence = useSequenceInfo(id)
@@ -210,7 +215,7 @@ export function BaseNode({
         <div
           onClick={() => updateNodeData(id, { collapsed: !collapsed })}
           className="flex items-center gap-1.5 min-w-0 flex-1 text-left cursor-pointer"
-          title={collapsed ? 'Expand' : 'Collapse'}
+          title={collapsed ? t.sceneBuilder.tooltip.expand : t.sceneBuilder.tooltip.collapse}
         >
           <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', collapsed && '-rotate-90')} />
           <div className="flex items-center min-w-0 flex-1 gap-1.5">
@@ -223,7 +228,7 @@ export function BaseNode({
                   <button
                     type="button"
                     onClick={(e) => e.stopPropagation()}
-                    title="Help"
+                    title={t.sceneBuilder.tooltip.help}
                     className="nodrag shrink-0 flex items-center justify-center size-3.5 rounded-full border border-muted-foreground/50 text-muted-foreground text-[9px] font-bold leading-none hover:bg-accent hover:text-accent-foreground hover:border-foreground/50 transition-colors cursor-pointer"
                   >
                     ?
@@ -272,7 +277,7 @@ export function BaseNode({
         {soon && (
           <span
             className="nodrag shrink-0 inline-flex items-center justify-center h-4 px-1.5 rounded-full bg-amber-500 text-white text-[9px] font-bold leading-none"
-            title="Not wired into rendering yet — this node can be placed and connected, but currently has no effect on the overlay."
+            title={t.sceneBuilder.tooltip.notWired}
           >
             SOON
           </span>
@@ -280,7 +285,7 @@ export function BaseNode({
         {sequence !== null && (
           <span
             className="nodrag shrink-0 inline-flex items-center justify-center size-5 rounded-full bg-indigo-500 text-white text-[10px] font-bold leading-none"
-            title={`Step ${sequence} in the process sequence (Start → ... → End)`}
+            title={`${interpolate(t.sceneBuilder.tooltip.step, { current: String(sequence) })} (Start → ... → End)`}
           >
             {sequence}
           </span>
@@ -297,7 +302,7 @@ export function BaseNode({
               if (rect) setPriorityMenuAnchor({ left: rect.left, top: rect.bottom + 4 })
             }}
             className="nodrag shrink-0 inline-flex items-center justify-center size-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold leading-none cursor-pointer hover:opacity-80 transition-opacity"
-            title={`Render priority ${priority.position} of ${priority.total} — click to move to end, right-click to set a specific position`}
+            title={interpolate(t.sceneBuilder.tooltip.priority, { position: String(priority.position), total: String(priority.total) })}
           >
             {priority.position}
           </button>
@@ -335,7 +340,7 @@ export function BaseNode({
             type="button"
             onClick={() => deleteElements({ nodes: [{ id }] })}
             className="nodrag shrink-0 text-muted-foreground hover:text-destructive transition-colors outline-none cursor-pointer"
-            title="Delete node"
+            title={t.sceneBuilder.tooltip.deleteNode}
           >
             <Trash2 className="size-3.5" />
           </button>
@@ -372,10 +377,10 @@ export function BaseNode({
               id={socket.id}
               label={socket.label}
               dotClass={SOCKET_DOT[socket.kind]}
-              title={`${socket.label} in${socket.multi ? ' (multiple)' : ''}`}
+              title={interpolate(socket.multi ? t.sceneBuilder.tooltip.socketInMulti : t.sceneBuilder.tooltip.socketIn, { label: socket.label })}
             />
           ))}
-          {sequenceIn && <SocketRow id="event-in" label="Sequence" dotClass="!bg-indigo-500" title="Event in — previous step" />}
+          {sequenceIn && <SocketRow id="event-in" label="Sequence" dotClass="!bg-indigo-500" title={t.sceneBuilder.tooltip.sequenceIn} />}
         </div>
       )}
       {hasBody && <div className="p-3 flex flex-col gap-2">{children}</div>}
@@ -383,7 +388,14 @@ export function BaseNode({
         (outputSockets && outputSockets.length > 0 ? (
           <div className="flex flex-col border-t py-0.5">
             {outputSockets.map((socket) => (
-              <OutputRow key={socket.id} id={socket.id} label={socket.label} dotClass={SOCKET_DOT[socket.kind]} title={`${socket.label} out`} help={socket.help} />
+              <OutputRow
+                key={socket.id}
+                id={socket.id}
+                label={socket.label}
+                dotClass={SOCKET_DOT[socket.kind]}
+                title={interpolate(t.sceneBuilder.tooltip.socketOut, { label: socket.label })}
+                helpKey={socket.helpKey}
+              />
             ))}
           </div>
         ) : (
@@ -392,7 +404,7 @@ export function BaseNode({
             position={Position.Right}
             id="output"
             className={cn('w-3 h-3', CATEGORY_DOT[category])}
-            title="Output"
+            title={t.sceneBuilder.tooltip.output}
           />
         ))}
     </div>

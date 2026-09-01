@@ -3,6 +3,7 @@ import { NodeProps, useReactFlow } from '@xyflow/react'
 import { BACKGROUND_ANIMATION_IDS } from '@shared/overlayConfig'
 import { MBadge } from '@/components/MBadge'
 import { Checkbox } from '@/components/ui/checkbox'
+import { useI18n } from '@/providers/I18nProvider'
 
 import { BACKGROUND_FX_SOCKETS } from './constants'
 import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect, numberInputClass } from './utils'
@@ -28,6 +29,7 @@ import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect
  */
 export function BackgroundAnimationNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const { t } = useI18n()
   const saved = useSavedNodeData(id)
   const type = (data.type as string) || 'none'
   const isDropEffect = type === 'paratrooper' || type === 'airdrop'
@@ -60,7 +62,7 @@ export function BackgroundAnimationNode({ id, data }: NodeProps) {
               checked={Boolean(data.repeat)}
               onCheckedChange={(checked) => updateNodeData(id, { repeat: !!checked })}
               className="nodrag"
-              title="Off (default): drops exactly one, use Play/Test to replay it. On: keeps dropping one at a time for as long as the scene is showing."
+              title={t.sceneBuilder.tooltip.backgroundFxLoop}
             />
           </Field>
           <p className="text-[11px] text-muted-foreground leading-snug w-40">

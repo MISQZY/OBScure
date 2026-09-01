@@ -3,10 +3,12 @@ import { Handle, NodeProps, NodeResizer, Position, useReactFlow } from '@xyflow/
 import { ChevronDown, Copy, Pencil, Trash2 } from 'lucide-react'
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/providers/I18nProvider'
 import { CATEGORY_STYLES, CATEGORY_DOT } from './constants'
 
 export function FrameNode({ id, data, selected }: NodeProps) {
   const { setNodes, deleteElements, getNode, addNodes } = useReactFlow()
+  const { t } = useI18n()
   const title = (data.label as string) || 'Group / Layout'
   const collapsed = Boolean(data.collapsed)
   const [isEditing, setIsEditing] = useState(false)
@@ -95,7 +97,7 @@ export function FrameNode({ id, data, selected }: NodeProps) {
               <div
                 onClick={toggleCollapse}
                 className="flex items-center gap-1.5 min-w-0 flex-1 text-left cursor-pointer"
-                title={collapsed ? 'Expand' : 'Collapse'}
+                title={collapsed ? t.sceneBuilder.tooltip.expand : t.sceneBuilder.tooltip.collapse}
               >
                 <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', collapsed && '-rotate-90')} />
                 {isEditing ? (
@@ -129,7 +131,7 @@ export function FrameNode({ id, data, selected }: NodeProps) {
                 type="button"
                 onClick={() => deleteElements({ nodes: [{ id }] })}
                 className="nodrag shrink-0 text-muted-foreground hover:text-destructive transition-colors outline-none cursor-pointer"
-                title="Delete node"
+                title={t.sceneBuilder.tooltip.deleteNode}
               >
                 <Trash2 className="size-3.5" />
               </button>
@@ -173,7 +175,7 @@ export function FrameNode({ id, data, selected }: NodeProps) {
               isConnectable={false}
               className={cn('w-3 h-3', CATEGORY_DOT.utils)}
               style={{ pointerEvents: 'none' }}
-              title="Incoming connections (collapsed)"
+              title={t.sceneBuilder.tooltip.incomingCollapsed}
             />
             <Handle
               type="source"
@@ -182,7 +184,7 @@ export function FrameNode({ id, data, selected }: NodeProps) {
               isConnectable={false}
               className={cn('w-3 h-3', CATEGORY_DOT.utils)}
               style={{ pointerEvents: 'none' }}
-              title="Outgoing connections (collapsed)"
+              title={t.sceneBuilder.tooltip.outgoingCollapsed}
             />
           </>
         )}
