@@ -59,13 +59,80 @@ function isMandatoryWidgetPairEdge(edge: Edge, nodes: Node[]): boolean {
  * dropping from the Add Node palette, Prettify). Everything here only
  * touches local editor state; nothing is persisted until Save (see
  * useOverlayMeta's own handleSave), so any of it is always safe to try and
- * undo by just not saving.
+ * undo by just not saving — see also the actual in-editor undo/redo stack
+ * below, which is a separate, faster way to recover from the same kind of
+ * accident without reloading the scene.
  */
-export function useSceneGraph(overlay: CustomOverlay | undefined) {
+
+interface GraphSnapshot {
+  nodes: Node[]
+  edges: Edge[]
+}
+
+const MAX_HISTORY = 50
+
+export function useSceneGraph(overlay: CustomOverlay | undefined, locked: boolean) {
   const [nodes, setNodes] = useState<Node[]>(defaultNodes)
   const [edges, setEdges] = useState<Edge[]>(defaultEdges)
   /** Captured via onInit on <ReactFlow> — SceneBuilderPage renders it itself rather than being a descendant of it, so useReactFlow() isn't available directly; this ref is the standard workaround for reaching imperative methods (fitView, getIntersectingNodes) from outside the flow tree. */
   const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null)
+
+  // Undo/redo for structural changes (add/remove node or edge, connect,
+  // drag, Prettify) — NOT per-keystroke node data edits (a Text node's
+  // Content, an Image node's URL, ...), which go through React Flow's own
+  // updateNodeData rather than onNodesChange and so never reach this stack;
+  // those already get the browser's native per-field undo, which is what
+  // Ctrl+Z was silently falling back to for EVERYTHING before this existed
+  // (including a deleted node, which no text field's undo history could
+  // ever bring back — see the keydown handler below and commit's callers).
+  const [past, setPast] = useState<GraphSnapshot[]>([])
+  const [future, setFuture] = useState<GraphSnapshot[]>([])
+
+  const commit = useCallback(() => {
+    setPast((p) => [...p.slice(-(MAX_HISTORY - 1)), { nodes, edges }])
+    setFuture([])
+  }, [nodes, edges])
+
+  /**
+   * Single choke point for every handler that unconditionally mutates the
+   * graph as one discrete action (Prettify, drag start, connect, add node,
+   * edge double-click delete) — pairs the locked-mode gate with the history
+   * snapshot so the two can't drift apart per call site (onNodesChange/
+   * onEdgesChange don't use this: they only want to gate/commit the
+   * 'remove' changes within a larger batch, not abort the whole handler).
+   * Returns false (with no commit) when locked, so callers just do
+   * `if (!beginMutation()) return`.
+   */
+  const beginMutation = useCallback((): boolean => {
+    if (locked) return false
+    commit()
+    return true
+  }, [locked, commit])
+
+  // undo/redo each call setNodes/setEdges directly rather than from inside
+  // setPast/setFuture's own updater — nesting a setState call inside
+  // another's updater is a side effect, and React 18 StrictMode (see
+  // main.tsx) deliberately double-invokes updater functions in dev to catch
+  // exactly that, which duplicated entries in the opposite stack on every
+  // single Ctrl+Z. Reading `past`/`future` directly (not just their
+  // setters) is what makes that possible.
+  const undo = useCallback(() => {
+    if (past.length === 0) return
+    const previous = past[past.length - 1]
+    setFuture((f) => [...f, { nodes, edges }])
+    setPast((p) => p.slice(0, -1))
+    setNodes(previous.nodes)
+    setEdges(previous.edges)
+  }, [nodes, edges, past])
+
+  const redo = useCallback(() => {
+    if (future.length === 0) return
+    const next = future[future.length - 1]
+    setPast((p) => [...p, { nodes, edges }])
+    setFuture((f) => f.slice(0, -1))
+    setNodes(next.nodes)
+    setEdges(next.edges)
+  }, [nodes, edges, future])
 
   useEffect(() => {
     if (overlay) {
@@ -76,7 +143,37 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
       setNodes(defaultNodes)
       setEdges(defaultEdges)
     }
+    // A different scene's history is meaningless here — without this, Ctrl+Z
+    // right after switching scenes would silently reach back into whatever
+    // the PREVIOUS scene's last edit was.
+    setPast([])
+    setFuture([])
   }, [overlay?.id])
+
+  // Ctrl+Z / Ctrl+Shift+Z (and Ctrl+Y, the common Windows redo chord) for the
+  // graph itself. Skipped while focus is inside a text field so the
+  // browser's own native undo for that field still works exactly as before —
+  // this only steps in for everything that field-level undo could never
+  // cover (node/edge structure).
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null): boolean => {
+      if (!(target instanceof HTMLElement)) return false
+      return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+    }
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (!(e.ctrlKey || e.metaKey) || isEditableTarget(e.target)) return
+      const key = e.key.toLowerCase()
+      if (key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+      } else if ((key === 'z' && e.shiftKey) || key === 'y') {
+        e.preventDefault()
+        redo()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [undo, redo])
 
   /**
    * One-shot auto-arrange via layoutGraph (dagre) — only touches local
@@ -88,6 +185,7 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
    * synchronously right after setNodes would still see the OLD layout.
    */
   const handlePrettify = (): void => {
+    if (!beginMutation()) return
     setNodes((nds) => layoutGraph(nds, edges))
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -95,6 +193,17 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
       })
     })
   }
+
+  /**
+   * Snapshots the pre-drag position for undo. React Flow streams a node's
+   * position continuously through onNodesChange as the pointer moves (each
+   * one already carries the NEW position, applied immediately), so there's
+   * no single "before" state to capture there — drag start is the only point
+   * where `nodes` still holds the position a Ctrl+Z should return to.
+   */
+  const onNodeDragStart = useCallback(() => {
+    beginMutation()
+  }, [beginMutation])
 
   const onNodeDragStop = useCallback(
     (_: MouseEvent | TouchEvent, node: Node) => {
@@ -162,8 +271,15 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      const removeIds = new Set(changes.filter((c) => c.type === 'remove').map((c) => c.id))
+      // Locked mode's own nodesDraggable/elementsSelectable/deleteKeyCode
+      // (see the <ReactFlow> props in SceneBuilderPage.tsx) already stop a
+      // removal at the source, but a locked scene should never lose a node
+      // no matter what triggers a 'remove' change, so it's filtered again
+      // here too rather than trusting a single layer to hold.
+      const effectiveChanges = locked ? changes.filter((c) => c.type !== 'remove') : changes
+      const removeIds = new Set(effectiveChanges.filter((c) => c.type === 'remove').map((c) => c.id))
       if (removeIds.size > 0) {
+        commit()
         // Each Source <-> Widget pairing (see SOURCE_PAIRINGS above) is
         // mandatory — deleting either half cascades to the other, so a scene
         // never ends up with a dangling half-pair. The secondary node
@@ -187,11 +303,11 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
       }
       const finalChanges =
         removeIds.size === 0
-          ? changes
+          ? effectiveChanges
           : [
-              ...changes,
+              ...effectiveChanges,
               ...[...removeIds]
-                .filter((rid) => !changes.some((c) => c.type === 'remove' && c.id === rid))
+                .filter((rid) => !effectiveChanges.some((c) => c.type === 'remove' && c.id === rid))
                 .map((rid) => ({ type: 'remove' as const, id: rid }))
             ]
       setNodes((nds) => applyNodeChanges(finalChanges, nds))
@@ -202,18 +318,20 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
         setEdges((eds) => eds.filter((e) => !removeIds.has(e.source) && !removeIds.has(e.target)))
       }
     },
-    [nodes, edges]
+    [nodes, edges, locked, commit]
   )
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
       const filtered = changes.filter((c) => {
         if (c.type !== 'remove') return true
+        if (locked) return false
         const edge = edges.find((e) => e.id === c.id)
         return !edge || !isMandatoryWidgetPairEdge(edge, nodes)
       })
+      if (filtered.some((c) => c.type === 'remove')) commit()
       setEdges((eds) => applyEdgeChanges(filtered, eds))
     },
-    [nodes, edges]
+    [nodes, edges, locked, commit]
   )
 
   /**
@@ -227,6 +345,7 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
    */
   const onConnect = useCallback(
     (params: Connection) => {
+      if (!beginMutation()) return
       setEdges((eds) => {
         const targetNode = nodes.find((n) => n.id === params.target)
         const socket = targetNode ? NODE_SOCKETS[targetNode.type!]?.find((s) => s.id === params.targetHandle) : undefined
@@ -235,7 +354,7 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
         return addEdge(params, base)
       })
     },
-    [nodes]
+    [nodes, beginMutation]
   )
 
   /**
@@ -310,12 +429,14 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
   const onEdgeDoubleClick = useCallback(
     (_: React.MouseEvent, edge: Edge) => {
       if (isMandatoryWidgetPairEdge(edge, nodes)) return
+      if (!beginMutation()) return
       setEdges((eds) => eds.filter((e) => e.id !== edge.id))
     },
-    [nodes]
+    [nodes, beginMutation]
   )
 
-  const addNode = (type: string, position: { x: number; y: number }): void => {
+  const addNode = useCallback((type: string, position: { x: number; y: number }): void => {
+    if (!beginMutation()) return
     const id = `${type}-${Date.now()}`
     const newNode: Node = {
       id,
@@ -402,7 +523,7 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
       return
     }
     setNodes((nds) => [...nds, newNode])
-  }
+  }, [beginMutation])
 
   // Drag-and-drop from the Add Node palette — see the palette buttons'
   // draggable/onDragStart in AddNodePalette and the canvas wrapper's
@@ -428,7 +549,7 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
       y: event.clientY
     })
     addNode(type, position)
-  }, [])
+  }, [addNode])
 
   return {
     nodes,
@@ -437,6 +558,7 @@ export function useSceneGraph(overlay: CustomOverlay | undefined) {
     setEdges,
     reactFlowInstanceRef,
     handlePrettify,
+    onNodeDragStart,
     onNodeDragStop,
     onNodesChange,
     onEdgesChange,

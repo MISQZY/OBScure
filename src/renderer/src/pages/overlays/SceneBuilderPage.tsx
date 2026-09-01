@@ -3,6 +3,7 @@ import { ReactFlow, Controls, Background, MiniMap } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import './scene-preview-animations.css'
 import './scene-builder-canvas.css'
+import { cn } from '@/lib/utils'
 import { nodeTypes, SavedNodeDataProvider } from '@/components/nodes'
 import { useTheme } from '@/providers/ThemeProvider'
 import { useCustomOverlays } from '@/providers/CustomOverlaysProvider'
@@ -37,11 +38,22 @@ export function SceneBuilderPage({
 
   const overlay = customOverlayId ? overlays.find((o) => o.id === customOverlayId) : undefined
 
+  // React Flow's own Controls panel has a built-in lock/unlock (padlock)
+  // button — this is the "locked mode" it toggles. On its own that button
+  // only flips React Flow's internal nodesDraggable/nodesConnectable/
+  // elementsSelectable flags, which don't touch plain DOM <input>s inside a
+  // custom node, and doesn't stop the Delete key from removing an
+  // already-selected node either. Lifting it into real state here — passed
+  // down as explicit (controlled) props below — is what lets locked mode
+  // actually block deletion and node-content editing, not just dragging.
+  const [locked, setLocked] = useState(false)
+
   const {
     nodes,
     edges,
     reactFlowInstanceRef,
     handlePrettify,
+    onNodeDragStart,
     onNodeDragStop,
     onNodesChange,
     onEdgesChange,
@@ -51,7 +63,7 @@ export function SceneBuilderPage({
     onPaletteDragStart,
     onCanvasDragOver,
     onCanvasDrop
-  } = useSceneGraph(overlay)
+  } = useSceneGraph(overlay, locked)
 
   const {
     nameInput,
@@ -146,6 +158,7 @@ export function SceneBuilderPage({
           nodes={nodes}
           edges={displayEdges(nodes, edges)}
           onNodesChange={onNodesChange}
+          onNodeDragStart={onNodeDragStart}
           onNodeDragStop={onNodeDragStop}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
@@ -163,10 +176,20 @@ export function SceneBuilderPage({
           nodeTypes={nodeTypes}
           colorMode={isDark ? 'dark' : 'light'}
           fitView
-          className="bg-background"
+          // Controlled so Controls' own lock button (onInteractiveChange
+          // below) actually reaches our `locked` state instead of only
+          // flipping React Flow's internal store — see the doc comment on
+          // that state above. deleteKeyCode={null} additionally covers a
+          // node that was already selected before locking, which
+          // elementsSelectable alone wouldn't retroactively deselect.
+          nodesDraggable={!locked}
+          nodesConnectable={!locked}
+          elementsSelectable={!locked}
+          deleteKeyCode={locked ? null : ['Backspace', 'Delete']}
+          className={cn('bg-background', locked && 'locked')}
         >
           <Background />
-          <Controls />
+          <Controls onInteractiveChange={(isInteractive) => setLocked(!isInteractive)} />
           <MiniMap nodeColor={minimapNodeColor} maskColor="rgba(0, 0, 0, 0.6)" pannable zoomable className="!bg-card !border !border-border" />
           <ProcessToken nodes={nodes} edges={edges} clockMs={processClockMs} durationMs={processDurationMs} active={proc.active && eventPhase === 'showing'} />
           <SceneBuilderToolbar

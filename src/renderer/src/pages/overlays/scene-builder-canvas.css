@@ -37,3 +37,17 @@
   border: none;
   background-color: transparent;
 }
+
+/*
+  React Flow's own nodesDraggable/nodesConnectable/elementsSelectable props
+  (see the <ReactFlow> element in SceneBuilderPage.tsx, driven by the
+  Controls panel's lock button) only govern React Flow's OWN drag/connect/
+  select gestures on a node — they have no effect on plain DOM <input>s,
+  <textarea>s, checkboxes, or buttons a custom node renders as its own
+  content (every node in components/nodes/*.tsx). Locked mode needs those
+  blocked too, or a scene that's supposedly locked can still be edited by
+  just typing into any field.
+*/
+.react-flow.locked .react-flow__node {
+  pointer-events: none;
+}
