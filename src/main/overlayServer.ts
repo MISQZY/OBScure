@@ -174,9 +174,13 @@ export class OverlayServer {
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      `img-src 'self' data:`,
+      // http:/https: so an Image/Video node's own URL field — which
+      // explicitly invites any external link — actually renders once this
+      // page is loaded as an OBS Browser Source, instead of the request
+      // getting silently dropped by CSP with nothing visible in OBS itself.
+      `img-src 'self' data: http: https:`,
       `connect-src 'self' ws://${this.host}:${this.port}`,
-      `media-src 'self' ${self}`,
+      `media-src 'self' ${self} http: https:`,
     ].join("; ");
   }
 

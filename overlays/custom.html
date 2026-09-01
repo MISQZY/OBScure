@@ -1307,10 +1307,21 @@
           : d.customImageName
             ? `custom-images/${encodeURIComponent(d.customImageName)}`
             : d.src || (vars && vars.albumArt) || null
+        // 'repeat' has no object-fit equivalent (no tiling keyword), so it's
+        // rendered as a tiled CSS background instead of an <img> — mirrors
+        // ImageView.tsx. The rest map straight onto object-fit, overriding
+        // the '#scene .image-node img' CSS rule's object-fit: cover default.
+        const fit = d.fit || 'cover'
         if (imageSrc) {
-          const img = document.createElement('img')
-          img.src = imageSrc
-          wrap.appendChild(img)
+          if (fit === 'repeat') {
+            wrap.style.backgroundImage = `url(${imageSrc})`
+            wrap.style.backgroundRepeat = 'repeat'
+          } else {
+            const img = document.createElement('img')
+            img.src = imageSrc
+            img.style.objectFit = fit
+            wrap.appendChild(img)
+          }
         }
         applyModifierStyle(wrap, mods)
         applyAnimation(wrap, mods, animate)

@@ -38,6 +38,23 @@ export const ANIMATION_SUB_TYPES = ['auto', 'in', 'out'] as const
 export const BOX_SHAPE_IDS = ['rectangle', 'pill', 'circle', 'hexagon', 'diamond'] as const
 export const EVENT_KINDS = ['alert', 'command'] as const
 
+/**
+ * How an Image node's picture fills its box (see ImageView in
+ * SceneBuilderPage.tsx / buildImage in overlays/custom.html). 'cover'
+ * (crop to fill, no distortion) is the default and was previously the only
+ * option. The rest map straight onto CSS `object-fit`, except 'repeat',
+ * which switches the element from an <img> to a tiled CSS background —
+ * object-fit has no tiling keyword of its own.
+ */
+export const IMAGE_FIT_IDS = ['cover', 'contain', 'fill', 'none', 'repeat'] as const
+export const IMAGE_FIT_LABELS: Record<(typeof IMAGE_FIT_IDS)[number], string> = {
+  cover: 'Cover',
+  contain: 'Contain',
+  fill: 'Stretch',
+  none: 'Original size',
+  repeat: 'Repeat'
+}
+
 export const ALERT_PLATFORM_LABELS: Record<AlertPlatform, string> = { twitch: 'Twitch', youtube: 'YouTube' }
 
 /** Falls back to inferring platform from a saved alertType (pre-platform-field scenes) rather than always defaulting to 'twitch' — otherwise loading an old YouTube-typed Event node would show a Sub-type list that doesn't contain its own saved value. */

@@ -5,7 +5,20 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { useI18n } from '@/providers/I18nProvider'
 
 import { IMAGE_SOCKETS, IMAGE_OUTPUTS } from './constants'
-import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, numberInputClass, textInputClass, UploadRow, useHasIncomingEdge } from './utils'
+import {
+  useSavedNodeData,
+  BaseNode,
+  Field,
+  NumberInput,
+  ColorPicker,
+  NodeSelect,
+  numberInputClass,
+  textInputClass,
+  UploadRow,
+  useHasIncomingEdge,
+  IMAGE_FIT_IDS,
+  IMAGE_FIT_LABELS
+} from './utils'
 
 /** A static image or (left blank) the live now-playing album art — see showAlbumArt. Connect into a Box/Group or straight into Scene. */
 export function ImageNode({ id, data }: NodeProps) {
@@ -15,6 +28,7 @@ export function ImageNode({ id, data }: NodeProps) {
   const [uploading, setUploading] = useState(false)
   const customImageName = (data.customImageName as string) || null
   const borderEnabled = Boolean(data.borderEnabled)
+  const fit = (data.fit as (typeof IMAGE_FIT_IDS)[number]) || 'cover'
   // Audio Player's Content output wired into this node's Content socket (see
   // IMAGE_SOCKETS/AUDIO_PLAYER_OUTPUTS) already decides what's shown, same
   // priority buildImage in overlays/custom.html gives it — the URL field
@@ -66,6 +80,14 @@ export function ImageNode({ id, data }: NodeProps) {
           URL staying online. Persists there until Remove, independent of
           this node/scene. */}
       <UploadRow uploading={uploading} hasCustom={Boolean(customImageName)} onUpload={() => void upload()} onRemove={() => void removeCustom()} label={customImageName ? 'Replace' : 'Upload'} />
+      <Field label="Fit">
+        <NodeSelect
+          value={fit}
+          options={IMAGE_FIT_IDS}
+          onChange={(next) => updateNodeData(id, { fit: next })}
+          renderOption={(opt) => IMAGE_FIT_LABELS[opt]}
+        />
+      </Field>
       <Field label="Radius">
         <NumberInput value={data.borderRadius as number} onChange={(v) => updateNodeData(id, { borderRadius: v })} min={0} fallback={8} savedValue={saved.borderRadius as number} className={numberInputClass} />
       </Field>

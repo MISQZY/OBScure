@@ -24,6 +24,7 @@ export function ImageView({
   audioCover: boolean
 }) {
   const customImageName = node.data.customImageName as string | undefined
+  const fit = (node.data.fit as string) || 'cover'
   const src = audioCover
     ? undefined
     : customImageName && urls
@@ -54,7 +55,14 @@ export function ImageView({
       }
     >
       {src ? (
-        <img src={src} className="w-full h-full object-cover" />
+        // 'repeat' has no object-fit equivalent (no tiling keyword), so it's
+        // rendered as a tiled CSS background instead of an <img> — mirrors
+        // buildImage in overlays/custom.html.
+        fit === 'repeat' ? (
+          <div className="w-full h-full" style={{ backgroundImage: `url(${src})`, backgroundRepeat: 'repeat' }} />
+        ) : (
+          <img src={src} className="w-full h-full" style={{ objectFit: fit as React.CSSProperties['objectFit'] }} />
+        )
       ) : audioCover ? (
         // Editor-only affordance, same reasoning as TextView's "Empty text"
         // — no live album art to preview in the builder, so a distinct icon

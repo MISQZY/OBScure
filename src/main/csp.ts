@@ -20,7 +20,10 @@ export function buildAppShellCsp(
     `script-src ${localSources.join(" ")}`,
     "style-src 'self' 'unsafe-inline'",
 
-    `img-src ${localSources.join(" ")} data:`,
+    // http:/https: (not just localSources) so an Image/Video node's own URL
+    // field — which explicitly invites any external link — actually loads
+    // in the editor's scene preview instead of silently rendering blank.
+    `img-src ${localSources.join(" ")} data: http: https:`,
     `frame-src ${localSources.join(" ")}`,
   ].join("; ");
 }
