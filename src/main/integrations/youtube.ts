@@ -20,7 +20,7 @@ async function fetchYoutube(
       error instanceof Error && error.cause instanceof Error
         ? error.cause.message
         : String(error);
-    throw new Error(`Не удалось связаться с YouTube: ${cause}`);
+    throw new Error(`Failed to reach YouTube: ${cause}`);
   }
 }
 
@@ -70,7 +70,7 @@ export class YoutubeIntegration extends BaseIntegration {
       null,
     );
     if (!clientId || !clientSecret) {
-      throw new Error("Сначала укажи Client ID и Client Secret");
+      throw new Error("Set a Client ID and Client Secret first");
     }
 
     this.setStatus("connecting");
@@ -103,17 +103,17 @@ export class YoutubeIntegration extends BaseIntegration {
 
     if (params.get("state") !== state) {
       this.setStatus("error");
-      throw new Error("OAuth state не совпадает — возможна подмена запроса");
+      throw new Error("OAuth state mismatch — the request may have been tampered with");
     }
     const authError = params.get("error");
     if (authError) {
       this.setStatus("error");
-      throw new Error(`Google отклонил авторизацию: ${authError}`);
+      throw new Error(`Google rejected the authorization: ${authError}`);
     }
     const code = params.get("code");
     if (!code) {
       this.setStatus("error");
-      throw new Error("Google не вернул код авторизации");
+      throw new Error("Google didn't return an authorization code");
     }
 
     const tokenResponse = await fetchYoutube(
@@ -133,14 +133,14 @@ export class YoutubeIntegration extends BaseIntegration {
 
     if (!tokenResponse.ok) {
       this.setStatus("error");
-      throw new Error(`Google отклонил обмен токена (${tokenResponse.status})`);
+      throw new Error(`Google rejected the token exchange (${tokenResponse.status})`);
     }
 
     const tokens = (await tokenResponse.json()) as GoogleTokenResponse;
     if (!tokens.refresh_token) {
       this.setStatus("error");
       throw new Error(
-        "Google не выдал refresh token — отзови доступ приложению в аккаунте Google и попробуй снова",
+        "Google didn't issue a refresh token — revoke the app's access in your Google account and try again",
       );
     }
 
@@ -175,7 +175,7 @@ export class YoutubeIntegration extends BaseIntegration {
     });
 
     if (!response.ok) {
-      throw new Error(`Не удалось обновить токен Google (${response.status})`);
+      throw new Error(`Failed to refresh the Google token (${response.status})`);
     }
 
     const tokens = (await response.json()) as GoogleTokenResponse;

@@ -95,7 +95,7 @@ export class TwitchSocket {
       const onClose = (): void => {
         if (settled) return;
         reject(
-          new Error("Twitch EventSub закрыл соединение до session_welcome"),
+          new Error("Twitch EventSub closed the connection before session_welcome"),
         );
       };
       const onError = (error: Error): void => {

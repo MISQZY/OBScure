@@ -38,7 +38,7 @@ export class RandomEngine {
 
   reveal(): RandomStatePayload {
     if (!this.pendingSeed) {
-      throw new Error("Нет активного раунда — сначала сгенерируй хэш");
+      throw new Error("No active round — generate a hash first");
     }
     const seed = this.pendingSeed;
     const { pendingMin: min, pendingMax: max, pendingCount: count } = this;

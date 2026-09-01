@@ -58,7 +58,7 @@ export abstract class BaseIntegration implements Integration {
 
   connect(): Promise<void> {
     return Promise.reject(
-      new Error("Эта интеграция не поддерживает OAuth-подключение"),
+      new Error("This integration doesn't support OAuth connect"),
     );
   }
 

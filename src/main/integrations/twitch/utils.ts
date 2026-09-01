@@ -29,7 +29,7 @@ export async function fetchTwitch(
       error instanceof Error && error.cause instanceof Error
         ? error.cause.message
         : String(error);
-    throw new Error(`Не удалось связаться с Twitch: ${cause}`);
+    throw new Error(`Failed to reach Twitch: ${cause}`);
   }
 }
 

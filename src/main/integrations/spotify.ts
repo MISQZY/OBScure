@@ -27,7 +27,7 @@ async function fetchSpotify(
       error instanceof Error && error.cause instanceof Error
         ? error.cause.message
         : String(error);
-    throw new Error(`Не удалось связаться со Spotify: ${cause}`);
+    throw new Error(`Failed to reach Spotify: ${cause}`);
   }
 }
 
@@ -185,7 +185,7 @@ export class SpotifyIntegration extends BaseIntegration {
       null,
     );
     if (!clientId) {
-      throw new Error("Сначала укажи Client ID");
+      throw new Error("Set a Client ID first");
     }
 
     this.setStatus("connecting");
@@ -219,17 +219,17 @@ export class SpotifyIntegration extends BaseIntegration {
 
     if (params.get("state") !== state) {
       this.setStatus("error");
-      throw new Error("OAuth state не совпадает — возможна подмена запроса");
+      throw new Error("OAuth state mismatch — the request may have been tampered with");
     }
     const authError = params.get("error");
     if (authError) {
       this.setStatus("error");
-      throw new Error(`Spotify отклонил авторизацию: ${authError}`);
+      throw new Error(`Spotify rejected the authorization: ${authError}`);
     }
     const code = params.get("code");
     if (!code) {
       this.setStatus("error");
-      throw new Error("Spotify не вернул код авторизации");
+      throw new Error("Spotify didn't return an authorization code");
     }
 
     const tokenResponse = await fetchSpotify(
@@ -250,14 +250,14 @@ export class SpotifyIntegration extends BaseIntegration {
     if (!tokenResponse.ok) {
       this.setStatus("error");
       throw new Error(
-        `Spotify отклонил обмен токена (${tokenResponse.status})`,
+        `Spotify rejected the token exchange (${tokenResponse.status})`,
       );
     }
 
     const tokens = (await tokenResponse.json()) as SpotifyTokenResponse;
     if (!tokens.refresh_token) {
       this.setStatus("error");
-      throw new Error("Spotify не выдал refresh token");
+      throw new Error("Spotify didn't issue a refresh token");
     }
 
     this.accessToken = tokens.access_token;
@@ -293,7 +293,7 @@ export class SpotifyIntegration extends BaseIntegration {
     );
 
     if (!response.ok) {
-      throw new Error(`Не удалось обновить токен Spotify (${response.status})`);
+      throw new Error(`Failed to refresh the Spotify token (${response.status})`);
     }
 
     const tokens = (await response.json()) as SpotifyTokenResponse;

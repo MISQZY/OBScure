@@ -119,7 +119,7 @@ export class TwitchIntegration extends BaseIntegration {
   async connect(): Promise<void> {
     const clientId = getClientId(this.config);
     if (!clientId) {
-      throw new Error("Сначала укажи Client ID");
+      throw new Error("Set a Client ID first");
     }
 
     this.setStatus("connecting");
@@ -132,7 +132,7 @@ export class TwitchIntegration extends BaseIntegration {
     if (!deviceResponse.ok) {
       this.setStatus("error");
       throw new Error(
-        `Twitch отклонил запрос кода устройства (${deviceResponse.status}): ${await deviceResponse.text()}`,
+        `Twitch rejected the device code request (${deviceResponse.status}): ${await deviceResponse.text()}`,
       );
     }
     const device = (await deviceResponse.json()) as DeviceCodeResponse;
@@ -182,7 +182,7 @@ export class TwitchIntegration extends BaseIntegration {
   private async fetchBroadcasterId(): Promise<string> {
     if (this.broadcasterId) return this.broadcasterId;
     if (!this.clientId || !this.accessToken) {
-      throw new Error("Нет токена Twitch для запроса профиля");
+      throw new Error("No Twitch token to request the profile with");
     }
 
     const response = await fetchTwitch(`${HELIX_BASE}/users`, {
@@ -192,15 +192,24 @@ export class TwitchIntegration extends BaseIntegration {
       },
     });
     if (!response.ok) {
+      // 401 here means the client ID and/or token themselves are invalid —
+      // not a transient failure. Surfacing it as TwitchAuthError (see
+      // handleConnectFailure) stops the reconnect loop instead of retrying
+      // forever against credentials that can never succeed.
+      if (response.status === 401) {
+        throw new TwitchAuthError(
+          `Twitch rejected the Client ID or token while fetching the profile (401)`,
+        );
+      }
       throw new Error(
-        `Не удалось получить профиль Twitch (${response.status})`,
+        `Failed to fetch the Twitch profile (${response.status})`,
       );
     }
 
     const body = (await response.json()) as { data: Array<{ id: string }> };
     const id = body.data[0]?.id;
     if (!id) {
-      throw new Error("Twitch не вернул профиль пользователя");
+      throw new Error("Twitch didn't return a user profile");
     }
     this.broadcasterId = id;
     return id;
@@ -376,7 +385,7 @@ export class TwitchIntegration extends BaseIntegration {
     sessionId: string,
   ): Promise<void> {
     if (!this.clientId || !this.accessToken) {
-      throw new Error("Нет токена Twitch для подписки на события");
+      throw new Error("No Twitch token to subscribe to events with");
     }
 
     const response = await fetchTwitch(`${HELIX_BASE}/eventsub/subscriptions`, {
@@ -395,8 +404,15 @@ export class TwitchIntegration extends BaseIntegration {
     });
 
     if (!response.ok && response.status !== 409) {
+      // Same reasoning as fetchBroadcasterId: a 401 means the client
+      // ID/token are invalid, not a transient failure — stop retrying.
+      if (response.status === 401) {
+        throw new TwitchAuthError(
+          `Twitch rejected the Client ID or token while subscribing to ${type} (401)`,
+        );
+      }
       throw new Error(
-        `Twitch отклонил подписку на ${type} (${response.status})`,
+        `Twitch rejected the subscription to ${type} (${response.status})`,
       );
     }
   }

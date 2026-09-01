@@ -43,7 +43,7 @@ export function waitForRedirect(
       if (settled) return;
       settled = true;
       server?.close();
-      rejectPromise(new Error("Время ожидания авторизации истекло"));
+      rejectPromise(new Error("Timed out waiting for authorization"));
     }, timeoutMs);
 
     const finish = (params: URLSearchParams): void => {

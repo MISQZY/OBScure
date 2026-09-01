@@ -28,7 +28,7 @@ export async function pollForDeviceToken(
   for (;;) {
     await sleep(delayMs);
     if (Date.now() >= deadline) {
-      throw new Error("Время на подтверждение авторизации в Twitch истекло");
+      throw new Error("Time to confirm the Twitch authorization ran out");
     }
 
     const tokenUrl = new URL("https://id.twitch.tv/oauth2/token");
@@ -52,7 +52,7 @@ export async function pollForDeviceToken(
       continue;
     }
     throw new Error(
-      `Twitch отклонил авторизацию устройства: ${message || response.status}`,
+      `Twitch rejected the device authorization: ${message || response.status}`,
     );
   }
 }
@@ -72,11 +72,11 @@ export async function refreshAccessToken(
 
     if (response.status === 400 || response.status === 401) {
       throw new TwitchAuthError(
-        `Twitch отклонил refresh-токен (${response.status}): ${body}`,
+        `Twitch rejected the refresh token (${response.status}): ${body}`,
       );
     }
     throw new Error(
-      `Не удалось обновить токен Twitch (${response.status}): ${body}`,
+      `Failed to refresh the Twitch token (${response.status}): ${body}`,
     );
   }
 
