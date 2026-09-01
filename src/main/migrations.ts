@@ -59,13 +59,26 @@ function readConfigJson(
   }
 }
 
+/** ConfigStore keeps every migratable key under the top-level `settings` object. */
+function readSettings(raw: Record<string, unknown>): Record<string, unknown> {
+  const settings = raw["settings"];
+  return settings && typeof settings === "object"
+    ? (settings as Record<string, unknown>)
+    : {};
+}
+
 function patchConfigJson(
   profileDir: string,
-  data: Record<string, unknown>,
+  raw: Record<string, unknown>,
+  settings: Record<string, unknown>,
 ): void {
   const configPath = join(profileDir, "config.json");
   try {
-    writeFileSync(configPath, JSON.stringify(data, null, 2), "utf-8");
+    writeFileSync(
+      configPath,
+      JSON.stringify({ ...raw, settings }, null, 2),
+      "utf-8",
+    );
   } catch (e) {
     logWarn("migrations", `failed to patch config.json in ${profileDir}`, e);
   }
@@ -86,9 +99,10 @@ function migrateOverlaysToPerFileStorage(userDataDir: string): void {
   eachProfileDir(userDataDir, (profileDir, profileId) => {
     const raw = readConfigJson(profileDir);
     if (!raw) return;
+    const settings = readSettings(raw);
 
-    const overlays = raw["customOverlays"];
-    const folders = raw["customOverlayFolders"];
+    const overlays = settings["customOverlays"];
+    const folders = settings["customOverlayFolders"];
     if (!Array.isArray(overlays) && !Array.isArray(folders)) return;
 
     const overlaysDir = join(profileDir, "overlays");
@@ -128,8 +142,12 @@ function migrateOverlaysToPerFileStorage(userDataDir: string): void {
     }
 
     // Strip migrated keys from config.json so this branch never fires again.
-    const { customOverlays: _co, customOverlayFolders: _cf, ...rest } = raw;
-    patchConfigJson(profileDir, rest);
+    const {
+      customOverlays: _co,
+      customOverlayFolders: _cf,
+      ...restSettings
+    } = settings;
+    patchConfigJson(profileDir, raw, restSettings);
 
     if (count > 0) {
       logInfo(
@@ -159,8 +177,9 @@ function migrateThemesToGlobalFolder(userDataDir: string): void {
   eachProfileDir(userDataDir, (profileDir, profileId) => {
     const raw = readConfigJson(profileDir);
     if (!raw) return;
+    const settings = readSettings(raw);
 
-    const themes = raw["customThemes"];
+    const themes = settings["customThemes"];
     if (!Array.isArray(themes) || themes.length === 0) return;
 
     if (!dirEnsured) {
@@ -186,8 +205,8 @@ function migrateThemesToGlobalFolder(userDataDir: string): void {
     }
 
     // Strip migrated key from config.json so this branch never fires again.
-    const { customThemes: _ct, ...rest } = raw;
-    patchConfigJson(profileDir, rest);
+    const { customThemes: _ct, ...restSettings } = settings;
+    patchConfigJson(profileDir, raw, restSettings);
 
     if (count > 0) {
       logInfo(
