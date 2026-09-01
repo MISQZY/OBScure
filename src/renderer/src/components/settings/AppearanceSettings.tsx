@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Download, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { ThemeSelect } from '@/components/settings/ThemeSelect'
 import { LocaleSelect } from '@/components/settings/LocaleSelect'
 import {
@@ -81,31 +82,33 @@ export function AppearanceSettings() {
         {customThemes.length > 0 && (
           <div className="flex flex-col gap-1.5 pt-1">
             <p className="text-xs font-medium text-muted-foreground">{s.customThemesTitle}</p>
-            <ul className="flex flex-col gap-1">
-              {customThemes.map((theme) => (
-                <li key={theme.id} className="flex items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 text-sm">
-                  <span>{theme.name}</span>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button type="button" variant="ghost" size="icon" aria-label={s.deleteCustom}>
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogTitle>
-                        {interpolate(s.deleteConfirm, { name: theme.name ?? theme.id })}
-                      </AlertDialogTitle>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
-                        <AlertDialogAction variant="destructive" onClick={() => void handleDeleteTheme(theme.id)}>
-                          {t.common.delete}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </li>
-              ))}
-            </ul>
+            <ScrollArea className="max-h-48">
+              <ul className="flex flex-col gap-1 pr-3">
+                {customThemes.map((theme) => (
+                  <li key={theme.id} className="flex items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 text-sm">
+                    <span>{theme.name}</span>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button type="button" variant="ghost" size="icon" aria-label={s.deleteCustom}>
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogTitle>
+                          {interpolate(s.deleteConfirm, { name: theme.name ?? theme.id })}
+                        </AlertDialogTitle>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+                          <AlertDialogAction variant="destructive" onClick={() => void handleDeleteTheme(theme.id)}>
+                            {t.common.delete}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </li>
+                ))}
+              </ul>
+            </ScrollArea>
           </div>
         )}
       </div>
@@ -127,29 +130,31 @@ export function AppearanceSettings() {
         {customLocales.length > 0 && (
           <div className="flex flex-col gap-1.5 pt-1">
             <p className="text-xs font-medium text-muted-foreground">{s.customLocalesTitle}</p>
-            <ul className="flex flex-col gap-1">
-              {customLocales.map((entry) => (
-                <li key={entry.id} className="flex items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 text-sm">
-                  <span>{entry.name}</span>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button type="button" variant="ghost" size="icon" aria-label={s.deleteCustom}>
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogTitle>{interpolate(s.deleteConfirm, { name: entry.name })}</AlertDialogTitle>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
-                        <AlertDialogAction variant="destructive" onClick={() => void handleDeleteLocale(entry.id)}>
-                          {t.common.delete}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </li>
-              ))}
-            </ul>
+            <ScrollArea className="max-h-48">
+              <ul className="flex flex-col gap-1 pr-3">
+                {customLocales.map((entry) => (
+                  <li key={entry.id} className="flex items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 text-sm">
+                    <span>{entry.name}</span>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button type="button" variant="ghost" size="icon" aria-label={s.deleteCustom}>
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogTitle>{interpolate(s.deleteConfirm, { name: entry.name })}</AlertDialogTitle>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+                          <AlertDialogAction variant="destructive" onClick={() => void handleDeleteLocale(entry.id)}>
+                            {t.common.delete}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </li>
+                ))}
+              </ul>
+            </ScrollArea>
           </div>
         )}
       </div>
