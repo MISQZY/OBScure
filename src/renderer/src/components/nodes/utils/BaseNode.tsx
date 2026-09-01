@@ -8,7 +8,7 @@ import { useI18n } from '@/providers/I18nProvider'
 import { interpolate } from '@/lib/i18n/interpolate'
 import { NodeCategory, InputSocket, OutputSocket, CATEGORY_STYLES, CATEGORY_DOT, SOCKET_DOT } from '../constants'
 import { usePriorityInfo, useSequenceInfo } from './hooks'
-import { NodePopover } from './NodePopover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 /** One labeled input-socket row — the dot is nested inside this (relatively positioned) row rather than placed by percentage on the whole node, so any number of sockets stacks cleanly regardless of node height. */
 export function SocketRow({ id, label, dotClass, title }: { id: string; label: string; dotClass: string; title: string }) {
@@ -27,7 +27,7 @@ export function SocketRow({ id, label, dotClass, title }: { id: string; label: s
   )
 }
 
-/** One labeled output-socket row — the source-side mirror of SocketRow, dot on the right edge. Only rendered for node types with an `outputSockets` list (see OutputSocket/NODE_OUTPUTS above); every other node keeps the single generic "output" handle. `helpKey` (optional — see OutputSocket's own doc comment) looks up `sceneBuilder.tooltip.outputs[helpKey]` and renders it in the same small "?" popover BaseNode's header uses, so a node's header help can stay a short one-liner while each output's own exact behavior lives on the row it belongs to. Placed AFTER the label (not before) so it sits flush against the row's right edge — the last child in a `justify-end` row lands at a fixed position regardless of the label's own width, so the "?" lines up identically across every output row instead of drifting with each label's length. */
+/** One labeled output-socket row — the source-side mirror of SocketRow, dot on the right edge. Only rendered for node types with an `outputSockets` list (see OutputSocket/NODE_OUTPUTS above); every other node keeps the single generic "output" handle. `helpKey` (optional — see OutputSocket's own doc comment) looks up `sceneBuilder.tooltip.outputs[helpKey]` and renders it in the same small "?" hover tooltip BaseNode's header uses, so a node's header help can stay a short one-liner while each output's own exact behavior lives on the row it belongs to. Placed AFTER the label (not before) so it sits flush against the row's right edge — the last child in a `justify-end` row lands at a fixed position regardless of the label's own width, so the "?" lines up identically across every output row instead of drifting with each label's length. */
 export function OutputRow({ id, label, dotClass, title, helpKey }: { id: string; label: string; dotClass: string; title: string; helpKey?: string }) {
   const { t } = useI18n()
   const help = helpKey ? (t.sceneBuilder.tooltip.outputs as Record<string, string>)[helpKey] : undefined
@@ -35,22 +35,20 @@ export function OutputRow({ id, label, dotClass, title, helpKey }: { id: string;
     <div className="relative flex items-center justify-end gap-1.5 pl-2 pr-3 h-5 text-[10px] text-muted-foreground">
       <span className="truncate">{label}</span>
       {help && (
-        <NodePopover
-          side="bottom"
-          className="w-56 text-xs leading-snug p-2.5"
-          trigger={
+        <Tooltip>
+          <TooltipTrigger asChild>
             <button
               type="button"
               onClick={(e) => e.stopPropagation()}
-              title={t.sceneBuilder.tooltip.help}
               className="nodrag shrink-0 flex items-center justify-center size-3.5 rounded-full border border-muted-foreground/50 text-muted-foreground text-[9px] font-bold leading-none hover:bg-accent hover:text-accent-foreground hover:border-foreground/50 transition-colors cursor-pointer"
             >
               ?
             </button>
-          }
-        >
-          {help}
-        </NodePopover>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="w-56 text-xs leading-snug whitespace-normal">
+            {help}
+          </TooltipContent>
+        </Tooltip>
       )}
       <Handle
         type="source"
@@ -260,22 +258,20 @@ export function BaseNode({
           <div className="flex items-center min-w-0 flex-1 gap-1.5">
             <span className="truncate shrink-0">{title}</span>
             {help && (
-              <NodePopover
-                side="bottom"
-                className="w-56 text-xs leading-snug p-2.5"
-                trigger={
+              <Tooltip>
+                <TooltipTrigger asChild>
                   <button
                     type="button"
                     onClick={(e) => e.stopPropagation()}
-                    title={t.sceneBuilder.tooltip.help}
                     className="nodrag shrink-0 flex items-center justify-center size-3.5 rounded-full border border-muted-foreground/50 text-muted-foreground text-[9px] font-bold leading-none hover:bg-accent hover:text-accent-foreground hover:border-foreground/50 transition-colors cursor-pointer"
                   >
                     ?
                   </button>
-                }
-              >
-                {help}
-              </NodePopover>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="w-56 text-xs leading-snug whitespace-normal">
+                  {help}
+                </TooltipContent>
+              </Tooltip>
             )}
             {isEditingLabel ? (
               <input
