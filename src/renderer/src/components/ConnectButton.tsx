@@ -17,7 +17,7 @@ export function ConnectButton({ integrationKey, status, onChanged }: ConnectButt
   const connect = async (): Promise<void> => {
     setPending(true)
     setError(null)
-    const result = await window.maddoner.connectIntegration(integrationKey)
+    const result = await window.obscure.connectIntegration(integrationKey)
     setPending(false)
     if (!result.ok) setError(result.error ?? t.connect.genericError)
     onChanged()
@@ -25,7 +25,7 @@ export function ConnectButton({ integrationKey, status, onChanged }: ConnectButt
 
   const disconnect = async (): Promise<void> => {
     setPending(true)
-    await window.maddoner.disconnectIntegration(integrationKey)
+    await window.obscure.disconnectIntegration(integrationKey)
     setPending(false)
     onChanged()
   }

@@ -74,7 +74,7 @@ export function CanvasSettingsForm({ current, onUpdated }: CanvasSettingsFormPro
 
     setPending(true)
     try {
-      const config = await window.maddoner.setCanvasConfig({
+      const config = await window.obscure.setCanvasConfig({
         width: Math.round(widthNumber),
         height: Math.round(heightNumber),
         aspectRatio

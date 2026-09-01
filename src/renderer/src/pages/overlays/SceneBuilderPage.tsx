@@ -82,12 +82,12 @@ export function SceneBuilderPage({
 
   const [urls, setUrls] = useState<OverlayUrls | null>(null)
   useEffect(() => {
-    window.maddoner.getOverlayUrls().then(setUrls)
+    window.obscure.getOverlayUrls().then(setUrls)
   }, [])
 
   const [canvasConfig, setCanvasConfig] = useState<CanvasConfig>(DEFAULT_CANVAS_CONFIG)
   useEffect(() => {
-    window.maddoner.getCanvasConfig().then(setCanvasConfig)
+    window.obscure.getCanvasConfig().then(setCanvasConfig)
   }, [])
 
   const { playToken, eventPhase, eventVars, processClockMs, testStatus, handlePlay, handleTest } = useScenePlayback({

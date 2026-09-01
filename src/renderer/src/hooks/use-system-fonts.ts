@@ -5,7 +5,7 @@ export function useSystemFonts(): string[] {
   const [fonts, setFonts] = useState<string[]>([])
 
   useEffect(() => {
-    window.maddoner.getSystemFonts().then(setFonts)
+    window.obscure.getSystemFonts().then(setFonts)
   }, [])
 
   return fonts

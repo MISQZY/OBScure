@@ -33,7 +33,7 @@ export function OverlayAddressForm({ current, onUpdated }: OverlayAddressFormPro
     setPending(true)
     setError(null)
     try {
-      const urls = await window.maddoner.updateOverlayAddress({ host, port: portNumber })
+      const urls = await window.obscure.updateOverlayAddress({ host, port: portNumber })
       onUpdated(urls)
     } catch {
       setError(t.overlayAddress.restartError)

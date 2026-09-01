@@ -13,12 +13,12 @@ export function SettingToggleField({ settingKey, label, description }: SettingTo
   const [enabled, setEnabled] = useState(false)
 
   useEffect(() => {
-    window.maddoner.getSetting<boolean>(settingKey).then((stored) => setEnabled(Boolean(stored)))
+    window.obscure.getSetting<boolean>(settingKey).then((stored) => setEnabled(Boolean(stored)))
   }, [settingKey])
 
   const toggle = (checked: boolean): void => {
     setEnabled(checked)
-    void window.maddoner.setSetting(settingKey, checked)
+    void window.obscure.setSetting(settingKey, checked)
   }
 
   return (

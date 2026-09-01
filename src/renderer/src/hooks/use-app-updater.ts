@@ -5,12 +5,12 @@ export function useAppUpdater(): [AppUpdaterStatus, () => void] {
   const [status, setStatus] = useState<AppUpdaterStatus>({ state: 'idle' })
 
   useEffect(() => {
-    window.maddoner.getUpdaterStatus().then(setStatus)
-    return window.maddoner.onUpdaterStatus(setStatus)
+    window.obscure.getUpdaterStatus().then(setStatus)
+    return window.obscure.onUpdaterStatus(setStatus)
   }, [])
 
   const download = useCallback(() => {
-    void window.maddoner.downloadUpdate()
+    void window.obscure.downloadUpdate()
   }, [])
 
   return [status, download]

@@ -118,4 +118,4 @@ const api = {
   }
 }
 
-contextBridge.exposeInMainWorld('maddoner', api)
+contextBridge.exposeInMainWorld('obscure', api)

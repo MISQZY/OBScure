@@ -63,5 +63,6 @@ export const PALETTE_GROUPS = [...new Set(NODE_PALETTE.map((entry) => entry.grou
 export const MIN_PREVIEW_WIDTH = 160
 export const MAX_PREVIEW_WIDTH = 720
 export const DEFAULT_PREVIEW_WIDTH = 320
-/** localStorage key for the preview's remembered width — same 'maddoner:*' convention as ThemeProvider/I18nProvider's own persisted preferences. */
-export const PREVIEW_WIDTH_STORAGE_KEY = 'maddoner:sceneBuilderPreviewWidth'
+/** localStorage key for the preview's remembered width — same 'obscure:*' convention as ThemeProvider/I18nProvider's own persisted preferences. */
+export const PREVIEW_WIDTH_STORAGE_KEY = 'obscure:sceneBuilderPreviewWidth'
+export const LEGACY_PREVIEW_WIDTH_STORAGE_KEY = 'maddoner:sceneBuilderPreviewWidth'

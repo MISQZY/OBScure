@@ -67,7 +67,7 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
   const [updaterStatus, downloadUpdate] = useAppUpdater()
 
   useEffect(() => {
-    window.maddoner.getAppVersion().then(setAppVersion)
+    window.obscure.getAppVersion().then(setAppVersion)
   }, [])
 
   const ungroupedOverlays = overlays.filter((o) => !o.folderId)
@@ -514,7 +514,7 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
           {appVersion && (
             <>
               <button
-                onClick={() => window.maddoner.openExternal(RELEASES_URL)}
+                onClick={() => window.obscure.openExternal(RELEASES_URL)}
                 className="hover:text-foreground hover:underline"
                 title={t.sidebar.releaseNotes}
               >

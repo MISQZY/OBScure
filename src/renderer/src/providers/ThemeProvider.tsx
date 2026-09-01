@@ -7,12 +7,14 @@ import {
   type ThemePreference
 } from '@/lib/theme'
 import { useCustomConfig } from '@/providers/CustomConfigProvider'
+import { readMigratedItem } from '@/lib/legacyStorage'
 
-const STORAGE_KEY = 'maddoner:theme'
+const STORAGE_KEY = 'obscure:theme'
+const LEGACY_STORAGE_KEY = 'maddoner:theme'
 
 function readStoredPreference(): ThemePreference {
   try {
-    return localStorage.getItem(STORAGE_KEY) ?? 'system'
+    return readMigratedItem(STORAGE_KEY, LEGACY_STORAGE_KEY) ?? 'system'
   } catch {
     return 'system'
   }
@@ -38,7 +40,7 @@ function applyThemeToDocument(theme: ThemeDefinition): void {
   for (const [key, value] of Object.entries(theme.colors)) {
     document.documentElement.style.setProperty(key, value)
   }
-  void window.maddoner?.setTitleBarOverlay(theme.titleBarOverlay)
+  void window.obscure?.setTitleBarOverlay(theme.titleBarOverlay)
 }
 
 interface ThemeContextValue {

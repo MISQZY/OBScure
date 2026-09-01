@@ -26,22 +26,22 @@ export function RandomToolPage() {
   const [state, setState] = useState<RandomStatePayload>(IDLE_STATE)
 
   useEffect(() => {
-    window.maddoner.getEventsConfig('random').then(setConfig)
+    window.obscure.getEventsConfig('random').then(setConfig)
   }, [])
 
   const save = async (): Promise<void> => {
-    const normalized = await window.maddoner.setEventsConfig('random', config)
+    const normalized = await window.obscure.setEventsConfig('random', config)
     setConfig(normalized)
     setSaved(true)
     setTimeout(() => setSaved(false), 1500)
   }
 
   const roll = async (): Promise<void> => {
-    setState(await window.maddoner.commitRandomRoll(config.min, config.max, config.count))
+    setState(await window.obscure.commitRandomRoll(config.min, config.max, config.count))
   }
 
   const reveal = async (): Promise<void> => {
-    setState(await window.maddoner.revealRandomRoll())
+    setState(await window.obscure.revealRandomRoll())
   }
 
   return (

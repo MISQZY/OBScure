@@ -16,8 +16,8 @@ export function SettingsPage() {
   const [canvasConfig, setCanvasConfig] = useState<CanvasConfig | null>(null)
 
   useEffect(() => {
-    window.maddoner.getOverlayUrls().then(setOverlayUrls)
-    window.maddoner.getCanvasConfig().then(setCanvasConfig)
+    window.obscure.getOverlayUrls().then(setOverlayUrls)
+    window.obscure.getCanvasConfig().then(setCanvasConfig)
   }, [])
 
   return (

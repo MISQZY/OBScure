@@ -14,7 +14,7 @@ export function SoundNode({ id, data }: NodeProps) {
   const upload = async (): Promise<void> => {
     setUploading(true)
     try {
-      const result = await window.maddoner.uploadCustomSound(customSoundName)
+      const result = await window.obscure.uploadCustomSound(customSoundName)
       if (result) updateNodeData(id, { soundId: 'custom', customSoundName: result.fileName })
     } finally {
       setUploading(false)
@@ -23,7 +23,7 @@ export function SoundNode({ id, data }: NodeProps) {
 
   const removeCustom = async (): Promise<void> => {
     if (!customSoundName) return
-    await window.maddoner.removeCustomSound(customSoundName)
+    await window.obscure.removeCustomSound(customSoundName)
     updateNodeData(id, { soundId: 'none', customSoundName: null })
   }
 

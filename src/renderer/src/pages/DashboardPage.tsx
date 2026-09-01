@@ -43,13 +43,13 @@ export function DashboardPage() {
   const hasTrack = Boolean(nowPlaying && (nowPlaying.title || nowPlaying.artist))
 
   useEffect(() => {
-    window.maddoner.getIntegrationsStatus().then(setStatus)
-    return window.maddoner.onIntegrationsStatusUpdate(setStatus)
+    window.obscure.getIntegrationsStatus().then(setStatus)
+    return window.obscure.onIntegrationsStatusUpdate(setStatus)
   }, [])
 
   useEffect(() => {
-    window.maddoner.getNowPlaying().then(setNowPlaying)
-    return window.maddoner.onNowPlaying(setNowPlaying)
+    window.obscure.getNowPlaying().then(setNowPlaying)
+    return window.obscure.onNowPlaying(setNowPlaying)
   }, [])
 
   useEffect(() => {
@@ -59,7 +59,7 @@ export function DashboardPage() {
     }
     let cancelled = false
     const load = (): void => {
-      window.maddoner.getTwitchStats().then((stats) => {
+      window.obscure.getTwitchStats().then((stats) => {
         if (!cancelled) setTwitchStats(stats)
       })
     }

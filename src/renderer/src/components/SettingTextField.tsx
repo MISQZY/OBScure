@@ -31,13 +31,13 @@ export function SettingTextField({
   const [revealed, setRevealed] = useState(false)
 
   useEffect(() => {
-    window.maddoner.getSetting<string>(settingKey).then((stored) => {
+    window.obscure.getSetting<string>(settingKey).then((stored) => {
       if (stored) setValue(stored)
     })
   }, [settingKey])
 
   const save = (): void => {
-    void window.maddoner.setSetting(settingKey, value).then(() => {
+    void window.obscure.setSetting(settingKey, value).then(() => {
       setSaved(true)
       setTimeout(() => setSaved(false), 1500)
     })

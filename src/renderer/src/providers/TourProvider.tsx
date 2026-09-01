@@ -1,11 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { TOUR_STEP_LISTS, type TourId, type TourStepConfig } from '@/lib/tour'
+import { readMigratedItem } from '@/lib/legacyStorage'
 
-const STORAGE_KEY = 'maddoner:onboarding-completed'
+const STORAGE_KEY = 'obscure:onboarding-completed'
+const LEGACY_STORAGE_KEY = 'maddoner:onboarding-completed'
 
 function readCompleted(): boolean {
   try {
-    return localStorage.getItem(STORAGE_KEY) === '1'
+    return readMigratedItem(STORAGE_KEY, LEGACY_STORAGE_KEY) === '1'
   } catch {
     return false
   }

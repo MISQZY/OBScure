@@ -4,13 +4,15 @@ import en from '@/localization/en.json'
 import { LOCALES, type LocaleId } from '@/lib/i18n/locales'
 import type { Dictionary } from '@/lib/i18n/types'
 import { useCustomConfig } from '@/providers/CustomConfigProvider'
+import { readMigratedItem } from '@/lib/legacyStorage'
 
-const STORAGE_KEY = 'maddoner:locale'
+const STORAGE_KEY = 'obscure:locale'
+const LEGACY_STORAGE_KEY = 'maddoner:locale'
 const BUILTIN_DICTIONARIES: Record<LocaleId, Dictionary> = { ru, en }
 
 function readStoredLocale(): string {
   try {
-    return localStorage.getItem(STORAGE_KEY) ?? 'ru'
+    return readMigratedItem(STORAGE_KEY, LEGACY_STORAGE_KEY) ?? 'ru'
   } catch {
     return 'ru'
   }

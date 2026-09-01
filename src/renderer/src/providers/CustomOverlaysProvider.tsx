@@ -5,7 +5,7 @@ interface CustomOverlaysContextValue {
   overlays: CustomOverlay[]
   saveOverlay: (overlay: CustomOverlay) => Promise<void>
   deleteOverlay: (id: string) => Promise<void>
-  /** Live-previews a scene (including unsaved edits) in any connected Browser Source without persisting it — see window.maddoner.testCustomOverlay. */
+  /** Live-previews a scene (including unsaved edits) in any connected Browser Source without persisting it — see window.obscure.testCustomOverlay. */
   testOverlay: (overlay: CustomOverlay) => Promise<void>
   folders: OverlayFolder[]
   saveFolder: (folder: OverlayFolder) => Promise<void>
@@ -30,28 +30,28 @@ export function CustomOverlaysProvider({ children }: { children: ReactNode }) {
   const [folders, setFolders] = useState<OverlayFolder[]>([])
 
   useEffect(() => {
-    window.maddoner.getCustomOverlays().then(setOverlays)
-    window.maddoner.getCustomOverlayFolders().then(setFolders)
+    window.obscure.getCustomOverlays().then(setOverlays)
+    window.obscure.getCustomOverlayFolders().then(setFolders)
   }, [])
 
   const saveOverlay = async (overlay: CustomOverlay): Promise<void> => {
-    setOverlays(await window.maddoner.saveCustomOverlay(overlay))
+    setOverlays(await window.obscure.saveCustomOverlay(overlay))
   }
 
   const deleteOverlay = async (id: string): Promise<void> => {
-    setOverlays(await window.maddoner.deleteCustomOverlay(id))
+    setOverlays(await window.obscure.deleteCustomOverlay(id))
   }
 
   const testOverlay = async (overlay: CustomOverlay): Promise<void> => {
-    await window.maddoner.testCustomOverlay(overlay)
+    await window.obscure.testCustomOverlay(overlay)
   }
 
   const saveFolder = async (folder: OverlayFolder): Promise<void> => {
-    setFolders(await window.maddoner.saveCustomOverlayFolder(folder))
+    setFolders(await window.obscure.saveCustomOverlayFolder(folder))
   }
 
   const deleteFolder = async (id: string): Promise<void> => {
-    setFolders(await window.maddoner.deleteCustomOverlayFolder(id))
+    setFolders(await window.obscure.deleteCustomOverlayFolder(id))
     setOverlays((current) =>
       current.map((o) => (o.folderId === id ? { ...o, folderId: undefined } : o))
     )

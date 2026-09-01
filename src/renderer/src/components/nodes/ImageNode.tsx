@@ -38,7 +38,7 @@ export function ImageNode({ id, data }: NodeProps) {
   const upload = async (): Promise<void> => {
     setUploading(true)
     try {
-      const result = await window.maddoner.uploadCustomImage(customImageName)
+      const result = await window.obscure.uploadCustomImage(customImageName)
       if (result) updateNodeData(id, { customImageName: result.fileName })
     } finally {
       setUploading(false)
@@ -47,7 +47,7 @@ export function ImageNode({ id, data }: NodeProps) {
 
   const removeCustom = async (): Promise<void> => {
     if (!customImageName) return
-    await window.maddoner.removeCustomImage(customImageName)
+    await window.obscure.removeCustomImage(customImageName)
     updateNodeData(id, { customImageName: null })
   }
 

@@ -7,9 +7,16 @@ import { LOCALES } from '@/lib/i18n/locales'
 import en from '@/localization/en.json'
 import { slugify, uniqueUrlKey } from '@/lib/custom-overlays'
 import { deriveTitleBarOverlay } from '@/lib/color'
+import { readMigratedItem } from '@/lib/legacyStorage'
 
-const THEME_CACHE_KEY = 'maddoner:customThemeCache'
-const LOCALE_CACHE_KEY = 'maddoner:customLocaleCache'
+const THEME_CACHE_KEY = 'obscure:customThemeCache'
+const LEGACY_THEME_CACHE_KEY = 'maddoner:customThemeCache'
+const LOCALE_CACHE_KEY = 'obscure:customLocaleCache'
+const LEGACY_LOCALE_CACHE_KEY = 'maddoner:customLocaleCache'
+const LEGACY_CACHE_KEYS: Record<string, string> = {
+  [THEME_CACHE_KEY]: LEGACY_THEME_CACHE_KEY,
+  [LOCALE_CACHE_KEY]: LEGACY_LOCALE_CACHE_KEY
+}
 
 export interface CustomLocaleEntry {
   id: string
@@ -20,7 +27,7 @@ export interface CustomLocaleEntry {
 
 function readCache<T>(key: string): T[] {
   try {
-    const raw = localStorage.getItem(key)
+    const raw = readMigratedItem(key, LEGACY_CACHE_KEYS[key])
     return raw ? (JSON.parse(raw) as T[]) : []
   } catch {
     return []
@@ -131,28 +138,28 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    window.maddoner.getCustomThemes().then((packs) => {
+    window.obscure.getCustomThemes().then((packs) => {
       setCustomThemes(cacheThemePacks(packs).map(packToThemeDefinition))
     })
-    window.maddoner.getCustomLocales().then((packs) => {
+    window.obscure.getCustomLocales().then((packs) => {
       writeCache(LOCALE_CACHE_KEY, packs)
       setCustomLocales(packs.map(packToLocaleEntry))
     })
   }, [])
 
   const deleteCustomTheme = async (id: string): Promise<void> => {
-    const packs = await window.maddoner.deleteCustomTheme(id)
+    const packs = await window.obscure.deleteCustomTheme(id)
     setCustomThemes(cacheThemePacks(packs).map(packToThemeDefinition))
   }
 
   const deleteCustomLocale = async (id: string): Promise<void> => {
-    const packs = await window.maddoner.deleteCustomLocale(id)
+    const packs = await window.obscure.deleteCustomLocale(id)
     writeCache(LOCALE_CACHE_KEY, packs)
     setCustomLocales(packs.map(packToLocaleEntry))
   }
 
   const uploadTheme = async (): Promise<UploadOutcome> => {
-    const file = await window.maddoner.openConfigFile()
+    const file = await window.obscure.openConfigFile()
     if (!file) return 'cancelled'
 
     let parsed: unknown
@@ -182,13 +189,13 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
       colors,
       titleBarOverlay: deriveTitleBarOverlay(colors, payload.titleBarOverlay ?? base.titleBarOverlay)
     }
-    const packs = await window.maddoner.saveCustomTheme(pack)
+    const packs = await window.obscure.saveCustomTheme(pack)
     setCustomThemes(cacheThemePacks(packs).map(packToThemeDefinition))
     return 'ok'
   }
 
   const uploadLocale = async (): Promise<UploadOutcome> => {
-    const file = await window.maddoner.openConfigFile()
+    const file = await window.obscure.openConfigFile()
     if (!file) return 'cancelled'
 
     let parsed: unknown
@@ -218,7 +225,7 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
       shortLabel,
       dictionary: payload.dictionary as Record<string, unknown>
     }
-    const packs = await window.maddoner.saveCustomLocale(pack)
+    const packs = await window.obscure.saveCustomLocale(pack)
     writeCache(LOCALE_CACHE_KEY, packs)
     setCustomLocales(packs.map(packToLocaleEntry))
     return 'ok'
@@ -235,7 +242,7 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
       mode: lightTheme.mode,
       colors: lightTheme.colors
     }
-    return window.maddoner.saveConfigFile('example-theme.json', JSON.stringify(payload, null, 2))
+    return window.obscure.saveConfigFile('example-theme.json', JSON.stringify(payload, null, 2))
   }
 
   const downloadExampleLocale = async (): Promise<boolean> => {
@@ -245,7 +252,7 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
       shortLabel: 'XX',
       dictionary: en
     }
-    return window.maddoner.saveConfigFile('example-lang.json', JSON.stringify(payload, null, 2))
+    return window.obscure.saveConfigFile('example-lang.json', JSON.stringify(payload, null, 2))
   }
 
   return (

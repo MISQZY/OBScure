@@ -19,7 +19,7 @@ import type { CanvasConfig } from '../shared/canvasConfig'
 import type { AvatarColor, Profile } from '../shared/profiles'
 import type { CustomLocalePack, CustomThemePack } from '../shared/customConfig'
 
-export interface MaddonerApi {
+export interface ObscureApi {
   getAppVersion: () => Promise<string>
   openExternal: (url: string) => Promise<void>
   getOverlayUrls: () => Promise<OverlayUrls>
@@ -82,6 +82,6 @@ export interface MaddonerApi {
 
 declare global {
   interface Window {
-    maddoner: MaddonerApi
+    obscure: ObscureApi
   }
 }

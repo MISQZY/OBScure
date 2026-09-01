@@ -50,10 +50,10 @@ export function RouletteToolPage() {
   const positionedWinnerIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    window.maddoner.getEventsConfig('roulette').then(setConfig)
-    window.maddoner.getRouletteState().then(setState)
-    window.maddoner.getTwitchRewards().then(setRewards)
-    return window.maddoner.onRouletteState(setState)
+    window.obscure.getEventsConfig('roulette').then(setConfig)
+    window.obscure.getRouletteState().then(setState)
+    window.obscure.getTwitchRewards().then(setRewards)
+    return window.obscure.onRouletteState(setState)
   }, [])
 
   useEffect(() => {
@@ -91,32 +91,32 @@ export function RouletteToolPage() {
   }, [state.phase, state.winner, state.entrants])
 
   const save = async (): Promise<void> => {
-    const normalized = await window.maddoner.setEventsConfig('roulette', config)
+    const normalized = await window.obscure.setEventsConfig('roulette', config)
     setConfig(normalized)
     setSaved(true)
     setTimeout(() => setSaved(false), 1500)
   }
 
   const start = async (): Promise<void> => {
-    setState(await window.maddoner.startRoulette(config.durationSeconds))
+    setState(await window.obscure.startRoulette(config.durationSeconds))
   }
 
   const cancel = async (): Promise<void> => {
-    setState(await window.maddoner.cancelRoulette())
+    setState(await window.obscure.cancelRoulette())
   }
 
   const finishEarly = async (): Promise<void> => {
-    setState(await window.maddoner.finishRouletteEarly())
+    setState(await window.obscure.finishRouletteEarly())
   }
 
   const addManual = async (): Promise<void> => {
     if (!manualName.trim()) return
-    setState(await window.maddoner.addRouletteEntrant(manualName))
+    setState(await window.obscure.addRouletteEntrant(manualName))
     setManualName('')
   }
 
   const removeEntrant = async (id: string): Promise<void> => {
-    setState(await window.maddoner.removeRouletteEntrant(id))
+    setState(await window.obscure.removeRouletteEntrant(id))
   }
 
   const secondsLeft = state.endsAt ? Math.max(0, Math.ceil((state.endsAt - now) / 1000)) : 0

@@ -71,7 +71,7 @@ export function AlertSoundPicker({
   const upload = async (): Promise<void> => {
     setUploading(true)
     try {
-      const result = await window.maddoner.uploadCustomSound(soundId === 'custom' ? customSoundName : null)
+      const result = await window.obscure.uploadCustomSound(soundId === 'custom' ? customSoundName : null)
       if (result) {
         stopPreview()
         onChange({ soundId: 'custom', customSoundName: result.fileName })
@@ -84,7 +84,7 @@ export function AlertSoundPicker({
   const removeCustom = async (): Promise<void> => {
     if (!customSoundName) return
     stopPreview()
-    await window.maddoner.removeCustomSound(customSoundName)
+    await window.obscure.removeCustomSound(customSoundName)
     onChange({ soundId: 'none', customSoundName: null })
   }
 

@@ -6,12 +6,12 @@ export function useIntegrationStatus(key: IntegrationKey): [string, () => void] 
   const [status, setStatus] = useState('disconnected')
 
   const fetchStatus = useCallback(() => {
-    window.maddoner.getIntegrationsStatus().then((all) => setStatus(all[key]))
+    window.obscure.getIntegrationsStatus().then((all) => setStatus(all[key]))
   }, [key])
 
   useEffect(() => {
     fetchStatus()
-    return window.maddoner.onIntegrationsStatusUpdate((all) => setStatus(all[key]))
+    return window.obscure.onIntegrationsStatusUpdate((all) => setStatus(all[key]))
   }, [fetchStatus, key])
 
   return [status, fetchStatus]
@@ -22,8 +22,8 @@ export function useIntegrationsStatus(): IntegrationsStatusMap | null {
   const [status, setStatus] = useState<IntegrationsStatusMap | null>(null)
 
   useEffect(() => {
-    window.maddoner.getIntegrationsStatus().then(setStatus)
-    return window.maddoner.onIntegrationsStatusUpdate(setStatus)
+    window.obscure.getIntegrationsStatus().then(setStatus)
+    return window.obscure.onIntegrationsStatusUpdate(setStatus)
   }, [])
 
   return status

@@ -39,8 +39,8 @@ export function ManageProfilesDialog({ open, onOpenChange }: ManageProfilesDialo
 
   const refresh = async (): Promise<void> => {
     const [list, active] = await Promise.all([
-      window.maddoner.getProfiles(),
-      window.maddoner.getActiveProfileId()
+      window.obscure.getProfiles(),
+      window.obscure.getActiveProfileId()
     ])
     setProfiles(list)
     setActiveId(active)
@@ -52,27 +52,27 @@ export function ManageProfilesDialog({ open, onOpenChange }: ManageProfilesDialo
 
   const handleRename = async (profile: Profile, name: string): Promise<void> => {
     if (!name.trim() || name === profile.name) return
-    await window.maddoner.renameProfile(profile.id, name)
+    await window.obscure.renameProfile(profile.id, name)
     void refresh()
   }
 
   const handleCycleColor = async (profile: Profile): Promise<void> => {
     const index = AVATAR_COLORS.indexOf(profile.avatarColor)
     const next = AVATAR_COLORS[(index + 1) % AVATAR_COLORS.length]
-    await window.maddoner.setProfileAvatarColor(profile.id, next)
+    await window.obscure.setProfileAvatarColor(profile.id, next)
     void refresh()
   }
 
   const handleSwitch = async (profile: Profile): Promise<void> => {
     if (profile.id === activeId) return
     setBusyId(profile.id)
-    await window.maddoner.switchProfile(profile.id)
+    await window.obscure.switchProfile(profile.id)
   }
 
   const handleDelete = async (profile: Profile): Promise<void> => {
     if (profiles.length <= 1) return
     setBusyId(profile.id)
-    await window.maddoner.deleteProfile(profile.id)
+    await window.obscure.deleteProfile(profile.id)
     if (profile.id !== activeId) {
       setBusyId(null)
       void refresh()
@@ -80,7 +80,7 @@ export function ManageProfilesDialog({ open, onOpenChange }: ManageProfilesDialo
   }
 
   const handleAdd = async (): Promise<void> => {
-    await window.maddoner.createProfile('')
+    await window.obscure.createProfile('')
     void refresh()
   }
 

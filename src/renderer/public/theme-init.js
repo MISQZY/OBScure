@@ -9,7 +9,7 @@
 // builtin palettes are duplicated here as a bootstrap fallback only because
 // this script can't import that JSON before paint. A custom (uploaded) theme
 // is instead read from the localStorage cache CustomConfigProvider keeps in
-// sync (maddoner:customThemeCache), so a previously-selected custom theme is
+// sync (obscure:customThemeCache), so a previously-selected custom theme is
 // also flash-free on the next launch.
 ;(function () {
   var BUILTIN_THEMES = {
@@ -88,9 +88,24 @@
   }
 
   try {
-    var STORAGE_KEY = 'maddoner:theme'
-    var CUSTOM_CACHE_KEY = 'maddoner:customThemeCache'
-    var pref = localStorage.getItem(STORAGE_KEY) || 'system'
+    var STORAGE_KEY = 'obscure:theme'
+    var LEGACY_STORAGE_KEY = 'maddoner:theme'
+    var CUSTOM_CACHE_KEY = 'obscure:customThemeCache'
+    var LEGACY_CUSTOM_CACHE_KEY = 'maddoner:customThemeCache'
+    // Migrates a value still filed under the app's old 'maddoner:' key
+    // prefix (renamed to 'obscure:' when the app became OBScure) so an
+    // existing user's persisted preference survives the rename.
+    var readMigrated = function (key, legacyKey) {
+      var value = localStorage.getItem(key)
+      if (value !== null) return value
+      var legacy = localStorage.getItem(legacyKey)
+      if (legacy !== null) {
+        localStorage.setItem(key, legacy)
+        localStorage.removeItem(legacyKey)
+      }
+      return legacy
+    }
+    var pref = readMigrated(STORAGE_KEY, LEGACY_STORAGE_KEY) || 'system'
 
     var resolved = null
     var themeId = pref
@@ -104,7 +119,7 @@
       resolved = BUILTIN_THEMES[themeId]
     } else {
       try {
-        var cached = JSON.parse(localStorage.getItem(CUSTOM_CACHE_KEY) || '[]')
+        var cached = JSON.parse(readMigrated(CUSTOM_CACHE_KEY, LEGACY_CUSTOM_CACHE_KEY) || '[]')
         for (var i = 0; i < cached.length; i++) {
           if (cached[i] && cached[i].id === themeId) {
             resolved = { mode: cached[i].mode, titleBarOverlay: cached[i].titleBarOverlay, colors: cached[i].colors }
@@ -131,8 +146,8 @@
     // drawn by DWM, not this page, so they start out hardcoded to a guess —
     // correct them here too, as early as the persisted theme is known, so
     // they don't visibly mismatch the page for even a moment.
-    if (window.maddoner && window.maddoner.setTitleBarOverlay) {
-      window.maddoner.setTitleBarOverlay(resolved.titleBarOverlay)
+    if (window.obscure && window.obscure.setTitleBarOverlay) {
+      window.obscure.setTitleBarOverlay(resolved.titleBarOverlay)
     }
   } catch (e) {
     // localStorage unavailable — just keep the default light theme.

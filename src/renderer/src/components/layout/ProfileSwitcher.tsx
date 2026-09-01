@@ -26,8 +26,8 @@ export function ProfileSwitcher() {
 
   const refresh = async (): Promise<void> => {
     const [list, active] = await Promise.all([
-      window.maddoner.getProfiles(),
-      window.maddoner.getActiveProfileId()
+      window.obscure.getProfiles(),
+      window.obscure.getActiveProfileId()
     ])
     setProfiles(list)
     setActiveId(active)
@@ -47,7 +47,7 @@ export function ProfileSwitcher() {
 
   const handleSwitch = (id: string): void => {
     if (id === activeId) return
-    void window.maddoner.switchProfile(id)
+    void window.obscure.switchProfile(id)
   }
 
   return (
