@@ -12,7 +12,7 @@ export interface ThemeDefinition {
   /** Drives Tailwind's `dark:` utility variant independently of the CSS palette below. */
   mode: 'light' | 'dark'
   /**
-   * Hex equivalents of this theme's --sidebar / --muted-foreground CSS vars,
+   * Hex equivalents of this theme's --titlebar / --muted-foreground CSS vars,
    * for the native DWM-drawn titlebar buttons (see titleBarOverlay in
    * src/main/index.ts) — those are painted outside the page, so they can't
    * just read the CSS vars and need these mirrored here.

@@ -38,11 +38,11 @@ const DRAG_STYLE = { WebkitAppRegion: 'drag' } as CSSProperties
 export function TitleBar() {
   return (
     <div
-      className="flex shrink-0 border-b border-sidebar-border bg-sidebar"
+      className="flex shrink-0 border-b border-titlebar-border bg-titlebar"
       style={{ height: 'calc(env(titlebar-area-height, 36px) + 1px)' }}
     >
       <div
-        className="flex select-none items-center gap-2 pl-3 text-xs font-medium text-sidebar-foreground"
+        className="flex select-none items-center gap-2 pl-3 text-xs font-medium text-titlebar-foreground"
         style={{
           ...DRAG_STYLE,
           marginLeft: 'env(titlebar-area-x, 0)',

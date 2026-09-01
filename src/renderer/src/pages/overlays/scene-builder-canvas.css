@@ -51,3 +51,36 @@
 .react-flow.locked .react-flow__node {
   pointer-events: none;
 }
+
+/*
+  React Flow's Controls/Background/MiniMap read their colors from its own
+  --xy-* custom properties, which only ever resolve to ONE of two hardcoded
+  palettes (see --xy-controls-*-default in @xyflow/react/dist/style.css,
+  under `.react-flow` and `.react-flow.dark`) selected by the `colorMode`
+  prop on <ReactFlow> in SceneBuilderPage.tsx — a binary light/dark switch
+  that knows nothing about this app's actual palette (theme/light.json,
+  dark.json, or any custom uploaded theme). Overriding the non-"-default"
+  variant here — which every one of those internal `var(--xy-x, --xy-x-
+  default)` lookups prefers when present — points Controls at our own CSS
+  vars instead, so its buttons track whatever theme (built-in or custom) is
+  actually active rather than just "dark or not."
+*/
+.react-flow {
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--accent);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-color-hover: var(--accent-foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: 0 1px 4px 0 rgb(0 0 0 / 0.15);
+  --xy-background-color: var(--scene-canvas);
+  --xy-background-pattern-dots-color: var(--border);
+  --xy-background-pattern-lines-color: var(--border);
+  --xy-background-pattern-cross-color: var(--border);
+}
+
+/* Same rounded-corner, bordered-card look as every other floating panel in the app (see MiniMap's className in SceneBuilderPage.tsx) instead of React Flow's own default square, border-less stack. */
+.react-flow__controls {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}

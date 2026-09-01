@@ -148,7 +148,7 @@ export function SceneBuilderPage({
   return (
     <div
       ref={canvasWrapperRef}
-      className="w-full h-full relative bg-background"
+      className="w-full h-full relative bg-scene-canvas"
       data-tour="scene-builder-canvas"
       onDragOver={onCanvasDragOver}
       onDrop={onCanvasDrop}
@@ -186,7 +186,7 @@ export function SceneBuilderPage({
           nodesConnectable={!locked}
           elementsSelectable={!locked}
           deleteKeyCode={locked ? null : ['Backspace', 'Delete']}
-          className={cn('bg-background', locked && 'locked')}
+          className={cn('bg-scene-canvas', locked && 'locked')}
         >
           <Background />
           <Controls onInteractiveChange={(isInteractive) => setLocked(!isInteractive)} />

@@ -61,7 +61,7 @@ function deepMerge<T extends Record<string, unknown>>(base: T, patch: Record<str
  * Fills in `colors` against the current base palette (self-healing a pack
  * saved before some newer CSS var existed) and recomputes titleBarOverlay
  * from THAT merged result rather than trusting whatever hex value was last
- * saved with it — so a theme edited (or hand-written) to change --sidebar/
+ * saved with it — so a theme edited (or hand-written) to change --titlebar/
  * --muted-foreground can't leave the native titlebar buttons pointing at a
  * stale color. titleBarOverlay falls back to the saved value, then the
  * built-in default, only if the colors can't be parsed.
@@ -226,7 +226,7 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
 
   const downloadExampleTheme = async (): Promise<boolean> => {
     const lightTheme = BUILTIN_THEMES.find((t) => t.id === 'light') ?? BUILTIN_THEMES[0]
-    // titleBarOverlay is deliberately omitted: it's derived from --sidebar /
+    // titleBarOverlay is deliberately omitted: it's derived from --titlebar /
     // --muted-foreground in `colors` on upload, so the example doesn't need
     // (and shouldn't show) a hex duplicate that could drift out of sync.
     const payload: CustomThemePack = {

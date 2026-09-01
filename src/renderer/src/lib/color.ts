@@ -69,7 +69,7 @@ export interface TitleBarOverlayColors {
 
 /**
  * Derives the native titlebar's button colors from a theme's actual CSS
- * palette (--sidebar for the background, --muted-foreground for the icon)
+ * palette (--titlebar for the background, --muted-foreground for the icon)
  * instead of trusting a hand-authored hex duplicate — which is what let a
  * custom theme's caption buttons drift out of sync with its real colors
  * whenever someone edited `colors` (oklch) without also updating a separate
@@ -80,7 +80,7 @@ export function deriveTitleBarOverlay(
   colors: Record<string, string>,
   fallback: TitleBarOverlayColors
 ): TitleBarOverlayColors {
-  const color = (colors['--sidebar'] && cssColorToHex(colors['--sidebar'])) ?? fallback.color
+  const color = (colors['--titlebar'] && cssColorToHex(colors['--titlebar'])) ?? fallback.color
   const symbolColor = (colors['--muted-foreground'] && cssColorToHex(colors['--muted-foreground'])) ?? fallback.symbolColor
   return { color, symbolColor }
 }
