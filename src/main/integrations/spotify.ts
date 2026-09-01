@@ -134,6 +134,20 @@ export class SpotifyIntegration extends BaseIntegration {
         } else {
           this.lastLoggedNoTrackItem = false;
         }
+      } else if (response.status === 204) {
+        // Spotify returns 204 (not an error) whenever nothing is currently
+        // playing — including the very first poll after startup, before
+        // anything has played this session. Only worth logging if a track
+        // had actually been playing and then stopped, since that's the one
+        // case where "frozen" behavior below is worth knowing about.
+        if (this.lastKey && this.lastLoggedStatus !== 204) {
+          logInfo(
+            "spotify",
+            "now-playing poll got 204 — nothing is playing right now, track will stay frozen until playback resumes",
+          );
+        }
+        this.lastLoggedStatus = 204;
+        return;
       } else {
         if (response.status !== this.lastLoggedStatus) {
           this.lastLoggedStatus = response.status;
