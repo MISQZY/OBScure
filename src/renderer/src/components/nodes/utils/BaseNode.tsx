@@ -125,15 +125,12 @@ export function BaseNode({
   // are all skipped rather than sitting there as dead, misleading UI.
   const canCollapse = Boolean(children)
   const hasBody = canCollapse && !collapsed
-  // The boxed output-rows list (outputSockets, rendered below with its own
-  // border-t — see `outputs` further down) is trailing content just like a
-  // socket section or body, so the header needs a bottom border/square
-  // corners here too. The single generic Handle rendered when a node has NO
-  // outputSockets doesn't count — it's just a small dot on the edge, not a
-  // section — so a body-less, socket-less, single-Handle node (Audio Player
-  // used to be one before outputSockets existed) still gets its rounded
-  // bottom corners.
-  const hasOutputSection = outputs && (outputSockets?.length ?? 0) > 0
+  // The output section (the boxed outputSockets rows list, OR — see
+  // `outputs` further down — the single unlabeled bottom row a node without
+  // outputSockets gets instead) is trailing content just like a socket
+  // section or body, so the header needs a bottom border/square corners
+  // here too rather than rounding itself as if it were the whole node.
+  const hasOutputSection = Boolean(outputs)
   const showTrailingBorder = hasSocketSection || hasBody || hasOutputSection
   // Scene/Random Widget/Roulette Widget have neither a collapsible body nor
   // are deletable from here (see each node's own `deletable={false}` doc
@@ -445,13 +442,22 @@ export function BaseNode({
             ))}
           </div>
         ) : (
-          <Handle
-            type="source"
-            position={Position.Right}
-            id="output"
-            className={cn('w-3 h-3', CATEGORY_DOT[category])}
-            title={t.sceneBuilder.tooltip.output}
-          />
+          // Same bottom-row treatment (and now the same labeled-row
+          // component) as the outputSockets list above, just a single
+          // generic "Output" row instead of named ones — not a bare Handle
+          // centered by React Flow's default top:50% on the whole node:
+          // that default measures against the node's OWN bounding box,
+          // which only gets re-measured when the box's overall size
+          // changes — collapsing a socket-only node like Wait doesn't
+          // change its box size (the dot was never part of layout flow to
+          // begin with), so the wire stayed pinned to the stale
+          // header-height midpoint while the visible dot drifted, the two
+          // visibly decoupling. A real row here has actual height, so
+          // adding/removing it changes the node's box size and forces
+          // React Flow to remeasure, keeping the wire glued to the dot.
+          <div className="flex flex-col border-t py-0.5">
+            <OutputRow id="output" label={t.sceneBuilder.tooltip.output} dotClass={CATEGORY_DOT[category]} title={t.sceneBuilder.tooltip.output} />
+          </div>
         ))}
     </div>
   )
