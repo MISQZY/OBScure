@@ -59,7 +59,10 @@ export function ImageView({
         // rendered as a tiled CSS background instead of an <img> — mirrors
         // buildImage in overlays/custom.html.
         fit === 'repeat' ? (
-          <div className="w-full h-full" style={{ backgroundImage: `url(${src})`, backgroundRepeat: 'repeat' }} />
+          // Quoted + escaped: an unquoted url(...) terminates at the first
+          // literal ')' — an URL containing one (or a space) would otherwise
+          // silently truncate mid-string into an invalid background-image.
+          <div className="w-full h-full" style={{ backgroundImage: `url("${src.replace(/["\\]/g, '\\$&')}")`, backgroundRepeat: 'repeat' }} />
         ) : (
           <img src={src} className="w-full h-full" style={{ objectFit: fit as React.CSSProperties['objectFit'] }} />
         )

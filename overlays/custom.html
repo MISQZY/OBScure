@@ -1314,7 +1314,9 @@
         const fit = d.fit || 'cover'
         if (imageSrc) {
           if (fit === 'repeat') {
-            wrap.style.backgroundImage = `url(${imageSrc})`
+            // Quoted + escaped, same reasoning as ImageView.tsx — an
+            // unquoted url(...) truncates at the first literal ')'.
+            wrap.style.backgroundImage = `url("${imageSrc.replace(/["\\]/g, '\\$&')}")`
             wrap.style.backgroundRepeat = 'repeat'
           } else {
             const img = document.createElement('img')

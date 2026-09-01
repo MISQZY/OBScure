@@ -24,6 +24,11 @@ export function buildAppShellCsp(
     // field — which explicitly invites any external link — actually loads
     // in the editor's scene preview instead of silently rendering blank.
     `img-src ${localSources.join(" ")} data: http: https:`,
+    // VideoView.tsx renders <video src>, which CSP governs via media-src,
+    // not img-src — without this an external video URL still fell back to
+    // default-src 'self' and stayed CSP-blocked in the editor preview even
+    // after the img-src fix above (it only ever fixed <img>).
+    `media-src ${localSources.join(" ")} http: https:`,
     `frame-src ${localSources.join(" ")}`,
   ].join("; ");
 }

@@ -58,18 +58,21 @@ function deepMerge<T extends Record<string, unknown>>(base: T, patch: Record<str
 }
 
 /**
- * Recomputes a pack's titleBarOverlay from its own colors rather than trusting
- * whatever hex value was last saved with it — so a theme edited (or hand-
- * written) to change --sidebar/--muted-foreground can't leave the native
- * titlebar buttons pointing at a stale color. Falls back to the saved value,
- * then the built-in default, only if the colors can't be parsed.
+ * Fills in `colors` against the current base palette (self-healing a pack
+ * saved before some newer CSS var existed) and recomputes titleBarOverlay
+ * from THAT merged result rather than trusting whatever hex value was last
+ * saved with it — so a theme edited (or hand-written) to change --sidebar/
+ * --muted-foreground can't leave the native titlebar buttons pointing at a
+ * stale color. titleBarOverlay falls back to the saved value, then the
+ * built-in default, only if the colors can't be parsed.
  */
 function normalizeThemePack(pack: CustomThemePack): CustomThemePack {
   const base = BUILTIN_THEMES.find((theme) => theme.mode === pack.mode) ?? BUILTIN_THEMES[0]
-  const mergedColors = deepMerge(base.colors, pack.colors ?? {})
+  const colors = deepMerge(base.colors, pack.colors ?? {})
   return {
     ...pack,
-    titleBarOverlay: deriveTitleBarOverlay(mergedColors, pack.titleBarOverlay ?? base.titleBarOverlay)
+    colors,
+    titleBarOverlay: deriveTitleBarOverlay(colors, pack.titleBarOverlay ?? base.titleBarOverlay)
   }
 }
 
@@ -82,7 +85,7 @@ function packToThemeDefinition(pack: CustomThemePack): ThemeDefinition {
     icon: Palette,
     mode: normalized.mode,
     titleBarOverlay: normalized.titleBarOverlay ?? base.titleBarOverlay,
-    colors: deepMerge(base.colors, normalized.colors ?? {})
+    colors: normalized.colors
   }
 }
 

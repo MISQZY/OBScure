@@ -33,7 +33,11 @@ export function cssColorToHex(value: string): string | null {
 
 function linearToSrgbChannel(linear: number): number {
   const abs = Math.abs(linear)
-  const srgb = abs > 0.0031308 ? 1.055 * abs ** (1 / 2.4) - 0.055 : linear * 12.92
+  // Sign reapplied on the gamma branch (Math.sign(linear) * ...) — an
+  // out-of-gamut oklch color routinely produces a negative linear value
+  // here, and exponentiating the unsigned `abs` without it would flip that
+  // into a bright positive channel instead of clamping toward 0 below.
+  const srgb = abs > 0.0031308 ? Math.sign(linear) * (1.055 * abs ** (1 / 2.4) - 0.055) : linear * 12.92
   return Math.round(Math.min(1, Math.max(0, srgb)) * 255)
 }
 
