@@ -125,7 +125,22 @@ export function BaseNode({
   // are all skipped rather than sitting there as dead, misleading UI.
   const canCollapse = Boolean(children)
   const hasBody = canCollapse && !collapsed
-  const showTrailingBorder = hasSocketSection || hasBody
+  // The boxed output-rows list (outputSockets, rendered below with its own
+  // border-t — see `outputs` further down) is trailing content just like a
+  // socket section or body, so the header needs a bottom border/square
+  // corners here too. The single generic Handle rendered when a node has NO
+  // outputSockets doesn't count — it's just a small dot on the edge, not a
+  // section — so a body-less, socket-less, single-Handle node (Audio Player
+  // used to be one before outputSockets existed) still gets its rounded
+  // bottom corners.
+  const hasOutputSection = outputs && (outputSockets?.length ?? 0) > 0
+  const showTrailingBorder = hasSocketSection || hasBody || hasOutputSection
+  // Scene/Random Widget/Roulette Widget have neither a collapsible body nor
+  // are deletable from here (see each node's own `deletable={false}` doc
+  // comment) — with both entries skipped below, ContextMenuContent would
+  // render with zero children: an empty, squashed popup box on right-click
+  // instead of no popup at all. Skip mounting the whole menu in that case.
+  const hasMenuItems = canCollapse || deletable
 
   /** Every sibling node (deduped, sorted by current priority) competing for the same (target, targetHandle) socket this node feeds — shared by cyclePriority/setPriority below. Mirrors usePriorityInfo's own computation (see its doc comment for the scoping/dedup reasoning); can't reuse the hook's own memoized result directly since these need the RAW node list to write new priorities back to, not just position/total. */
   const getPrioritySiblings = () => {
@@ -214,15 +229,27 @@ export function BaseNode({
       <ContextMenuTrigger asChild>
       <div
         className={cn(
-          // rounded-t (both corners, not just tr) so the header's own
-          // background — which the outer node isn't clipped to, since it
-          // has no overflow-hidden — actually matches the outer wrapper's
-          // rounded-md at the top-left too, instead of a hard square corner
-          // poking past the curve and showing the canvas through the gap.
-          // Same reasoning for rounded-b when this header IS the whole node.
-          'px-3 py-2 rounded-t-md font-semibold text-sm flex justify-between items-center gap-2',
+          // Rounded top corners so the header's own background — which the
+          // outer node isn't clipped to, since it has no overflow-hidden
+          // (sockets/handles need to protrude past the edges — see
+          // SocketRow/OutputRow's negative left/right offsets) — matches the
+          // outer wrapper's rounded-md curve instead of a hard square corner
+          // poking past it and showing the canvas through the gap. The two
+          // corners aren't symmetric: the outer border is 1px on top/right
+          // but 4px on the left (categoryStyle's accent stripe, `border-l-4`
+          // below), so the header — flush against the INSIDE of that border
+          // — sits 1px down but 4px right of the outer box's true corner.
+          // Mirroring the outer's flat rounded-md (8px) radius on both axes
+          // here would overshoot that offset and visibly miss the border's
+          // curve on the left side; each corner's radius is instead
+          // `[horizontal_vertical]`, shrunk per axis by ITS OWN adjacent
+          // border width (8-4 horizontal, 8-1 vertical for top-left; 8-1/8-1
+          // for top-right) so it nests flush against the border regardless
+          // of the asymmetry. Same reasoning for rounded-b when this header
+          // IS the whole node.
+          'px-3 py-2 rounded-tl-[4px_7px] rounded-tr-[7px] font-semibold text-sm flex justify-between items-center gap-2',
           categoryStyle.header,
-          showTrailingBorder ? 'border-b' : 'rounded-b-md'
+          showTrailingBorder ? 'border-b' : 'rounded-bl-[4px_7px] rounded-br-[7px]'
         )}
       >
         <div
@@ -362,29 +389,31 @@ export function BaseNode({
         )}
       </div>
       </ContextMenuTrigger>
-      <ContextMenuContent>
-        {canCollapse && (
-          <ContextMenuItem onSelect={() => updateNodeData(id, { collapsed: !collapsed })}>
-            {collapsed ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
-            {collapsed ? t.sceneBuilder.tooltip.expand : t.sceneBuilder.tooltip.collapse}
-          </ContextMenuItem>
-        )}
-        {deletable && (
-          <ContextMenuItem onSelect={duplicateNode}>
-            <Copy className="size-4" />
-            {t.sceneBuilder.tooltip.duplicate}
-          </ContextMenuItem>
-        )}
-        {deletable && (
-          <>
-            <ContextMenuSeparator />
-            <ContextMenuItem variant="destructive" onSelect={() => deleteElements({ nodes: [{ id }] })}>
-              <Trash2 className="size-4" />
-              {t.sceneBuilder.tooltip.delete}
+      {hasMenuItems && (
+        <ContextMenuContent>
+          {canCollapse && (
+            <ContextMenuItem onSelect={() => updateNodeData(id, { collapsed: !collapsed })}>
+              {collapsed ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+              {collapsed ? t.sceneBuilder.tooltip.expand : t.sceneBuilder.tooltip.collapse}
             </ContextMenuItem>
-          </>
-        )}
-      </ContextMenuContent>
+          )}
+          {deletable && (
+            <ContextMenuItem onSelect={duplicateNode}>
+              <Copy className="size-4" />
+              {t.sceneBuilder.tooltip.duplicate}
+            </ContextMenuItem>
+          )}
+          {deletable && (
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem variant="destructive" onSelect={() => deleteElements({ nodes: [{ id }] })}>
+                <Trash2 className="size-4" />
+                {t.sceneBuilder.tooltip.delete}
+              </ContextMenuItem>
+            </>
+          )}
+        </ContextMenuContent>
+      )}
       </ContextMenu>
       {hasSocketSection && (
         <div className="flex flex-col border-b py-0.5">
