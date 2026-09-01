@@ -35,19 +35,14 @@ export function modifierStyle(mods: Node[], baseMods?: Node[]): React.CSSPropert
     const targetOverflow = overflow || baseOverflow
     if (targetOverflow?.data.overflowX) style.overflowX = targetOverflow.data.overflowX as React.CSSProperties['overflowX']
     if (targetOverflow?.data.overflowY) style.overflowY = targetOverflow.data.overflowY as React.CSSProperties['overflowY']
-    if (targetOverflow?.data.hideScrollbar) {
-      style.scrollbarWidth = 'none'
-      style.msOverflowStyle = 'none'
-    }
     // Auto-scroll's whole illusion depends on the scrolling axis actually
     // clipping (see AutoScrollTrack's own doc comment) — a track sliding
     // around inside an axis left 'visible' just shows BOTH duplicated
     // copies fully unfolded with no windowing at all, which reads as
     // "doesn't scroll through properly, jumps around" (the exact bug this
     // was built to prevent — it's easy to flip Auto-scroll on without also
-    // remembering to set that SAME axis's own Overflow X/Y to hidden/auto).
-    // Force it here rather than trusting the separate dropdown to already
-    // agree with it.
+    // remembering to set that SAME axis's own Clip X/Y checkbox).  Force it
+    // here rather than trusting the separate checkbox to already agree.
     if (targetOverflow?.data.autoScroll) {
       const scrollDirection = (targetOverflow.data.scrollDirection as string) || 'up'
       if (scrollDirection === 'left' || scrollDirection === 'right') {

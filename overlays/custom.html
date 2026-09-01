@@ -976,10 +976,6 @@
           const d = overflow.data || {}
           if (d.overflowX) el.style.overflowX = d.overflowX
           if (d.overflowY) el.style.overflowY = d.overflowY
-          if (d.hideScrollbar) {
-            el.style.scrollbarWidth = 'none'
-            el.style.msOverflowStyle = 'none'
-          }
           // Auto-scroll's whole illusion depends on the scrolling axis
           // actually clipping (see applyAutoScrollContent's own doc
           // comment) — an axis left 'visible' just shows BOTH duplicated
@@ -987,7 +983,7 @@
           // "doesn't scroll through properly, jumps around". Force it here
           // rather than trusting Overflow X/Y to already agree with it —
           // easy to flip Auto-scroll on without also remembering to set
-          // that SAME axis's own dropdown to hidden/auto.
+          // that SAME axis's own Clip X/Y checkbox.
           if (d.autoScroll) {
             const scrollDirection = d.scrollDirection || 'up'
             if (scrollDirection === 'left' || scrollDirection === 'right') {

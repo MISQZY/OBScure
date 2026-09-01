@@ -64,7 +64,5 @@ export function inferAlertPlatform(data: Record<string, unknown>): AlertPlatform
   return (ALERT_TYPES_BY_PLATFORM.youtube as string[]).includes(savedType) ? 'youtube' : 'twitch'
 }
 export const TASK_ACTIONS = ['show', 'hide', 'update'] as const
-/** Maps 1:1 onto CSS `overflow-x`/`overflow-y` — see OverflowNode. 'auto' shows a scrollbar only once content actually exceeds the box (from a wired Size, most often); 'scroll' always reserves one. */
-export const OVERFLOW_MODES = ['visible', 'hidden', 'auto', 'scroll'] as const
 /** Which way an Overflow node's Auto-scroll animates its content — see overflowAutoScroll in overlays/sceneUtils.tsx. 'up'/'down' pick the vertical keyframe, 'left'/'right' the horizontal one; 'down'/'right' just play the same keyframe in reverse. */
 export const SCROLL_DIRECTIONS = ['up', 'down', 'left', 'right'] as const

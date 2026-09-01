@@ -544,7 +544,7 @@ export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
   event: { kind: 'alert', platform: 'twitch', alertType: ALERT_TYPES_BY_PLATFORM.twitch[0] },
   ordering: { layout: 'vertical', direction: 'direct', gap: 8 },
   hide: { hidden: true },
-  overflow: { overflowX: 'hidden', overflowY: 'hidden', hideScrollbar: true, autoScroll: false, scrollDirection: 'up', scrollSpeed: 40 },
+  overflow: { overflowX: 'hidden', overflowY: 'hidden', autoScroll: false, scrollDirection: 'up', scrollSpeed: 40 },
   task: { action: 'show' },
   wait: { delay: 1000 },
   // rowTemplate tokens: {name}/{chance}/{weight} — see rouletteEntrantRows'

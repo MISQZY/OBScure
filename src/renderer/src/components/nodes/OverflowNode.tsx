@@ -1,50 +1,43 @@
 import React from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
 import { Checkbox } from '@/components/ui/checkbox'
-import { BaseNode, Field, NodeSelect, NumberInput, numberInputClass, OVERFLOW_MODES, SCROLL_DIRECTIONS } from './utils'
+import { BaseNode, Field, NodeSelect, NumberInput, numberInputClass, SCROLL_DIRECTIONS } from './utils'
 
 /**
- * Clips or scrolls whatever it's wired into once content exceeds its box —
- * needs a Size (fixed width and/or height) on the same target to actually
- * have anything to overflow against, same as Position needing a real anchor.
- * 'hidden' on both axes reads as plain "overflow: hidden" clipping; 'auto'/
- * 'scroll' on an axis makes that axis scrollable (mouse wheel/touch — same
- * as any normal scrollable div, no extra wiring). Hide scrollbar keeps the
- * clipping/scrolling behavior but drops the visible scrollbar track, for a
- * cleaner look in a broadcast overlay.
+ * Clips whatever it's wired into once content exceeds its box — needs a
+ * Size (fixed width and/or height) on the same target to actually have
+ * anything to clip against, same as Position needing a real anchor. Purely
+ * `overflow: hidden`/`visible` per axis; there's no scrollable ('auto'/
+ * 'scroll') mode, since an OBS Browser Source has no mouse/touch reaching
+ * it in the actual broadcast output for anyone to scroll with — offering
+ * one just showed a dead scrollbar nobody could ever use.
  *
  * Auto-scroll (Text only for now — see overflowAutoScroll in
- * overlays/sceneUtils.tsx) plays a continuous, looping scroll instead of
- * requiring an actual mouse/touch to move it — for a credits-style list
- * (e.g. Roulette Entrants' formatted rows feeding a Text node) that's too
- * long to fit its box and should just cycle through on its own. Direction
- * picks which axis animates; Speed is px/second, NOT a fixed seconds-per-
- * loop duration — a fixed duration made a long list race past unreadably
- * fast while a short one crawled, since both got squeezed into/stretched
- * across the same total time. Speed keeps the READING pace constant no
- * matter how many rows there are; the renderer measures the actual content
- * size and works out how long one loop takes from that.
+ * overlays/sceneUtils.tsx) is the actual answer to "content too long for
+ * its box": a continuous, looping scroll instead of requiring a mouse/
+ * touch to move it — for a credits-style list (e.g. Roulette Entrants'
+ * formatted rows feeding a Text node) that's too long to fit and should
+ * just cycle through on its own. Direction picks which axis animates;
+ * Speed is px/second, NOT a fixed seconds-per-loop duration — a fixed
+ * duration made a long list race past unreadably fast while a short one
+ * crawled, since both got squeezed into/stretched across the same total
+ * time. Speed keeps the READING pace constant no matter how many rows
+ * there are; the renderer measures the actual content size and works out
+ * how long one loop takes from that.
  */
 export function OverflowNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
-  const overflowX = (data.overflowX as string) || 'hidden'
-  const overflowY = (data.overflowY as string) || 'hidden'
+  const clipX = data.overflowX !== 'visible'
+  const clipY = data.overflowY !== 'visible'
   const autoScroll = Boolean(data.autoScroll)
   const scrollDirection = (data.scrollDirection as string) || 'up'
   return (
     <BaseNode id={id} data={data} title="Overflow" category="style">
-      <Field label="Overflow X">
-        <NodeSelect value={overflowX} options={OVERFLOW_MODES} onChange={(next) => updateNodeData(id, { overflowX: next })} />
+      <Field label="Clip X">
+        <Checkbox checked={clipX} onCheckedChange={(checked) => updateNodeData(id, { overflowX: checked ? 'hidden' : 'visible' })} className="nodrag" />
       </Field>
-      <Field label="Overflow Y">
-        <NodeSelect value={overflowY} options={OVERFLOW_MODES} onChange={(next) => updateNodeData(id, { overflowY: next })} />
-      </Field>
-      <Field label="Hide scrollbar">
-        <Checkbox
-          checked={data.hideScrollbar !== false}
-          onCheckedChange={(checked) => updateNodeData(id, { hideScrollbar: !!checked })}
-          className="nodrag"
-        />
+      <Field label="Clip Y">
+        <Checkbox checked={clipY} onCheckedChange={(checked) => updateNodeData(id, { overflowY: checked ? 'hidden' : 'visible' })} className="nodrag" />
       </Field>
       <Field label="Auto-scroll">
         <Checkbox checked={autoScroll} onCheckedChange={(checked) => updateNodeData(id, { autoScroll: !!checked })} className="nodrag" />
