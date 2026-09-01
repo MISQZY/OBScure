@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, LayoutDashboard, Layers, Plug, Settings, Workflow, Wrench, Plus, Trash2 } from 'lucide-react'
+import { ChevronRight, Download, LayoutDashboard, Layers, Plug, Settings, Workflow, Wrench, Plus, Trash2 } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -22,6 +22,8 @@ import { EVENT_KEYS, EVENTS_META, eventLabels } from '@/lib/events-meta'
 import { useI18n } from '@/providers/I18nProvider'
 import { useCustomOverlays } from '@/providers/CustomOverlaysProvider'
 import { uniqueUrlKey } from '@/lib/custom-overlays'
+import { useAppUpdater } from '@/hooks/use-app-updater'
+import { interpolate } from '@/lib/i18n/interpolate'
 
 interface AppSidebarProps {
   active: NavKey
@@ -42,6 +44,7 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
   const [isCreatingOverlay, setIsCreatingOverlay] = useState(false)
   const [newOverlayName, setNewOverlayName] = useState("")
   const [appVersion, setAppVersion] = useState("")
+  const [updaterStatus, downloadUpdate] = useAppUpdater()
 
   useEffect(() => {
     window.maddoner.getAppVersion().then(setAppVersion)
@@ -264,6 +267,24 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter>
+        {(updaterStatus.state === 'available' ||
+          updaterStatus.state === 'downloading' ||
+          updaterStatus.state === 'downloaded') && (
+          <button
+            onClick={downloadUpdate}
+            disabled={updaterStatus.state !== 'available'}
+            className="mx-2 mb-1 flex items-center justify-center gap-1.5 rounded-md bg-green-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-500 disabled:cursor-wait disabled:opacity-80 group-data-[collapsible=icon]:hidden"
+          >
+            <Download className="size-3.5" />
+            <span>
+              {updaterStatus.state === 'downloading'
+                ? interpolate(t.updater.downloading, { percent: String(updaterStatus.percent) })
+                : updaterStatus.state === 'downloaded'
+                  ? t.updater.installing
+                  : t.updater.update}
+            </span>
+          </button>
+        )}
         <p className="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
           {appVersion && `v${appVersion} `}by MISQZY
         </p>

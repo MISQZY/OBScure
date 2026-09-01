@@ -20,6 +20,7 @@ import { registerSettingsHandlers } from "./ipc/settingsHandlers";
 import { registerEventsHandlers } from "./ipc/eventsHandlers";
 import { registerProfileHandlers } from "./ipc/profileHandlers";
 import { registerIntegrationsHandlers } from "./ipc/integrationsHandlers";
+import { initUpdater } from "./updater";
 import type { CustomOverlay, NowPlayingPayload } from "../shared/types";
 import type { CustomLocalePack, CustomThemePack } from "../shared/customConfig";
 import {
@@ -366,6 +367,7 @@ app.whenReady().then(async () => {
   );
 
   createMainWindow();
+  initUpdater(() => mainWindow);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();

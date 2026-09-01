@@ -3,11 +3,13 @@ productName: OBScure
 directories:
   output: dist
 
-# CI builds artifacts on tag push and uploads them via actions/upload-artifact
-# (see .github/workflows/ci.yml) instead of an electron-builder GitHub
-# Release. Without this, electron-builder auto-detects "CI + version tag" and
-# implicitly tries to publish a release, failing without a GH_TOKEN.
-publish: null
+# CI publishes a real GitHub Release on tag push (see .github/workflows/ci.yml,
+# job "release", using the built-in GITHUB_TOKEN) so electron-updater has a
+# stable, unauthenticated URL to check and download updates from.
+publish:
+  provider: github
+  owner: MISQZY
+  repo: OBScure
 
 icon: build/icon.ico
 

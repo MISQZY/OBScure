@@ -6,6 +6,11 @@
     "integrations": "Integrations",
     "settings": "Settings"
   },
+  "updater": {
+    "update": "Update",
+    "downloading": "Downloading... {percent}%",
+    "installing": "Installing..."
+  },
   "profiles": {
     "menuLabel": "Profiles",
     "manage": "Manage profiles...",

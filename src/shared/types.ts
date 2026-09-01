@@ -153,3 +153,14 @@ export interface TwitchChannelStats {
   followerCount: number | null
   subscriberCount: number | null
 }
+
+/** Auto-update state pushed from src/main/updater.ts. 'unsupported' covers dev runs and the portable build, which has no install path for electron-updater to update in place. */
+export type AppUpdaterStatus =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'not-available' }
+  | { state: 'available'; version: string }
+  | { state: 'downloading'; percent: number }
+  | { state: 'downloaded'; version: string }
+  | { state: 'error'; message: string }
+  | { state: 'unsupported' }

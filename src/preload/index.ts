@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type {
+  AppUpdaterStatus,
   ConnectResult,
   CustomOverlay,
   IntegrationKey,
@@ -100,7 +101,14 @@ const api = {
   openConfigFile: (): Promise<{ fileName: string; content: string } | null> =>
     ipcRenderer.invoke('config:openJsonFile'),
   saveConfigFile: (defaultFileName: string, content: string): Promise<boolean> =>
-    ipcRenderer.invoke('config:saveTextFile', defaultFileName, content)
+    ipcRenderer.invoke('config:saveTextFile', defaultFileName, content),
+  getUpdaterStatus: (): Promise<AppUpdaterStatus> => ipcRenderer.invoke('updater:getStatus'),
+  downloadUpdate: (): Promise<void> => ipcRenderer.invoke('updater:download'),
+  onUpdaterStatus: (callback: (status: AppUpdaterStatus) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, status: AppUpdaterStatus): void => callback(status)
+    ipcRenderer.on('updater:status', listener)
+    return () => ipcRenderer.off('updater:status', listener)
+  }
 }
 
 contextBridge.exposeInMainWorld('maddoner', api)

@@ -6,6 +6,11 @@
     "integrations": "Интеграции",
     "settings": "Настройки"
   },
+  "updater": {
+    "update": "Обновить",
+    "downloading": "Загрузка... {percent}%",
+    "installing": "Установка..."
+  },
   "profiles": {
     "menuLabel": "Профили",
     "manage": "Управление профилями...",

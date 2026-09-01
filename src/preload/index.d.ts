@@ -1,4 +1,5 @@
 import type {
+  AppUpdaterStatus,
   ConnectResult,
   CustomOverlay,
   IntegrationKey,
@@ -69,6 +70,9 @@ export interface MaddonerApi {
   deleteCustomLocale: (id: string) => Promise<CustomLocalePack[]>
   openConfigFile: () => Promise<{ fileName: string; content: string } | null>
   saveConfigFile: (defaultFileName: string, content: string) => Promise<boolean>
+  getUpdaterStatus: () => Promise<AppUpdaterStatus>
+  downloadUpdate: () => Promise<void>
+  onUpdaterStatus: (callback: (status: AppUpdaterStatus) => void) => () => void
 }
 
 declare global {
