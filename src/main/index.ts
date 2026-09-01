@@ -72,8 +72,6 @@ if (
   renameSync(oldUserDataDir, newUserDataDir);
 }
 
-runAllMigrations(app.getPath("userData"));
-
 const DEFAULT_OVERLAY_HOST = "127.0.0.1";
 const DEFAULT_OVERLAY_PORT = 47890;
 
@@ -97,6 +95,7 @@ if (!existsSync(customImagesDir))
   mkdirSync(customImagesDir, { recursive: true });
 
 const profileManager = new ProfileManager(app.getPath("userData"));
+runAllMigrations(app.getPath("userData"));
 let config = new ConfigStore(profileManager.getActiveProfileDir());
 let overlayStore = new OverlayStore(profileManager.getActiveProfileDir());
 const themeStore = new ThemeStore(app.getPath("userData"));
