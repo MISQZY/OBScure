@@ -36,6 +36,7 @@ import { interpolate } from '@/lib/i18n/interpolate'
 import type { CustomOverlay, OverlayFolder } from '@shared/types'
 
 const RELEASES_URL = 'https://github.com/MISQZY/OBScure/releases'
+const AUTHOR_URL = 'https://github.com/MISQZY'
 
 interface AppSidebarProps {
   active: NavKey
@@ -510,20 +511,27 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
             </span>
           </button>
         )}
-        <p className="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+        <div className="flex flex-col items-center gap-2 px-2 py-3 text-center text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
           {appVersion && (
-            <>
-              <button
-                onClick={() => window.obscure.openExternal(RELEASES_URL)}
-                className="hover:text-foreground hover:underline"
-                title={t.sidebar.releaseNotes}
-              >
-                v{appVersion}
-              </button>{' '}
-            </>
+            <button
+              onClick={() => window.obscure.openExternal(`${RELEASES_URL}/tag/v${appVersion}`)}
+              className="rounded-full bg-sidebar-accent px-2.5 py-1.5 font-mono text-[10px] font-semibold tracking-wide text-sidebar-accent-foreground hover:bg-sidebar-primary/15 hover:text-sidebar-primary-foreground"
+              title={t.sidebar.releaseNotes}
+            >
+              v{appVersion}
+            </button>
           )}
-          by MISQZY
-        </p>
+          <span>
+            by{' '}
+            <button
+              onClick={() => window.obscure.openExternal(AUTHOR_URL)}
+              className="hover:text-foreground hover:underline"
+            >
+              MISQZY
+            </button>{' '}
+            ♥️
+          </span>
+        </div>
       </SidebarFooter>
     </Sidebar>
   )
