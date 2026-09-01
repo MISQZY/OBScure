@@ -28,6 +28,14 @@ export interface CustomOverlay {
   urlKey: string
   nodes: any[]
   edges: any[]
+  /** Sidebar grouping only — id of the OverlayFolder this scene is filed under. Omitted (or absent from folders.json) means "ungrouped". */
+  folderId?: string
+}
+
+/** Purely a sidebar organization concept — folders group CustomOverlay entries in the Overlays nav section, nothing more (no effect on OBS URLs or the scene graph). */
+export interface OverlayFolder {
+  id: string
+  name: string
 }
 
 export interface AlertPayload {
@@ -130,6 +138,7 @@ export type SettingKey =
   | 'overlay.host'
   | 'overlay.port'
   | 'customOverlays'
+  | 'customOverlayFolders'
   | 'customThemes'
   | 'customLocales'
 

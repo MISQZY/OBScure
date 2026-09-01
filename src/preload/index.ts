@@ -7,6 +7,7 @@ import type {
   IntegrationsStatusMap,
   NowPlayingPayload,
   OverlayAddress,
+  OverlayFolder,
   OverlayUrls,
   RandomStatePayload,
   RouletteStatePayload,
@@ -89,6 +90,11 @@ const api = {
     ipcRenderer.invoke('overlay:saveCustomOverlay', overlay),
   deleteCustomOverlay: (id: string): Promise<CustomOverlay[]> => ipcRenderer.invoke('overlay:deleteCustomOverlay', id),
   testCustomOverlay: (overlay: CustomOverlay): Promise<void> => ipcRenderer.invoke('overlay:testCustomOverlay', overlay),
+  getCustomOverlayFolders: (): Promise<OverlayFolder[]> => ipcRenderer.invoke('overlay:getCustomOverlayFolders'),
+  saveCustomOverlayFolder: (folder: OverlayFolder): Promise<OverlayFolder[]> =>
+    ipcRenderer.invoke('overlay:saveCustomOverlayFolder', folder),
+  deleteCustomOverlayFolder: (id: string): Promise<OverlayFolder[]> =>
+    ipcRenderer.invoke('overlay:deleteCustomOverlayFolder', id),
   setTitleBarOverlay: (overlay: { color: string; symbolColor: string }): Promise<void> =>
     ipcRenderer.invoke('window:setTitleBarOverlay', overlay),
   getCustomThemes: (): Promise<CustomThemePack[]> => ipcRenderer.invoke('theme:getCustomThemes'),

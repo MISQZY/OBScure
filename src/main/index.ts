@@ -22,7 +22,7 @@ import { registerProfileHandlers } from "./ipc/profileHandlers";
 import { registerIntegrationsHandlers } from "./ipc/integrationsHandlers";
 import { initUpdater } from "./updater";
 import { initLogger, logError, logInfo, logWarn } from "./logger";
-import type { CustomOverlay, NowPlayingPayload } from "../shared/types";
+import type { CustomOverlay, OverlayFolder, NowPlayingPayload } from "../shared/types";
 import type { CustomLocalePack, CustomThemePack } from "../shared/customConfig";
 import {
   DEFAULT_EVENTS_CONFIGS,
@@ -120,6 +120,10 @@ function getStoredRouletteConfig(): RouletteConfig {
 
 function getStoredCustomOverlays(): CustomOverlay[] {
   return config.getSetting<CustomOverlay[]>("customOverlays", []);
+}
+
+function getStoredCustomOverlayFolders(): OverlayFolder[] {
+  return config.getSetting<OverlayFolder[]>("customOverlayFolders", []);
 }
 
 function getStoredCustomThemes(): CustomThemePack[] {
@@ -312,6 +316,7 @@ registerOverlayHandlers({
   overlayServer,
   mainWindow: () => mainWindow,
   getStoredCustomOverlays,
+  getStoredCustomOverlayFolders,
   getStoredCustomThemes,
   getStoredCustomLocales,
 });

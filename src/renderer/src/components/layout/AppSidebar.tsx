@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { ChevronRight, Download, LayoutDashboard, Layers, Plug, Settings, Workflow, Wrench, Plus } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { ChevronRight, Download, Folder, FolderPlus, LayoutDashboard, Layers, Plug, Settings, Trash2, Workflow, Wrench, Plus } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -14,6 +14,15 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem
 } from '@/components/ui/sidebar'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from '@/components/ui/alert-dialog'
 import { ProfileSwitcher } from '@/components/layout/ProfileSwitcher'
 import { cn } from '@/lib/utils'
 import type { NavKey } from '@/lib/nav'
@@ -24,6 +33,7 @@ import { useCustomOverlays } from '@/providers/CustomOverlaysProvider'
 import { uniqueUrlKey } from '@/lib/custom-overlays'
 import { useAppUpdater } from '@/hooks/use-app-updater'
 import { interpolate } from '@/lib/i18n/interpolate'
+import type { CustomOverlay, OverlayFolder } from '@shared/types'
 
 const RELEASES_URL = 'https://github.com/MISQZY/OBScure/releases'
 
@@ -38,19 +48,241 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
   const [toolsOpen, setToolsOpen] = useState(true)
   const [integrationsOpen, setIntegrationsOpen] = useState(true)
   const [overlaysOpen, setOverlaysOpen] = useState(true)
-  const { overlays, saveOverlay } = useCustomOverlays()
+  const { overlays, saveOverlay, folders, saveFolder, deleteFolder, moveOverlayToFolder } = useCustomOverlays()
 
   const isToolsActive = active.startsWith('tools/')
   const isIntegrationsActive = active.startsWith('integrations/')
 
-  const [isCreatingOverlay, setIsCreatingOverlay] = useState(false)
+  // undefined = not creating an overlay; null = creating at the top level (no folder); a folder id = creating inside that folder.
+  const [creatingOverlayFolderId, setCreatingOverlayFolderId] = useState<string | null | undefined>(undefined)
   const [newOverlayName, setNewOverlayName] = useState("")
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false)
+  const [newFolderName, setNewFolderName] = useState("")
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set())
+  const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null)
+  const [renameFolderName, setRenameFolderName] = useState("")
+  const [draggedOverlayId, setDraggedOverlayId] = useState<string | null>(null)
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
   const [appVersion, setAppVersion] = useState("")
   const [updaterStatus, downloadUpdate] = useAppUpdater()
 
   useEffect(() => {
     window.maddoner.getAppVersion().then(setAppVersion)
   }, [])
+
+  const ungroupedOverlays = overlays.filter((o) => !o.folderId)
+
+  const createOverlay = async (name: string, folderId?: string): Promise<void> => {
+    const id = `scene-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+    const urlKey = uniqueUrlKey(name, overlays.map((o) => o.urlKey))
+    await saveOverlay({ id, name, urlKey, nodes: [], edges: [], folderId })
+    onNavigate(`overlays/custom/${id}` as NavKey)
+  }
+
+  const createFolder = async (name: string): Promise<void> => {
+    const id = `folder-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+    await saveFolder({ id, name })
+  }
+
+  const toggleFolder = (folderId: string): void => {
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev)
+      if (next.has(folderId)) next.delete(folderId)
+      else next.add(folderId)
+      return next
+    })
+  }
+
+  const renderCreateOverlayInput = (folderId?: string): React.ReactElement => (
+    <SidebarMenuSubItem>
+      <div
+        className="flex items-center px-2 py-1 gap-2 cursor-text"
+        onClick={(e) => e.currentTarget.querySelector('input')?.focus()}
+      >
+        <input
+          autoFocus
+          placeholder="Overlay name..."
+          className="w-full bg-background border rounded px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary"
+          value={newOverlayName}
+          onChange={(e) => setNewOverlayName(e.target.value)}
+          onKeyDown={async (e) => {
+            if (e.key === 'Enter' && newOverlayName.trim()) {
+              const name = newOverlayName.trim()
+              setCreatingOverlayFolderId(undefined)
+              setNewOverlayName("")
+              await createOverlay(name, folderId)
+            } else if (e.key === 'Escape') {
+              setCreatingOverlayFolderId(undefined)
+              setNewOverlayName("")
+            }
+          }}
+          onBlur={(e) => {
+            // If focus moved to another focusable element in the app (e.relatedTarget is not null),
+            // it means the user clicked a button/link. We can safely cancel.
+            // If e.relatedTarget is null, it might be a window blur (Alt+Shift layout change,
+            // clicking outside window) or clicking a non-focusable background div. We keep it open.
+            if (e.relatedTarget && e.relatedTarget !== document.body) {
+              setCreatingOverlayFolderId(undefined)
+              setNewOverlayName("")
+            }
+          }}
+        />
+      </div>
+    </SidebarMenuSubItem>
+  )
+
+  const renderOverlayItem = (overlay: CustomOverlay): React.ReactElement => (
+    <SidebarMenuSubItem key={overlay.id}>
+      <SidebarMenuSubButton
+        isActive={active === `overlays/custom/${overlay.id}`}
+        draggable
+        onDragStart={(e) => {
+          setDraggedOverlayId(overlay.id)
+          e.dataTransfer.effectAllowed = 'move'
+          e.dataTransfer.setData('text/plain', overlay.id)
+        }}
+        onDragEnd={() => {
+          setDraggedOverlayId(null)
+          setDragOverFolderId(null)
+        }}
+        onClick={(event) => {
+          event.preventDefault()
+          onNavigate(`overlays/custom/${overlay.id}` as NavKey)
+        }}
+        className={cn(draggedOverlayId === overlay.id && 'opacity-50')}
+      >
+        <Workflow />
+        <span>{overlay.name}</span>
+      </SidebarMenuSubButton>
+    </SidebarMenuSubItem>
+  )
+
+  const renderFolder = (folder: OverlayFolder): React.ReactElement => {
+    const folderOverlays = overlays.filter((o) => o.folderId === folder.id)
+    const isOpen = !collapsedFolders.has(folder.id)
+    const isDragOver = dragOverFolderId === folder.id
+    const handleFolderDragOver = (e: React.DragEvent): void => {
+      if (!draggedOverlayId) return
+      e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = 'move'
+      setDragOverFolderId(folder.id)
+    }
+    const handleFolderDrop = (e: React.DragEvent): void => {
+      e.preventDefault()
+      e.stopPropagation()
+      const overlayId = e.dataTransfer.getData('text/plain') || draggedOverlayId
+      if (overlayId) void moveOverlayToFolder(overlayId, folder.id)
+      setDraggedOverlayId(null)
+      setDragOverFolderId(null)
+    }
+
+    return (
+      <SidebarMenuSubItem key={folder.id}>
+        <div
+          className={cn(
+            'group/folder flex h-7 min-w-0 w-full -translate-x-px cursor-pointer items-center gap-2 overflow-hidden rounded-md px-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+            isDragOver && 'bg-sidebar-accent text-sidebar-accent-foreground ring-1 ring-sidebar-ring'
+          )}
+          onClick={() => toggleFolder(folder.id)}
+          onDragOver={handleFolderDragOver}
+          onDragLeave={() => setDragOverFolderId((prev) => (prev === folder.id ? null : prev))}
+          onDrop={handleFolderDrop}
+        >
+          <ChevronRight className={cn('size-3.5 shrink-0 transition-transform', isOpen && 'rotate-90')} />
+          <Folder className="size-4 shrink-0" />
+          {renamingFolderId === folder.id ? (
+            <input
+              autoFocus
+              className="w-full min-w-0 bg-background border rounded px-1 py-0.5 text-xs outline-none focus:ring-1 focus:ring-primary"
+              value={renameFolderName}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => setRenameFolderName(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation()
+                if (e.key === 'Enter' && renameFolderName.trim()) {
+                  void saveFolder({ ...folder, name: renameFolderName.trim() })
+                  setRenamingFolderId(null)
+                } else if (e.key === 'Escape') {
+                  setRenamingFolderId(null)
+                }
+              }}
+              onBlur={() => setRenamingFolderId(null)}
+            />
+          ) : (
+            <span
+              className="truncate flex-1"
+              title={folder.name}
+              onDoubleClick={(e) => {
+                e.stopPropagation()
+                setRenamingFolderId(folder.id)
+                setRenameFolderName(folder.name)
+              }}
+            >
+              {folder.name}
+            </span>
+          )}
+          <button
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setCollapsedFolders((prev) => {
+                if (!prev.has(folder.id)) return prev
+                const next = new Set(prev)
+                next.delete(folder.id)
+                return next
+              })
+              setCreatingOverlayFolderId(folder.id)
+              setNewOverlayName('')
+            }}
+            className="ml-auto flex items-center justify-center p-1 rounded opacity-0 group-hover/folder:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground shrink-0"
+            title="New overlay in folder"
+          >
+            <Plus className="size-3.5" />
+          </button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                }}
+                className="flex items-center justify-center p-1 rounded opacity-0 group-hover/folder:opacity-100 hover:bg-destructive/10 hover:text-destructive shrink-0"
+                title="Delete folder"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+              <AlertDialogTitle>
+                {`Delete folder "${folder.name}"? Overlays inside will not be deleted.`}
+              </AlertDialogTitle>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+                <AlertDialogAction variant="destructive" onClick={() => deleteFolder(folder.id)}>
+                  {t.common.delete}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+
+        {isOpen && (
+          <SidebarMenuSub onDragOver={handleFolderDragOver} onDrop={handleFolderDrop}>
+            {creatingOverlayFolderId === folder.id && renderCreateOverlayInput(folder.id)}
+            {folderOverlays.map(renderOverlayItem)}
+            {folderOverlays.length === 0 && creatingOverlayFolderId !== folder.id && (
+              <SidebarMenuSubItem>
+                <SidebarMenuSubButton className="opacity-50 pointer-events-none">
+                  <span>Empty</span>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            )}
+          </SidebarMenuSub>
+        )}
+      </SidebarMenuSubItem>
+    )
+  }
 
   return (
     <Sidebar collapsible="icon">
@@ -90,10 +322,23 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
                         e.preventDefault()
                         e.stopPropagation()
                         setOverlaysOpen(true)
-                        setIsCreatingOverlay(true)
-                        setNewOverlayName('')
+                        setIsCreatingFolder(true)
+                        setNewFolderName('')
                       }}
                       className="ml-auto flex items-center justify-center p-1 rounded hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      title="New folder"
+                    >
+                      <FolderPlus className="size-4" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setOverlaysOpen(true)
+                        setCreatingOverlayFolderId(null)
+                        setNewOverlayName('')
+                      }}
+                      className="flex items-center justify-center p-1 rounded hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                       title={t.sidebar.overlays}
                     >
                       <Plus className="size-4" />
@@ -103,62 +348,57 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
                 </SidebarMenuButton>
 
                 {overlaysOpen && (
-                  <SidebarMenuSub>
-                    {isCreatingOverlay && (
+                  <SidebarMenuSub
+                    onDragOver={(e) => {
+                      if (!draggedOverlayId) return
+                      e.preventDefault()
+                      e.dataTransfer.dropEffect = 'move'
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      const overlayId = e.dataTransfer.getData('text/plain') || draggedOverlayId
+                      if (overlayId) void moveOverlayToFolder(overlayId, undefined)
+                      setDraggedOverlayId(null)
+                      setDragOverFolderId(null)
+                    }}
+                  >
+                    {isCreatingFolder && (
                       <SidebarMenuSubItem>
-                        <div 
+                        <div
                           className="flex items-center px-2 py-1 gap-2 cursor-text"
                           onClick={(e) => e.currentTarget.querySelector('input')?.focus()}
                         >
                           <input
                             autoFocus
-                            placeholder="Overlay name..."
+                            placeholder="Folder name..."
                             className="w-full bg-background border rounded px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary"
-                            value={newOverlayName}
-                            onChange={e => setNewOverlayName(e.target.value)}
+                            value={newFolderName}
+                            onChange={(e) => setNewFolderName(e.target.value)}
                             onKeyDown={async (e) => {
-                              if (e.key === 'Enter' && newOverlayName.trim()) {
-                                const name = newOverlayName.trim()
-                                const id = `scene-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
-                                const urlKey = uniqueUrlKey(name, overlays.map((o) => o.urlKey))
-                                setIsCreatingOverlay(false)
-                                setNewOverlayName("")
-                                await saveOverlay({ id, name, urlKey, nodes: [], edges: [] })
-                                onNavigate(`overlays/custom/${id}` as NavKey)
+                              if (e.key === 'Enter' && newFolderName.trim()) {
+                                const name = newFolderName.trim()
+                                setIsCreatingFolder(false)
+                                setNewFolderName('')
+                                await createFolder(name)
                               } else if (e.key === 'Escape') {
-                                setIsCreatingOverlay(false)
-                                setNewOverlayName("")
+                                setIsCreatingFolder(false)
+                                setNewFolderName('')
                               }
                             }}
                             onBlur={(e) => {
-                              // If focus moved to another focusable element in the app (e.relatedTarget is not null),
-                              // it means the user clicked a button/link. We can safely cancel.
-                              // If e.relatedTarget is null, it might be a window blur (Alt+Shift layout change, 
-                              // clicking outside window) or clicking a non-focusable background div. We keep it open.
                               if (e.relatedTarget && e.relatedTarget !== document.body) {
-                                setIsCreatingOverlay(false)
-                                setNewOverlayName("")
+                                setIsCreatingFolder(false)
+                                setNewFolderName('')
                               }
                             }}
                           />
                         </div>
                       </SidebarMenuSubItem>
                     )}
-                    {overlays.map((overlay) => (
-                      <SidebarMenuSubItem key={overlay.id}>
-                        <SidebarMenuSubButton
-                          isActive={active === `overlays/custom/${overlay.id}`}
-                          onClick={(event) => {
-                            event.preventDefault()
-                            onNavigate(`overlays/custom/${overlay.id}` as NavKey)
-                          }}
-                        >
-                          <Workflow />
-                          <span>{overlay.name}</span>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    ))}
-                    {overlays.length === 0 && !isCreatingOverlay && (
+                    {folders.map(renderFolder)}
+                    {creatingOverlayFolderId === null && renderCreateOverlayInput(undefined)}
+                    {ungroupedOverlays.map(renderOverlayItem)}
+                    {overlays.length === 0 && folders.length === 0 && !isCreatingFolder && creatingOverlayFolderId === undefined && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton className="opacity-50 pointer-events-none">
                           <span>No overlays yet</span>

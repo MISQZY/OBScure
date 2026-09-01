@@ -7,6 +7,7 @@ import type { OverlayServer } from "../overlayServer";
 import type {
   CustomOverlay,
   OverlayAddress,
+  OverlayFolder,
   OverlayUrls,
   SettingKey,
 } from "../../shared/types";
@@ -20,6 +21,7 @@ interface OverlayHandlersDeps {
   overlayServer: OverlayServer;
   mainWindow: () => BrowserWindow | null;
   getStoredCustomOverlays: () => CustomOverlay[];
+  getStoredCustomOverlayFolders: () => OverlayFolder[];
   getStoredCustomThemes: () => CustomThemePack[];
   getStoredCustomLocales: () => CustomLocalePack[];
 }
@@ -30,6 +32,7 @@ export function registerOverlayHandlers(deps: OverlayHandlersDeps): void {
     overlayServer,
     mainWindow,
     getStoredCustomOverlays,
+    getStoredCustomOverlayFolders,
     getStoredCustomThemes,
     getStoredCustomLocales,
   } = deps;
@@ -82,6 +85,40 @@ export function registerOverlayHandlers(deps: OverlayHandlersDeps): void {
     "customOverlays",
     getStoredCustomOverlays,
     (next) => overlayServer.setCustomOverlays(next as CustomOverlay[]),
+  );
+
+  ipcMain.handle(
+    "overlay:getCustomOverlayFolders",
+    (): OverlayFolder[] => getStoredCustomOverlayFolders(),
+  );
+  ipcMain.handle(
+    "overlay:saveCustomOverlayFolder",
+    (_event, folder: OverlayFolder): OverlayFolder[] => {
+      const current = getStoredCustomOverlayFolders();
+      const exists = current.some((f) => f.id === folder.id);
+      const next = exists
+        ? current.map((f) => (f.id === folder.id ? folder : f))
+        : [...current, folder];
+      config().setSetting("customOverlayFolders", next);
+      return next;
+    },
+  );
+  ipcMain.handle(
+    "overlay:deleteCustomOverlayFolder",
+    (_event, id: string): OverlayFolder[] => {
+      const next = getStoredCustomOverlayFolders().filter((f) => f.id !== id);
+      config().setSetting("customOverlayFolders", next);
+      // Deleting a folder only ungroups its scenes — it never deletes them.
+      const overlays = getStoredCustomOverlays();
+      if (overlays.some((o) => o.folderId === id)) {
+        const nextOverlays = overlays.map((o) =>
+          o.folderId === id ? { ...o, folderId: undefined } : o,
+        );
+        config().setSetting("customOverlays", nextOverlays);
+        overlayServer.setCustomOverlays(nextOverlays);
+      }
+      return next;
+    },
   );
   registerCustomPackHandlers(
     "theme:getCustomThemes",

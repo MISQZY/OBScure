@@ -6,6 +6,7 @@ import type {
   IntegrationsStatusMap,
   NowPlayingPayload,
   OverlayAddress,
+  OverlayFolder,
   OverlayUrls,
   RandomStatePayload,
   RouletteStatePayload,
@@ -62,6 +63,9 @@ export interface MaddonerApi {
   saveCustomOverlay: (overlay: CustomOverlay) => Promise<CustomOverlay[]>
   deleteCustomOverlay: (id: string) => Promise<CustomOverlay[]>
   testCustomOverlay: (overlay: CustomOverlay) => Promise<void>
+  getCustomOverlayFolders: () => Promise<OverlayFolder[]>
+  saveCustomOverlayFolder: (folder: OverlayFolder) => Promise<OverlayFolder[]>
+  deleteCustomOverlayFolder: (id: string) => Promise<OverlayFolder[]>
   setTitleBarOverlay: (overlay: { color: string; symbolColor: string }) => Promise<void>
   getCustomThemes: () => Promise<CustomThemePack[]>
   saveCustomTheme: (pack: CustomThemePack) => Promise<CustomThemePack[]>

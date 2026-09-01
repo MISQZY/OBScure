@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import type { CustomOverlay } from '@shared/types'
+import type { CustomOverlay, OverlayFolder } from '@shared/types'
 
 interface CustomOverlaysContextValue {
   overlays: CustomOverlay[]
@@ -7,6 +7,12 @@ interface CustomOverlaysContextValue {
   deleteOverlay: (id: string) => Promise<void>
   /** Live-previews a scene (including unsaved edits) in any connected Browser Source without persisting it — see window.maddoner.testCustomOverlay. */
   testOverlay: (overlay: CustomOverlay) => Promise<void>
+  folders: OverlayFolder[]
+  saveFolder: (folder: OverlayFolder) => Promise<void>
+  /** Deletes the folder only — its overlays are ungrouped (folderId cleared) by the main process, never deleted. */
+  deleteFolder: (id: string) => Promise<void>
+  /** Moves an overlay into `folderId`, or to the top level (ungrouped) when omitted. */
+  moveOverlayToFolder: (overlayId: string, folderId: string | undefined) => Promise<void>
 }
 
 const CustomOverlaysContext = createContext<CustomOverlaysContextValue | null>(null)
@@ -21,9 +27,11 @@ const CustomOverlaysContext = createContext<CustomOverlaysContextValue | null>(n
  */
 export function CustomOverlaysProvider({ children }: { children: ReactNode }) {
   const [overlays, setOverlays] = useState<CustomOverlay[]>([])
+  const [folders, setFolders] = useState<OverlayFolder[]>([])
 
   useEffect(() => {
     window.maddoner.getCustomOverlays().then(setOverlays)
+    window.maddoner.getCustomOverlayFolders().then(setFolders)
   }, [])
 
   const saveOverlay = async (overlay: CustomOverlay): Promise<void> => {
@@ -38,8 +46,27 @@ export function CustomOverlaysProvider({ children }: { children: ReactNode }) {
     await window.maddoner.testCustomOverlay(overlay)
   }
 
+  const saveFolder = async (folder: OverlayFolder): Promise<void> => {
+    setFolders(await window.maddoner.saveCustomOverlayFolder(folder))
+  }
+
+  const deleteFolder = async (id: string): Promise<void> => {
+    setFolders(await window.maddoner.deleteCustomOverlayFolder(id))
+    setOverlays((current) =>
+      current.map((o) => (o.folderId === id ? { ...o, folderId: undefined } : o))
+    )
+  }
+
+  const moveOverlayToFolder = async (overlayId: string, folderId: string | undefined): Promise<void> => {
+    const overlay = overlays.find((o) => o.id === overlayId)
+    if (!overlay || overlay.folderId === folderId) return
+    await saveOverlay({ ...overlay, folderId })
+  }
+
   return (
-    <CustomOverlaysContext.Provider value={{ overlays, saveOverlay, deleteOverlay, testOverlay }}>
+    <CustomOverlaysContext.Provider
+      value={{ overlays, saveOverlay, deleteOverlay, testOverlay, folders, saveFolder, deleteFolder, moveOverlayToFolder }}
+    >
       {children}
     </CustomOverlaysContext.Provider>
   )
