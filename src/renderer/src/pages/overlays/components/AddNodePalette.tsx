@@ -31,10 +31,6 @@ export function AddNodePalette({
   )
 
   return (
-    // max-h leaves real clearance at the bottom for <Controls> (also
-    // bottom-left, ~9rem tall including its own margin) — a smaller,
-    // reliably-scrollable panel instead of one that stretches to nearly the
-    // full canvas height and overlaps it.
     <Panel position="top-left" data-tour="scene-builder-add-node" className="m-4 flex flex-col items-start gap-2">
       {isNarrow && (
         <button
@@ -47,7 +43,16 @@ export function AddNodePalette({
         </button>
       )}
       {(!isNarrow || paletteOpen) && (
-        <div className="bg-card border rounded-lg shadow-sm flex flex-col min-w-[170px] max-h-[min(28rem,calc(100%_-_9rem))] overflow-hidden">
+        // React Flow's <Panel> is position:absolute with no explicit height
+        // (only top/left are set), so its own height is auto/shrink-to-fit —
+        // a %-based max-height here (the previous calc(100% - 9rem)) has no
+        // definite-height ancestor to resolve against, which CSS treats as
+        // 'none' (unconstrained). That's what broke both the cap and, as a
+        // consequence, the scrolling: with no real bound, the list just grew
+        // past the canvas instead of clipping+scrolling. vh is viewport-
+        // relative, so it stays bounded regardless of the Panel's own
+        // (undefined) height.
+        <div className="bg-card border rounded-lg shadow-sm flex flex-col min-w-[170px] max-h-[50vh] overflow-hidden">
           <div className="p-2.5 border-b bg-card shrink-0">
             <h3 className="font-semibold text-sm text-center">{t.sceneBuilder.nav.addNode}</h3>
           </div>
