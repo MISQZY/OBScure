@@ -1,4 +1,4 @@
-import type { ConfigStore } from "../../configStore";
+import type { CredentialsStore } from "../../credentialsStore";
 import {
   TwitchAuthError,
   fetchTwitch,
@@ -9,11 +9,8 @@ import {
   TwitchTokenResponse,
 } from "./utils";
 
-export function getClientId(config: ConfigStore): string | null {
-  return (
-    config.getSetting<string | null>("twitch.clientId", null) ||
-    BUILTIN_CLIENT_ID
-  );
+export function getClientId(credentials: CredentialsStore): string | null {
+  return credentials.getClientId("twitch.clientId") || BUILTIN_CLIENT_ID;
 }
 
 export async function pollForDeviceToken(

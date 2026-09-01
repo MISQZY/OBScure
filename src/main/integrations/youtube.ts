@@ -35,15 +35,9 @@ export class YoutubeIntegration extends BaseIntegration {
   private accessTokenExpiresAt = 0;
 
   async start(): Promise<void> {
-    const clientId = this.config.getSetting<string | null>(
-      "youtube.clientId",
-      null,
-    );
-    const clientSecret = this.config.getSetting<string | null>(
-      "youtube.clientSecret",
-      null,
-    );
-    const refreshToken = this.config.getSecret("youtube.refreshToken");
+    const clientId = this.credentials.getClientId("youtube.clientId");
+    const clientSecret = this.credentials.getClientId("youtube.clientSecret");
+    const refreshToken = this.credentials.getSecret("youtube.refreshToken");
     if (!clientId || !clientSecret || !refreshToken) {
       this.setStatus("disconnected");
       return;
@@ -61,14 +55,8 @@ export class YoutubeIntegration extends BaseIntegration {
   stop(): void {}
 
   async connect(): Promise<void> {
-    const clientId = this.config.getSetting<string | null>(
-      "youtube.clientId",
-      null,
-    );
-    const clientSecret = this.config.getSetting<string | null>(
-      "youtube.clientSecret",
-      null,
-    );
+    const clientId = this.credentials.getClientId("youtube.clientId");
+    const clientSecret = this.credentials.getClientId("youtube.clientSecret");
     if (!clientId || !clientSecret) {
       throw new Error("Set a Client ID and Client Secret first");
     }
@@ -146,12 +134,12 @@ export class YoutubeIntegration extends BaseIntegration {
 
     this.accessToken = tokens.access_token;
     this.accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000;
-    this.config.setSecret("youtube.refreshToken", tokens.refresh_token);
+    this.credentials.setSecret("youtube.refreshToken", tokens.refresh_token);
     this.setStatus("connected");
   }
 
   disconnect(): void {
-    this.config.deleteSecret("youtube.refreshToken");
+    this.credentials.deleteSecret("youtube.refreshToken");
     this.accessToken = null;
     this.accessTokenExpiresAt = 0;
     this.setStatus("disconnected");

@@ -20,6 +20,7 @@ import { logInfo, logWarn } from "./logger";
 export function runAllMigrations(userDataDir: string): void {
   migrateOverlaysToPerFileStorage(userDataDir);
   migrateThemesToGlobalFolder(userDataDir);
+  migrateCredentialsToOwnFile(userDataDir);
 }
 
 // ---------------------------------------------------------------------------
@@ -59,7 +60,7 @@ function readConfigJson(
   }
 }
 
-/** ConfigStore keeps every migratable key under the top-level `settings` object. */
+/** ConfigStore keeps plain settings under the top-level `settings` object. */
 function readSettings(raw: Record<string, unknown>): Record<string, unknown> {
   const settings = raw["settings"];
   return settings && typeof settings === "object"
@@ -67,18 +68,21 @@ function readSettings(raw: Record<string, unknown>): Record<string, unknown> {
     : {};
 }
 
+/** ConfigStore keeps OS-encrypted secrets under the top-level `secrets` object. */
+function readSecrets(raw: Record<string, unknown>): Record<string, unknown> {
+  const secrets = raw["secrets"];
+  return secrets && typeof secrets === "object"
+    ? (secrets as Record<string, unknown>)
+    : {};
+}
+
 function patchConfigJson(
   profileDir: string,
-  raw: Record<string, unknown>,
-  settings: Record<string, unknown>,
+  next: Record<string, unknown>,
 ): void {
   const configPath = join(profileDir, "config.json");
   try {
-    writeFileSync(
-      configPath,
-      JSON.stringify({ ...raw, settings }, null, 2),
-      "utf-8",
-    );
+    writeFileSync(configPath, JSON.stringify(next, null, 2), "utf-8");
   } catch (e) {
     logWarn("migrations", `failed to patch config.json in ${profileDir}`, e);
   }
@@ -147,7 +151,7 @@ function migrateOverlaysToPerFileStorage(userDataDir: string): void {
       customOverlayFolders: _cf,
       ...restSettings
     } = settings;
-    patchConfigJson(profileDir, raw, restSettings);
+    patchConfigJson(profileDir, { ...raw, settings: restSettings });
 
     if (count > 0) {
       logInfo(
@@ -206,7 +210,7 @@ function migrateThemesToGlobalFolder(userDataDir: string): void {
 
     // Strip migrated key from config.json so this branch never fires again.
     const { customThemes: _ct, ...restSettings } = settings;
-    patchConfigJson(profileDir, raw, restSettings);
+    patchConfigJson(profileDir, { ...raw, settings: restSettings });
 
     if (count > 0) {
       logInfo(
@@ -214,5 +218,111 @@ function migrateThemesToGlobalFolder(userDataDir: string): void {
         `themes: migrated ${count} theme(s) from profile ${profileId}`,
       );
     }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Migration: integration credentials  (v3 → v4)
+// ---------------------------------------------------------------------------
+
+/** Client ID / client secret keys that used to live under config.json's `settings`. */
+const CREDENTIAL_SETTING_KEYS = [
+  "spotify.clientId",
+  "twitch.clientId",
+  "youtube.clientId",
+  "youtube.clientSecret",
+] as const;
+
+/** OAuth refresh token keys that used to live under config.json's `secrets`. */
+const CREDENTIAL_SECRET_KEYS = [
+  "spotify.refreshToken",
+  "twitch.refreshToken",
+  "youtube.refreshToken",
+] as const;
+
+interface StoredCredentials {
+  secrets: Record<string, string>;
+  clientIds: Record<string, string>;
+}
+
+/**
+ * Before: `<profileDir>/config.json`  →  `settings.*.clientId` / `secrets.*.refreshToken`
+ * After:  `<profileDir>/credentials.json`  →  `{ clientIds: {...}, secrets: {...} }`
+ *
+ * Rationale: integration credentials (OAuth tokens, client IDs/secrets) are
+ * kept out of the same file as ordinary UI settings, mirroring CredentialsStore.
+ */
+function migrateCredentialsToOwnFile(userDataDir: string): void {
+  eachProfileDir(userDataDir, (profileDir, profileId) => {
+    const raw = readConfigJson(profileDir);
+    if (!raw) return;
+    const settings = readSettings(raw);
+    const secrets = readSecrets(raw);
+
+    const settingKeys = CREDENTIAL_SETTING_KEYS.filter(
+      (key) => typeof settings[key] === "string",
+    );
+    const secretKeys = CREDENTIAL_SECRET_KEYS.filter(
+      (key) => typeof secrets[key] === "string",
+    );
+    if (settingKeys.length === 0 && secretKeys.length === 0) return;
+
+    const credentialsPath = join(profileDir, "credentials.json");
+    let credentials: StoredCredentials = { secrets: {}, clientIds: {} };
+    if (existsSync(credentialsPath)) {
+      try {
+        credentials = {
+          secrets: {},
+          clientIds: {},
+          ...JSON.parse(readFileSync(credentialsPath, "utf-8")),
+        };
+      } catch {
+        /* start fresh if the existing file is corrupt */
+      }
+    }
+
+    // Never clobber credentials already present in the new file with stale
+    // config.json content.
+    for (const key of settingKeys) {
+      if (!(key in credentials.clientIds)) {
+        credentials.clientIds[key] = settings[key] as string;
+      }
+    }
+    for (const key of secretKeys) {
+      if (!(key in credentials.secrets)) {
+        credentials.secrets[key] = secrets[key] as string;
+      }
+    }
+
+    try {
+      writeFileSync(
+        credentialsPath,
+        JSON.stringify(credentials, null, 2),
+        "utf-8",
+      );
+    } catch (e) {
+      logWarn(
+        "migrations",
+        `credentials: failed to write credentials.json (profile ${profileId})`,
+        e,
+      );
+      return;
+    }
+
+    // Strip migrated keys from config.json so this branch never fires again.
+    const restSettings = { ...settings };
+    for (const key of settingKeys) delete restSettings[key];
+    const restSecrets = { ...secrets };
+    for (const key of secretKeys) delete restSecrets[key];
+    patchConfigJson(profileDir, {
+      ...raw,
+      settings: restSettings,
+      secrets: restSecrets,
+    });
+
+    logInfo(
+      "migrations",
+      `credentials: migrated ${settingKeys.length + secretKeys.length} key(s) from profile ${profileId}`,
+    );
   });
 }

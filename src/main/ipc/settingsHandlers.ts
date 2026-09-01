@@ -2,6 +2,7 @@ import { app, ipcMain, shell } from "electron";
 import type { BrowserWindow } from "electron";
 import { getFonts } from "font-list";
 import type { ConfigStore } from "../configStore";
+import type { CredentialsStore } from "../credentialsStore";
 import type { WindowsMediaIntegration } from "../integrations/windowsMedia";
 import type { SettingKey } from "../../shared/types";
 import {
@@ -11,15 +12,25 @@ import {
 
 interface SettingsHandlersDeps {
   config: () => ConfigStore;
+  credentials: () => CredentialsStore;
   mainWindow: () => BrowserWindow | null;
   windowsMedia: () => WindowsMediaIntegration;
   getStoredCanvasConfig: () => CanvasConfig;
   canvasConfigSettingKey: string;
 }
 
+/** Client ID / client secret keys — persisted via CredentialsStore, not ConfigStore. */
+const CREDENTIAL_SETTING_KEYS: ReadonlySet<SettingKey> = new Set([
+  "spotify.clientId",
+  "twitch.clientId",
+  "youtube.clientId",
+  "youtube.clientSecret",
+]);
+
 export function registerSettingsHandlers(deps: SettingsHandlersDeps): void {
   const {
     config,
+    credentials,
     mainWindow,
     windowsMedia,
     getStoredCanvasConfig,
@@ -53,11 +64,17 @@ export function registerSettingsHandlers(deps: SettingsHandlersDeps): void {
   );
 
   ipcMain.handle("settings:get", (_event, key: SettingKey) =>
-    config().getSetting(key, null),
+    CREDENTIAL_SETTING_KEYS.has(key)
+      ? credentials().getClientId(key)
+      : config().getSetting(key, null),
   );
 
   ipcMain.handle("settings:set", (_event, key: SettingKey, value: unknown) => {
-    config().setSetting(key, value);
+    if (CREDENTIAL_SETTING_KEYS.has(key)) {
+      credentials().setClientId(key, value as string);
+    } else {
+      config().setSetting(key, value);
+    }
     if (key === "windowsMedia.enabled") {
       windowsMedia().stop();
       void windowsMedia().start();

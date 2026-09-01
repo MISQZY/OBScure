@@ -56,11 +56,8 @@ export class SpotifyIntegration extends BaseIntegration {
   private lastLoggedNoTrackItem = false;
 
   async start(): Promise<void> {
-    const clientId = this.config.getSetting<string | null>(
-      "spotify.clientId",
-      null,
-    );
-    const refreshToken = this.config.getSecret("spotify.refreshToken");
+    const clientId = this.credentials.getClientId("spotify.clientId");
+    const refreshToken = this.credentials.getSecret("spotify.refreshToken");
     if (!clientId || !refreshToken) {
       this.setStatus("disconnected");
       return;
@@ -83,11 +80,8 @@ export class SpotifyIntegration extends BaseIntegration {
   }
 
   private async poll(): Promise<void> {
-    const clientId = this.config.getSetting<string | null>(
-      "spotify.clientId",
-      null,
-    );
-    const refreshToken = this.config.getSecret("spotify.refreshToken");
+    const clientId = this.credentials.getClientId("spotify.clientId");
+    const refreshToken = this.credentials.getSecret("spotify.refreshToken");
     if (!clientId || !refreshToken) return;
 
     try {
@@ -180,10 +174,7 @@ export class SpotifyIntegration extends BaseIntegration {
   }
 
   async connect(): Promise<void> {
-    const clientId = this.config.getSetting<string | null>(
-      "spotify.clientId",
-      null,
-    );
+    const clientId = this.credentials.getClientId("spotify.clientId");
     if (!clientId) {
       throw new Error("Set a Client ID first");
     }
@@ -262,13 +253,13 @@ export class SpotifyIntegration extends BaseIntegration {
 
     this.accessToken = tokens.access_token;
     this.accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000;
-    this.config.setSecret("spotify.refreshToken", tokens.refresh_token);
+    this.credentials.setSecret("spotify.refreshToken", tokens.refresh_token);
     this.setStatus("connected");
     this.startPolling(() => this.poll(), POLL_INTERVAL_MS);
   }
 
   disconnect(): void {
-    this.config.deleteSecret("spotify.refreshToken");
+    this.credentials.deleteSecret("spotify.refreshToken");
     this.accessToken = null;
     this.accessTokenExpiresAt = 0;
     this.setStatus("disconnected");
@@ -300,7 +291,7 @@ export class SpotifyIntegration extends BaseIntegration {
     this.accessToken = tokens.access_token;
     this.accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000;
     if (tokens.refresh_token) {
-      this.config.setSecret("spotify.refreshToken", tokens.refresh_token);
+      this.credentials.setSecret("spotify.refreshToken", tokens.refresh_token);
     }
   }
 }

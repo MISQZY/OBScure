@@ -3,6 +3,7 @@ import { BaseIntegration } from "../types";
 import { logInfo, logWarn } from "../../logger";
 import type { EventBus } from "../../eventBus";
 import type { ConfigStore } from "../../configStore";
+import type { CredentialsStore } from "../../credentialsStore";
 import type {
   IntegrationKey,
   TwitchChannelStats,
@@ -33,8 +34,13 @@ export class TwitchIntegration extends BaseIntegration {
   private stopping = false;
   private readonly twitchSocket: TwitchSocket;
 
-  constructor(key: IntegrationKey, eventBus: EventBus, config: ConfigStore) {
-    super(key, eventBus, config);
+  constructor(
+    key: IntegrationKey,
+    eventBus: EventBus,
+    config: ConfigStore,
+    credentials: CredentialsStore,
+  ) {
+    super(key, eventBus, config, credentials);
     this.twitchSocket = new TwitchSocket({
       isStopping: () => this.stopping,
       setStatus: (status) => this.setStatus(status),
@@ -45,8 +51,8 @@ export class TwitchIntegration extends BaseIntegration {
   }
 
   async start(): Promise<void> {
-    const clientId = getClientId(this.config);
-    const refreshToken = this.config.getSecret("twitch.refreshToken");
+    const clientId = getClientId(this.credentials);
+    const refreshToken = this.credentials.getSecret("twitch.refreshToken");
     if (!clientId || !refreshToken) {
       logInfo(
         "twitch",
@@ -73,7 +79,7 @@ export class TwitchIntegration extends BaseIntegration {
   /** Re-derives credentials from stored state and (re)establishes the socket. */
   private async reconnect(): Promise<void> {
     const clientId = this.clientId;
-    const refreshToken = this.config.getSecret("twitch.refreshToken");
+    const refreshToken = this.credentials.getSecret("twitch.refreshToken");
     if (!clientId || !refreshToken) {
       this.setStatus("disconnected");
       return;
@@ -99,7 +105,7 @@ export class TwitchIntegration extends BaseIntegration {
   private handleConnectFailure(error: unknown): void {
     if (error instanceof TwitchAuthError) {
       logWarn("twitch", "refresh token rejected, dropping to disconnected", error);
-      this.config.deleteSecret("twitch.refreshToken");
+      this.credentials.deleteSecret("twitch.refreshToken");
       this.accessToken = null;
       this.accessTokenExpiresAt = 0;
       this.twitchSocket.cancelReconnect();
@@ -117,7 +123,7 @@ export class TwitchIntegration extends BaseIntegration {
   }
 
   async connect(): Promise<void> {
-    const clientId = getClientId(this.config);
+    const clientId = getClientId(this.credentials);
     if (!clientId) {
       throw new Error("Set a Client ID first");
     }
@@ -165,7 +171,7 @@ export class TwitchIntegration extends BaseIntegration {
   }
 
   disconnect(): void {
-    this.config.deleteSecret("twitch.refreshToken");
+    this.credentials.deleteSecret("twitch.refreshToken");
     this.accessToken = null;
     this.accessTokenExpiresAt = 0;
     this.broadcasterId = null;
@@ -176,7 +182,7 @@ export class TwitchIntegration extends BaseIntegration {
   private applyTokens(tokens: TwitchTokenResponse): void {
     this.accessToken = tokens.access_token;
     this.accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000;
-    this.config.setSecret("twitch.refreshToken", tokens.refresh_token);
+    this.credentials.setSecret("twitch.refreshToken", tokens.refresh_token);
   }
 
   private async fetchBroadcasterId(): Promise<string> {

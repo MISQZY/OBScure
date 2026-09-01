@@ -1,5 +1,6 @@
 import type { EventBus } from "../eventBus";
 import type { ConfigStore } from "../configStore";
+import type { CredentialsStore } from "../credentialsStore";
 import type { IntegrationKey } from "../../shared/types";
 
 export type IntegrationStatus =
@@ -19,6 +20,7 @@ export abstract class BaseIntegration implements Integration {
     public readonly key: IntegrationKey,
     protected readonly eventBus: EventBus,
     protected readonly config: ConfigStore,
+    protected readonly credentials: CredentialsStore,
   ) {}
 
   /**

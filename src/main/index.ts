@@ -9,6 +9,7 @@ import { ConfigStore } from "./configStore";
 import { ProfileManager } from "./profileStore";
 import { OverlayStore } from "./overlayStore";
 import { ThemeStore } from "./themeStore";
+import { CredentialsStore } from "./credentialsStore";
 import { runAllMigrations } from "./migrations";
 import { buildAppShellCsp } from "./csp";
 import { NowPlayingCache } from "./nowPlayingCache";
@@ -98,6 +99,7 @@ const profileManager = new ProfileManager(app.getPath("userData"));
 runAllMigrations(app.getPath("userData"));
 let config = new ConfigStore(profileManager.getActiveProfileDir());
 let overlayStore = new OverlayStore(profileManager.getActiveProfileDir());
+let credentialsStore = new CredentialsStore(profileManager.getActiveProfileDir());
 const themeStore = new ThemeStore(app.getPath("userData"));
 
 function getStoredCanvasConfig(): CanvasConfig {
@@ -140,10 +142,15 @@ const overlayServer = new OverlayServer({
 
 
 let integrations = {
-  spotify: new SpotifyIntegration("spotify", eventBus, config),
-  windowsMedia: new WindowsMediaIntegration("windowsMedia", eventBus, config),
-  twitch: new TwitchIntegration("twitch", eventBus, config),
-  youtube: new YoutubeIntegration("youtube", eventBus, config),
+  spotify: new SpotifyIntegration("spotify", eventBus, config, credentialsStore),
+  windowsMedia: new WindowsMediaIntegration(
+    "windowsMedia",
+    eventBus,
+    config,
+    credentialsStore,
+  ),
+  twitch: new TwitchIntegration("twitch", eventBus, config, credentialsStore),
+  youtube: new YoutubeIntegration("youtube", eventBus, config, credentialsStore),
 };
 
 const randomEngine = new RandomEngine(eventBus);
@@ -233,12 +240,23 @@ async function reinitializeForActiveProfile(): Promise<void> {
   const profileDir = profileManager.getActiveProfileDir();
   config = new ConfigStore(profileDir);
   overlayStore = new OverlayStore(profileDir);
+  credentialsStore = new CredentialsStore(profileDir);
 
   integrations = {
-    spotify: new SpotifyIntegration("spotify", eventBus, config),
-    windowsMedia: new WindowsMediaIntegration("windowsMedia", eventBus, config),
-    twitch: new TwitchIntegration("twitch", eventBus, config),
-    youtube: new YoutubeIntegration("youtube", eventBus, config),
+    spotify: new SpotifyIntegration("spotify", eventBus, config, credentialsStore),
+    windowsMedia: new WindowsMediaIntegration(
+      "windowsMedia",
+      eventBus,
+      config,
+      credentialsStore,
+    ),
+    twitch: new TwitchIntegration("twitch", eventBus, config, credentialsStore),
+    youtube: new YoutubeIntegration(
+      "youtube",
+      eventBus,
+      config,
+      credentialsStore,
+    ),
   };
   await Promise.all(
     Object.values(integrations).map((integration) => integration.start()),
@@ -327,6 +345,7 @@ registerMediaHandlers({
 
 registerSettingsHandlers({
   config: () => config,
+  credentials: () => credentialsStore,
   mainWindow: () => mainWindow,
   windowsMedia: () => integrations.windowsMedia,
   getStoredCanvasConfig,
