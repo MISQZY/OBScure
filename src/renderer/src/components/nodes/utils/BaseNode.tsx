@@ -117,7 +117,14 @@ export function BaseNode({
   const [labelText, setLabelText] = useState((data.label as string) || '')
   const categoryStyle = CATEGORY_STYLES[category]
   const hasSocketSection = sockets.length > 0 || sequenceIn
-  const hasBody = Boolean(children) && !collapsed
+  // Collapsing only ever hides `children` below (see hasBody) — sockets
+  // always stay visible regardless of `collapsed` (a wire has to land
+  // somewhere). A node with no body — pure sockets/outputs, e.g. Scene,
+  // Start, Audio Player, Random/Roulette Widget — has nothing collapsing
+  // could ever hide, so the chevron/click-to-collapse/context-menu entry
+  // are all skipped rather than sitting there as dead, misleading UI.
+  const canCollapse = Boolean(children)
+  const hasBody = canCollapse && !collapsed
   const showTrailingBorder = hasSocketSection || hasBody
 
   /** Every sibling node (deduped, sorted by current priority) competing for the same (target, targetHandle) socket this node feeds — shared by cyclePriority/setPriority below. Mirrors usePriorityInfo's own computation (see its doc comment for the scoping/dedup reasoning); can't reuse the hook's own memoized result directly since these need the RAW node list to write new priorities back to, not just position/total. */
@@ -207,17 +214,25 @@ export function BaseNode({
       <ContextMenuTrigger asChild>
       <div
         className={cn(
-          'px-3 py-2 rounded-tr-md font-semibold text-sm flex justify-between items-center gap-2',
+          // rounded-t (both corners, not just tr) so the header's own
+          // background — which the outer node isn't clipped to, since it
+          // has no overflow-hidden — actually matches the outer wrapper's
+          // rounded-md at the top-left too, instead of a hard square corner
+          // poking past the curve and showing the canvas through the gap.
+          // Same reasoning for rounded-b when this header IS the whole node.
+          'px-3 py-2 rounded-t-md font-semibold text-sm flex justify-between items-center gap-2',
           categoryStyle.header,
-          showTrailingBorder ? 'border-b' : 'rounded-br-md'
+          showTrailingBorder ? 'border-b' : 'rounded-b-md'
         )}
       >
         <div
-          onClick={() => updateNodeData(id, { collapsed: !collapsed })}
-          className="flex items-center gap-1.5 min-w-0 flex-1 text-left cursor-pointer"
-          title={collapsed ? t.sceneBuilder.tooltip.expand : t.sceneBuilder.tooltip.collapse}
+          onClick={canCollapse ? () => updateNodeData(id, { collapsed: !collapsed }) : undefined}
+          className={cn('flex items-center gap-1.5 min-w-0 flex-1 text-left', canCollapse && 'cursor-pointer')}
+          title={canCollapse ? (collapsed ? t.sceneBuilder.tooltip.expand : t.sceneBuilder.tooltip.collapse) : undefined}
         >
-          <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', collapsed && '-rotate-90')} />
+          {canCollapse && (
+            <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', collapsed && '-rotate-90')} />
+          )}
           <div className="flex items-center min-w-0 flex-1 gap-1.5">
             <span className="truncate shrink-0">{title}</span>
             {help && (
@@ -348,10 +363,12 @@ export function BaseNode({
       </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onSelect={() => updateNodeData(id, { collapsed: !collapsed })}>
-          {collapsed ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
-          {collapsed ? 'Expand' : 'Collapse'}
-        </ContextMenuItem>
+        {canCollapse && (
+          <ContextMenuItem onSelect={() => updateNodeData(id, { collapsed: !collapsed })}>
+            {collapsed ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+            {collapsed ? 'Expand' : 'Collapse'}
+          </ContextMenuItem>
+        )}
         {deletable && (
           <ContextMenuItem onSelect={duplicateNode}>
             <Copy className="size-4" />
