@@ -33,7 +33,10 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/40 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        // top-[37px] (not inset-0) — matches the custom titlebar's own total
+        // height (see TitleBar.tsx / sidebar.tsx's identical offset) so the
+        // dimmed backdrop starts below it instead of covering the titlebar too.
+        "fixed inset-x-0 top-[37px] bottom-0 z-50 bg-black/40 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className
       )}
       {...props}
