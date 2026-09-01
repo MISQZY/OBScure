@@ -77,13 +77,13 @@ export function ScenePreviewPanel({
               <Play className="size-3 fill-current" />
             </button>
           </div>
-          {/* Bottom-left corner: the one corner that actually moves as this top-right-anchored box grows/shrinks — see usePreviewResize's own doc comment. */}
+          {/* Bottom-left corner: the one corner that actually moves as this top-right-anchored box grows/shrinks — see usePreviewResize's own doc comment. Themed bg-card/border chip (not bare white lines) so the grip stays visible regardless of what color the scene underneath happens to be — a plain white icon disappeared against light overlay content. */}
           <div
             onMouseDown={onResizeStart}
             title="Drag to resize preview"
-            className="pointer-events-auto absolute z-10 bottom-0 left-0 size-4 cursor-sw-resize flex items-end justify-start p-0.5 opacity-60 hover:opacity-100 transition-opacity"
+            className="pointer-events-auto absolute z-10 bottom-1 left-1 flex items-center justify-center size-4 rounded-sm bg-card/90 border border-border cursor-sw-resize opacity-70 hover:opacity-100 transition-opacity"
           >
-            <div className="size-2 border-b-2 border-l-2 border-white/80 rounded-bl-sm" />
+            <div className="size-1.5 border-b-2 border-l-2 border-foreground/80 rounded-bl-sm" />
           </div>
           <div
             // shrink-0 is the actual fix (see the diagnostic session that
