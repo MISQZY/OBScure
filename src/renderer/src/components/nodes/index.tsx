@@ -30,6 +30,7 @@ import { HideNode } from './HideNode'
 import { StartNode } from './StartNode'
 import { TaskNode } from './TaskNode'
 import { WaitNode } from './WaitNode'
+import { ConditionNode } from './ConditionNode'
 import { EndNode } from './EndNode'
 
 export const nodeTypes = {
@@ -62,6 +63,7 @@ export const nodeTypes = {
   start: StartNode,
   task: TaskNode,
   wait: WaitNode,
+  condition: ConditionNode,
   end: EndNode
 }
 

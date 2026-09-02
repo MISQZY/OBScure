@@ -64,5 +64,29 @@ export function inferAlertPlatform(data: Record<string, unknown>): AlertPlatform
   return (ALERT_TYPES_BY_PLATFORM.youtube as string[]).includes(savedType) ? 'youtube' : 'twitch'
 }
 export const TASK_ACTIONS = ['show', 'hide', 'update'] as const
+
+/** Same field vocabulary as EVENT_PLACEHOLDERS above — a Condition branches on the exact same {user}/{amount}/{message}/{source} an alert already exposes to templates, rather than inventing a second vocabulary. */
+export const CONDITION_FIELDS = EVENT_PLACEHOLDERS
+export const CONDITION_FIELD_LABELS: Record<(typeof EVENT_PLACEHOLDERS)[number], string> = {
+  user: 'Username',
+  amount: 'Amount',
+  message: 'Message',
+  source: 'Platform'
+}
+
+export type ConditionOperator = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains'
+/** Offered only for the 'amount' field (see ConditionNode) — comparing anything else numerically would just be NaN vs. NaN. */
+export const NUMERIC_CONDITION_OPERATORS: ConditionOperator[] = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte']
+/** Offered for user/message/source — every comparison here is case-insensitive substring/equality, see evaluateCondition in pages/overlays/sceneUtils/graph.ts. */
+export const STRING_CONDITION_OPERATORS: ConditionOperator[] = ['eq', 'neq', 'contains']
+export const CONDITION_OPERATOR_LABELS: Record<ConditionOperator, string> = {
+  eq: '=',
+  neq: '≠',
+  gt: '>',
+  gte: '≥',
+  lt: '<',
+  lte: '≤',
+  contains: 'contains'
+}
 /** Which way an Overflow node's Auto-scroll animates its content — see overflowAutoScroll in overlays/sceneUtils.tsx. 'up'/'down' pick the vertical keyframe, 'left'/'right' the horizontal one; 'down'/'right' just play the same keyframe in reverse. */
 export const SCROLL_DIRECTIONS = ['up', 'down', 'left', 'right'] as const

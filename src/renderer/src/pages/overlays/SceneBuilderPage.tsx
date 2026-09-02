@@ -132,7 +132,7 @@ export function SceneBuilderPage({
     vars: eventActive ? eventVars : null,
     alertTypes: proc.active ? proc.alertTypes : (trigger?.alertTypes ?? [])
   }
-  const processBuilt = proc.active ? buildProcessSchedule(nodes, edges) : null
+  const processBuilt = proc.active ? buildProcessSchedule(nodes, edges, eventState.vars) : null
   const processSchedule = processBuilt?.schedule ?? []
   // Real length (ms) of a running Process preview, totalMs plus the same
   // exit-animation buffer handlePlay's own rAF loop runs the clock out to —
@@ -191,7 +191,7 @@ export function SceneBuilderPage({
           <Background />
           <Controls onInteractiveChange={(isInteractive) => setLocked(!isInteractive)} />
           <MiniMap nodeColor={minimapNodeColor} maskColor="rgba(0, 0, 0, 0.6)" pannable zoomable className="!bg-card !border !border-border" />
-          <ProcessToken nodes={nodes} edges={edges} clockMs={processClockMs} durationMs={processDurationMs} active={proc.active && eventPhase === 'showing'} />
+          <ProcessToken nodes={nodes} edges={edges} clockMs={processClockMs} durationMs={processDurationMs} active={proc.active && eventPhase === 'showing'} vars={eventState.vars} />
           <SceneBuilderToolbar
             overlay={overlay}
             urls={urls}

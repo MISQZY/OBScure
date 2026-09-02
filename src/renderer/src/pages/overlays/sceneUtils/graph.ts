@@ -44,18 +44,88 @@ export function lastOfType(mods: Node[], type: string): Node | undefined {
 
 
 /**
- * Start/Task/Wait/End form a SECOND kind of edge in the same graph —
- * sequence flow ("then"), separate from the data/composition edges
+ * Start/Task/Wait/Condition/End form a SECOND kind of edge in the same
+ * graph — sequence flow ("then"), separate from the data/composition edges
  * (Text/Image → Box → Scene, modifier → component) everything else in this
  * file walks via `incoming`. See the doc comment on nodeTypes in
  * components/nodes/index.tsx for the full picture.
  */
-export const PROCESS_TYPES = new Set(['start', 'task', 'wait', 'end'])
+export const PROCESS_TYPES = new Set(['start', 'task', 'wait', 'condition', 'end'])
 
 
-/** The next Start/Task/Wait/End node reached by following `nodeId`'s OWN sequence-flow edge forward (linear chains only — see buildProcessSchedule). */
-export function nextProcessNode(nodeId: string, edges: Edge[], map: NodeMap): Node | null {
-  const edge = edges.find((e) => e.source === nodeId && map[e.target] && PROCESS_TYPES.has(map[e.target].type!))
+/**
+ * Resolves one Condition node's field/operator/value (see ConditionNode /
+ * CONDITION_FIELDS/CONDITION_OPERATOR_LABELS in components/nodes/utils/
+ * constants.ts) against `vars` — the SAME {user}/{amount}/{message}/
+ * {source} bag interpolate() already fills a Text/Image placeholder from
+ * (sourced from AlertPayload in shared/types.ts). `vars` null (no live alert
+ * context — the process was armed by Audio Player/Roulette/Random instead
+ * of a real Event, or an editor Play run before the field/value has
+ * anything real to compare) or the field genuinely absent from this
+ * particular payload (e.g. `amount` on a follow) always evaluates false —
+ * routes down Else rather than throwing or silently "matching" on absent
+ * data. String comparisons are case-insensitive (chat text/usernames vary in
+ * case a streamer shouldn't have to account for). Mirrors evaluateCondition
+ * in overlays/custom.html.
+ */
+export function evaluateCondition(data: Record<string, unknown>, vars: Record<string, unknown> | null): boolean {
+  const field = (data.field as string) || 'amount'
+  const operator = (data.operator as string) || 'eq'
+  const raw = vars ? vars[field] : undefined
+  if (raw === undefined || raw === null) return false
+  const compare = typeof data.value === 'string' ? data.value : ''
+  if (field === 'amount') {
+    const a = Number(raw)
+    const b = Number(compare)
+    if (Number.isNaN(a) || Number.isNaN(b)) return false
+    switch (operator) {
+      case 'eq':
+        return a === b
+      case 'neq':
+        return a !== b
+      case 'gt':
+        return a > b
+      case 'gte':
+        return a >= b
+      case 'lt':
+        return a < b
+      case 'lte':
+        return a <= b
+      default:
+        return false
+    }
+  }
+  const a = String(raw).toLowerCase()
+  const b = compare.toLowerCase()
+  switch (operator) {
+    case 'eq':
+      return a === b
+    case 'neq':
+      return a !== b
+    case 'contains':
+      return a.includes(b)
+    default:
+      return false
+  }
+}
+
+
+/**
+ * The next Start/Task/Wait/Condition/End node reached by following
+ * `nodeId`'s OWN sequence-flow edge forward — a plain Start/Task/Wait has
+ * exactly one such edge (linear, as before); a Condition has TWO ('then'/
+ * 'else', see CONDITION_OUTPUTS in components/nodes/constants.ts) and picks
+ * between them via evaluateCondition against `vars` (see buildProcessSchedule
+ * for where that comes from — omitted/null everywhere this is called for
+ * design-time display only, e.g. useSequenceInfo's step-number badge, which
+ * has no live vars to resolve a branch with anyway).
+ */
+export function nextProcessNode(nodeId: string, edges: Edge[], map: NodeMap, vars: Record<string, unknown> | null = null): Node | null {
+  const node = map[nodeId]
+  const branch = node?.type === 'condition' ? (evaluateCondition(node.data, vars) ? 'then' : 'else') : null
+  const edge = edges.find(
+    (e) => e.source === nodeId && (branch ? e.sourceHandle === branch : true) && map[e.target] && PROCESS_TYPES.has(map[e.target].type!)
+  )
   return edge ? map[edge.target] : null
 }
 
@@ -71,7 +141,7 @@ export const CONTENT_TYPES_WITH_SCENE = new Set([...CONTENT_TYPES, 'scene'])
 /** Position/Size/Transform/Animation/Hide/Display/Ordering — see NodeCategory's 'style' bucket in components/nodes/index.tsx. */
 export const STYLE_TYPES = new Set(['position', 'size', 'transform', 'opacity', 'shadow', 'animation', 'hide', 'overflow', 'ordering'])
 
-/** Event/Sound/Timer/Background FX/Random/Roulette/Audio Player/Range/Roulette Settings — see NodeCategory's 'data' bucket. */
+/** Event/Sound/Timer/Background FX/Random/Roulette/Audio Player — see NodeCategory's 'data' bucket. */
 export const DATA_TYPES = new Set(['event', 'sound', 'timer', 'backgroundAnimation', 'randomSource', 'rouletteSource', 'audioPlayer'])
 
 
@@ -122,12 +192,18 @@ export function displayEdges(nodes: Node[], edges: Edge[]): Edge[] {
 
     let styled: Edge
     if (sourceType && targetType && PROCESS_TYPES.has(sourceType) && PROCESS_TYPES.has(targetType)) {
+      // A Condition's Else branch (see CONDITION_OUTPUTS) reads as the same
+      // sequence-flow spine, just visibly secondary — lighter/dashed instead
+      // of the bold solid Then/plain-chain look — so a branching process
+      // still reads at a glance which wire is the "expected" path and which
+      // is the fallback.
+      const isElseBranch = sourceType === 'condition' && e.sourceHandle === 'else'
       styled = {
         ...e,
-        style: { stroke: '#6366f1', strokeWidth: 3 },
-        animated: true,
+        style: isElseBranch ? { stroke: '#a5b4fc', strokeWidth: 2, strokeDasharray: '6 4' } : { stroke: '#6366f1', strokeWidth: 3 },
+        animated: !isElseBranch,
         zIndex: 10,
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1', width: 12, height: 12 }
+        markerEnd: { type: MarkerType.ArrowClosed, color: isElseBranch ? '#a5b4fc' : '#6366f1', width: 12, height: 12 }
       }
     } else if (targetType === 'task' && isContentSource) {
       styled = {

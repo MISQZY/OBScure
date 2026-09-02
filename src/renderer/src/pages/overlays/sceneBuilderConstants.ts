@@ -49,6 +49,7 @@ export const NODE_PALETTE: { type: string; label: string; group: string }[] = [
   { type: 'start', label: 'Start', group: 'Process' },
   { type: 'task', label: 'Task', group: 'Process' },
   { type: 'wait', label: 'Wait', group: 'Process' },
+  { type: 'condition', label: 'Condition', group: 'Process' },
   { type: 'end', label: 'End', group: 'Process' },
   // Self-contained one-shot/ambient accessories — each has its own config
   // and a single output, wired into Start or Scene to activate alongside a

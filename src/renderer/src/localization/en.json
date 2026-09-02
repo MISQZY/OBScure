@@ -355,6 +355,7 @@
         "rouletteSource": "Live entrants and round phase from the Roulette tool, auto-paired with its own display widget. Check each output's own help for where to wire it.",
         "start": "Entry point for the process — wire in a Live Data-section trigger to say what starts it.",
         "task": "Wire in the Target this step acts on, plus any modifiers. A sound cue also needs a Target wired — even an otherwise-inert Update step — since that's what anchors it to this moment.",
+        "condition": "Branches the process in two: Then fires when Field/Is/Value matches this alert, Else otherwise. Only meaningful for a process armed by a real Event — one armed by Audio Player/Roulette/Random has no alert to check, so it always falls to Else, same as a Field simply absent from this alert (Amount on a follow, say).",
         "image": "Leave URL empty to show the live now-playing album art, or wire a Live Data-section node's Content output into Content for the same result, explicitly (the URL field goes read-only). Defaults to 96×96 — wire in a Transform-section node to override the size.",
         "video": "Defaults to 320×180 — wire in a Transform-section node to override the size.",
         "videoAutoplay": "Off relies on the browser allowing autoplay audio, which isn't guaranteed — pair with an Effects-section node for reliable sound instead.",
@@ -371,7 +372,9 @@
         "rouletteEvent": "The round's phase signal. Wire into a Process-section entry point to arm it the moment a round starts, or into the paired widget's Visibility socket to hide it outside an active round — both at once is fine.",
         "rouletteEntrantsContent": "Wire into a Content-section node's own Content socket to replace its template with this list's formatted rows — that node's own text field goes read-only while connected. Its styling fields stay its own; only row formatting lives here.",
         "randomContent": "Wire into this node's own paired display widget's Source socket (a permanent pairing), or into any Content-section node's own Content socket to fill its placeholders — the template stays editable.",
-        "randomEvent": "The roll's phase signal. Wire into a Process-section entry point to arm it the moment a roll is committed, or into the paired widget's Visibility socket to hide it outside an active roll — both at once is fine."
+        "randomEvent": "The roll's phase signal. Wire into a Process-section entry point to arm it the moment a roll is committed, or into the paired widget's Visibility socket to hide it outside an active roll — both at once is fine.",
+        "conditionThen": "Wire into the next step to take when this Condition matches. Same Event socket every other process step uses (Task/Wait/Condition/End).",
+        "conditionElse": "Wire into the next step to take when this Condition does NOT match — including whenever there's no real alert to check at all (an Audio Player/Roulette/Random-armed process, or a missing Field)."
       }
     }
   }

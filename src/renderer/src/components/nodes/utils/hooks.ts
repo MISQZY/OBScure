@@ -137,9 +137,19 @@ export function useAvailablePlaceholders(nodeId: string): readonly string[] {
  * chain forward from Start (Start itself is step 1) — answers "what order
  * do these Tasks run in" at a glance, the process equivalent of
  * usePriorityInfo above. `null` for a non-process node, or a process node
- * not reachable from Start (an orphaned Task, say — walking a linear chain
- * can't reach it). Mirrors nextProcessNode in SceneBuilderPage.tsx, just
- * walking for display here instead of resolving timing.
+ * not reachable from Start at all. A Condition node (see CONDITION_OUTPUTS
+ * in components/nodes/constants.ts) forks the chain into two edges instead
+ * of one — which branch actually fires depends on live data this purely
+ * design-time badge has no access to, so this is a breadth-first walk
+ * (both edges out of a Condition explored, first depth wins) rather than a
+ * single path: every reachable node gets a step number, both branches
+ * numbered as "the next step" regardless of which one a real run takes.
+ * Cycle-safe (a node already assigned a depth is never revisited, so an
+ * intentional Condition loop — see MAX_PROCESS_STEPS in sceneUtils/
+ * processSchedule.ts — can't hang this). Unlike nextProcessNode
+ * (sceneUtils/graph.ts), which resolves ONE concrete run's timing, this
+ * only ever answers "how many hops from Start," never which branch a real
+ * alert would take.
  */
 export function useSequenceInfo(nodeId: string): number | null {
   return useStore((s) => {
@@ -147,16 +157,18 @@ export function useSequenceInfo(nodeId: string): number | null {
     if (!selfNode || !PROCESS_TYPES.has(selfNode.type!)) return null
     const start = s.nodes.find((n) => n.type === 'start')
     if (!start) return null
-    let index = 0
-    let current: (typeof s.nodes)[number] | undefined = start
-    while (current) {
-      index += 1
-      if (current.id === nodeId) return index
-      const nextEdge = s.edges.find(
-        (e) => e.source === current!.id && s.nodes.some((n) => n.id === e.target && PROCESS_TYPES.has(n.type!))
-      )
-      current = nextEdge ? s.nodes.find((n) => n.id === nextEdge.target) : undefined
+    const depth = new Map<string, number>([[start.id, 1]])
+    const queue = [start.id]
+    while (queue.length > 0) {
+      const id = queue.shift()!
+      const currentDepth = depth.get(id)!
+      const outgoing = s.edges.filter((e) => e.source === id && s.nodes.some((n) => n.id === e.target && PROCESS_TYPES.has(n.type!)))
+      for (const edge of outgoing) {
+        if (depth.has(edge.target)) continue
+        depth.set(edge.target, currentDepth + 1)
+        queue.push(edge.target)
+      }
     }
-    return null
+    return depth.get(nodeId) ?? null
   })
 }

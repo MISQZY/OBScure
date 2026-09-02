@@ -24,12 +24,15 @@ import { ALERT_TYPES_BY_PLATFORM } from '@shared/types'
  * modifierStyle's own doc comment in SceneBuilderPage.tsx for how duplicate
  * fields within one group resolve (last-wired wins).
  */
+/** Shared by InputSocket/OutputSocket's own `kind` — 'process' only ever appears on an OUTPUT socket (Condition's Then/Else, see CONDITION_OUTPUTS below); no INPUT socket needs it since the sequence-flow target ("event-in") is rendered by BaseNode's own `sequenceIn` row, not through NODE_SOCKETS. */
+export type SocketKind = 'content' | 'style' | 'data' | 'process'
+
 export type InputSocket = {
   id: string
   label: string
   accepts: string[]
   /** Dot color only — reuses the CATEGORY_STYLES palette so a socket's color hints at what kind of node it accepts. */
-  kind: 'content' | 'style' | 'data'
+  kind: SocketKind
   multi?: boolean
 }
 
@@ -237,7 +240,7 @@ export const NODE_SOCKETS: Record<string, InputSocket[]> = {
 export type OutputSocket = {
   id: string
   label: string
-  kind: 'content' | 'style' | 'data'
+  kind: SocketKind
   feeds: string[]
   helpKey?: string
 }
@@ -431,6 +434,27 @@ export const RANDOM_OUTPUTS: OutputSocket[] = [
 /** A Random Widget's own single Structural/Target role — same reuse of STRUCTURAL_OUTPUT/TARGET_OUTPUT as ROULETTE_WIDGET_OUTPUTS above; nothing Random-specific about the output side. */
 export const RANDOM_WIDGET_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
 
+/**
+ * A Condition's two branch roles — unlike every OutputSocket above (all
+ * `kind: 'content'`, feeding a data/composition socket), these are
+ * `kind: 'process'`: sequence-flow, same family as the plain generic
+ * "output" handle every other Start/Task/Wait uses, just split into two
+ * labeled rows instead of one. `feeds` lists 'event-in' for documentation
+ * only — isValidConnection in hooks/useSceneGraph.ts short-circuits on
+ * `targetHandle === 'event-in'` before ever consulting a source's own
+ * NODE_OUTPUTS/feeds list, so either branch can already reach any process
+ * node's sequence input regardless. Which branch is actually taken is
+ * resolved by evaluateCondition (pages/overlays/sceneUtils/graph.ts) against
+ * the SAME {user}/{amount}/{message}/{source} vars a Text/Image placeholder
+ * already reads (see EVENT_PLACEHOLDERS in components/nodes/utils/
+ * constants.ts) — missing context (no live alert, e.g. a process armed by
+ * Audio Player/Roulette/Random instead) always falls to Else, never throws.
+ */
+export const CONDITION_OUTPUTS: OutputSocket[] = [
+  { id: 'then', label: 'Then', kind: 'process', feeds: ['event-in'], helpKey: 'conditionThen' },
+  { id: 'else', label: 'Else', kind: 'process', feeds: ['event-in'], helpKey: 'conditionElse' }
+]
+
 /** Every node type's OUTPUT sockets, keyed by node `type` — analogous to NODE_SOCKETS. Node types absent here (the large majority) render the single generic "output" handle unchanged. */
 export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
   text: TEXT_OUTPUTS,
@@ -443,7 +467,8 @@ export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
   rouletteWidget: ROULETTE_WIDGET_OUTPUTS,
   rouletteEntrants: ROULETTE_ENTRANTS_OUTPUTS,
   randomSource: RANDOM_OUTPUTS,
-  randomWidget: RANDOM_WIDGET_OUTPUTS
+  randomWidget: RANDOM_WIDGET_OUTPUTS,
+  condition: CONDITION_OUTPUTS
 }
 
 /**
@@ -453,7 +478,7 @@ export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
  * own groups (see NODE_PALETTE in pages/overlays/sceneBuilderConstants.ts,
  * which further splits 'data' into Live Data vs. Tools) — this is only the
  * canvas tint, several palette sections can and do share one category:
- *  - process: Start/Task/Wait/End — the sequence-flow chain.
+ *  - process: Start/Task/Wait/Condition/End — the sequence-flow chain.
  *  - content: Scene/Text/Image/Box — what exists and how it's nested.
  *  - style: Position/Size/Transform/Animation/Hide/Overflow/Display/Ordering —
  *    per-component modifiers, wired into a SPECIFIC Text/Image/Box/Task.
@@ -478,7 +503,7 @@ export const CATEGORY_STYLES: Record<NodeCategory, { header: string; border: str
   utils: { header: 'bg-slate-500/15', border: 'border-l-slate-500', dot: 'bg-slate-500' }
 }
 
-export const PROCESS_TYPES = new Set(['start', 'task', 'wait', 'end'])
+export const PROCESS_TYPES = new Set(['start', 'task', 'wait', 'condition', 'end'])
 
 /**
  * Every node type's category, keyed by node `type` — the same source of
@@ -499,6 +524,7 @@ export const NODE_CATEGORY: Record<string, NodeCategory> = {
   start: 'process',
   task: 'process',
   wait: 'process',
+  condition: 'process',
   end: 'process',
   position: 'style',
   size: 'style',
@@ -554,6 +580,13 @@ export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
   overflow: { overflowX: 'hidden', overflowY: 'hidden', autoScroll: false, scrollDirection: 'up', scrollSpeed: 40 },
   task: { action: 'show' },
   wait: { delay: 1000 },
+  // A sensible starting example (raid size over 10) rather than an empty
+  // comparison — see evaluateCondition in pages/overlays/sceneUtils/graph.ts
+  // for exactly how field/operator/value resolve against a live alert's
+  // vars, and NUMERIC_CONDITION_OPERATORS/STRING_CONDITION_OPERATORS in
+  // components/nodes/utils/constants.ts for which operators ConditionNode
+  // offers per field.
+  condition: { field: 'amount', operator: 'gt', value: '10' },
   // rowTemplate tokens: {name}/{chance}/{weight} — see rouletteEntrantRows'
   // own doc comment in overlays/sceneUtils.tsx. layout 'list' = one entrant
   // per line, 'inline' joins them with `separator` instead. No color/
@@ -562,10 +595,14 @@ export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
   rouletteEntrants: { layout: 'list', rowTemplate: '{name}', sortByChance: false, separator: ', ' }
 }
 
-export const SOCKET_DOT: Record<InputSocket['kind'], string> = {
+export const SOCKET_DOT: Record<SocketKind, string> = {
   content: '!bg-emerald-500',
   style: '!bg-amber-500',
-  data: '!bg-sky-500'
+  data: '!bg-sky-500',
+  // Matches CATEGORY_DOT.process below — Condition's Then/Else rows read as
+  // sequence-flow, same color as the plain generic "output" every other
+  // process node uses, not as a data/content socket.
+  process: '!bg-indigo-500'
 }
 
 /**

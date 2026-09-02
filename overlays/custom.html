@@ -339,28 +339,96 @@
       // buildProcessSchedule/processTrigger/computeTaskState in
       // SceneBuilderPage.tsx exactly.
 
-      const PROCESS_TYPES = new Set(['start', 'task', 'wait', 'end'])
+      const PROCESS_TYPES = new Set(['start', 'task', 'wait', 'condition', 'end'])
 
-      function nextProcessNode(nodeId, edges, map) {
-        const edge = edges.find((e) => e.source === nodeId && map[e.target] && PROCESS_TYPES.has(map[e.target].type))
+      // Safety cap on how many nodes buildProcessSchedule will ever walk in
+      // one pass — Condition makes it possible to wire Else (or Then) back
+      // to an earlier step (an intentional "retry" loop); without a cap, one
+      // that never reaches End would hang the walk. Mirrors MAX_PROCESS_STEPS
+      // in pages/overlays/sceneUtils/processSchedule.ts.
+      const MAX_PROCESS_STEPS = 500
+
+      /**
+       * Resolves one Condition node's field/operator/value against `vars` —
+       * the SAME {user}/{amount}/{message}/{source} bag interpolate()
+       * already fills a Text/Image placeholder from (see
+       * normalizeAlertVars). `vars` null/undefined (no live alert context —
+       * the process was armed by Audio Player/Roulette/Random instead of a
+       * real Event) or the field genuinely absent from this particular
+       * payload (e.g. `amount` on a follow) always evaluates false — routes
+       * down Else rather than throwing or silently "matching" on absent
+       * data. String comparisons are case-insensitive. Mirrors
+       * evaluateCondition in pages/overlays/sceneUtils/graph.ts.
+       */
+      function evaluateCondition(data, vars) {
+        const field = data.field || 'amount'
+        const operator = data.operator || 'eq'
+        const raw = vars ? vars[field] : undefined
+        if (raw === undefined || raw === null) return false
+        const compare = typeof data.value === 'string' ? data.value : ''
+        if (field === 'amount') {
+          const a = Number(raw)
+          const b = Number(compare)
+          if (Number.isNaN(a) || Number.isNaN(b)) return false
+          switch (operator) {
+            case 'eq':
+              return a === b
+            case 'neq':
+              return a !== b
+            case 'gt':
+              return a > b
+            case 'gte':
+              return a >= b
+            case 'lt':
+              return a < b
+            case 'lte':
+              return a <= b
+            default:
+              return false
+          }
+        }
+        const a = String(raw).toLowerCase()
+        const b = compare.toLowerCase()
+        switch (operator) {
+          case 'eq':
+            return a === b
+          case 'neq':
+            return a !== b
+          case 'contains':
+            return a.includes(b)
+          default:
+            return false
+        }
+      }
+
+      function nextProcessNode(nodeId, edges, map, vars) {
+        const node = map[nodeId]
+        const branch = node && node.type === 'condition' ? (evaluateCondition(node.data, vars) ? 'then' : 'else') : null
+        const edge = edges.find(
+          (e) => e.source === nodeId && (branch ? e.sourceHandle === branch : true) && map[e.target] && PROCESS_TYPES.has(map[e.target].type)
+        )
         return edge ? map[edge.target] : null
       }
 
       /**
-       * Walks the linear Start -> Task -> Wait -> ... -> End sequence-flow
-       * chain into a flat, time-resolved schedule: one entry per Task,
-       * `atMs` accumulated from every Wait node's delay passed so far. A
-       * Task with no component wired into it (via a plain data edge, same
-       * as a Box's own children) is skipped — nothing to act on.
+       * Walks the Start -> Task -> Wait -> Condition -> ... -> End
+       * sequence-flow chain into a flat, time-resolved schedule: one entry
+       * per Task, `atMs` accumulated from every Wait node's delay passed so
+       * far. A Task with no component wired into it (via a plain data edge,
+       * same as a Box's own children) is skipped — nothing to act on. A
+       * Condition picks Then or Else by evaluating its field/operator/value
+       * against `vars` (null outside a real alert-armed process, in which
+       * case every Condition falls to Else).
        */
-      function buildProcessSchedule(nodes, edges) {
+      function buildProcessSchedule(nodes, edges, vars) {
         const map = nodeMap(nodes)
         const start = nodes.find((n) => n.type === 'start')
         if (!start) return null
         const schedule = []
         let atMs = 0
-        let current = nextProcessNode(start.id, edges, map)
-        while (current) {
+        let current = nextProcessNode(start.id, edges, map, vars)
+        let steps = 0
+        while (current && steps++ < MAX_PROCESS_STEPS) {
           if (current.type === 'wait') {
             atMs += current.data.delay || 1000
           } else if (current.type === 'task') {
@@ -385,7 +453,7 @@
           } else if (current.type === 'end') {
             break
           }
-          current = nextProcessNode(current.id, edges, map)
+          current = nextProcessNode(current.id, edges, map, vars)
         }
         return { schedule, totalMs: atMs }
       }
@@ -2283,7 +2351,7 @@
         alertActive = true
         const vars = normalizeAlertVars(payload)
         if (matchesProcess) {
-          const built = buildProcessSchedule(latestOverlay.nodes || [], latestOverlay.edges || [])
+          const built = buildProcessSchedule(latestOverlay.nodes || [], latestOverlay.edges || [], vars)
           if (built) {
             showProcessContent(latestOverlay, vars, built.schedule, built.totalMs)
             return
@@ -2331,7 +2399,6 @@
         if (proc.active) {
           missingEl.style.display = 'none'
           if (simulateTest) {
-            const built = buildProcessSchedule(overlay.nodes || [], overlay.edges || [])
             // Sample data shaped to whichever trigger is actually armed —
             // an alert-shaped vars object would leave a Task's own
             // {title}/{artist}/{entrants}/{winner} placeholders literal
@@ -2343,12 +2410,17 @@
             // has no scene-wide equivalent of its own — only this
             // process-armed case). alertTypes wins over audio, which wins
             // over roulette, when more than one is wired to the same Start.
+            // Computed BEFORE buildProcessSchedule (not just showProcessContent)
+            // since a Condition node needs these SAME vars to pick Then/Else —
+            // only the alert-shaped case actually carries {user}/{amount}/
+            // {message}/{source}, so a Condition falls to Else for the other two.
             const vars =
               proc.alertTypes.size > 0
                 ? { type: [...proc.alertTypes][0], user: 'Viewer', amount: 25, message: 'Sample message', source: 'twitch' }
                 : proc.audioArmed
                   ? { source: 'spotify', title: 'Sample Track', artist: 'Sample Artist', albumArt: '', isPlaying: true }
                   : { entrants: 'Alice, Bob, Carla', winner: 'Alice' }
+            const built = buildProcessSchedule(overlay.nodes || [], overlay.edges || [], proc.alertTypes.size > 0 ? vars : null)
             if (built) showProcessContent(overlay, vars, built.schedule, built.totalMs)
             return
           }
@@ -2518,7 +2590,11 @@
               if (trackChanged && !alertActive) {
                 const proc = processTrigger(latestOverlay)
                 if (proc.audioArmed) {
-                  const built = buildProcessSchedule(latestOverlay.nodes || [], latestOverlay.edges || [])
+                  // null vars: a track-change has no {user}/{amount}/{message}/
+                  // {source}-shaped alert to check — any Condition in this
+                  // process falls to Else, same as evaluateCondition's own
+                  // "field absent" case.
+                  const built = buildProcessSchedule(latestOverlay.nodes || [], latestOverlay.edges || [], null)
                   if (built) {
                     alertActive = true
                     showProcessContent(latestOverlay, payload, built.schedule, built.totalMs)
@@ -2569,7 +2645,13 @@
               if (justStartedCollecting && !alertActive) {
                 const proc = processTrigger(latestOverlay)
                 if (proc.rouletteArmed) {
-                  const built = buildProcessSchedule(latestOverlay.nodes || [], latestOverlay.edges || [])
+                  // null vars: `vars` here is rouletteStateVars' own
+                  // {entrants}/{entrantsList}/{winner}/{timeLeft} shape, not
+                  // an alert's {user}/{amount}/{message}/{source} — a
+                  // Condition has nothing of that shape to check, so it
+                  // falls to Else, same as evaluateCondition's "field
+                  // absent" case.
+                  const built = buildProcessSchedule(latestOverlay.nodes || [], latestOverlay.edges || [], null)
                   if (built) {
                     alertActive = true
                     processArmedThisTick = true
@@ -2625,7 +2707,9 @@
               if (justCommitted && !alertActive) {
                 const proc = processTrigger(latestOverlay)
                 if (proc.randomArmed) {
-                  const built = buildProcessSchedule(latestOverlay.nodes || [], latestOverlay.edges || [])
+                  // null vars: no alert-shaped {user}/{amount}/{message}/
+                  // {source} here either — any Condition falls to Else.
+                  const built = buildProcessSchedule(latestOverlay.nodes || [], latestOverlay.edges || [], null)
                   if (built) {
                     alertActive = true
                     processArmedThisTick = true

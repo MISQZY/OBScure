@@ -25,16 +25,19 @@ export function ProcessToken({
   edges,
   clockMs,
   durationMs,
-  active
+  active,
+  vars
 }: {
   nodes: Node[]
   edges: Edge[]
   clockMs: number
   durationMs: number
   active: boolean
+  /** Same vars a running process's Condition nodes branch on (see evaluateCondition) — needed here too so the token visibly follows whichever branch the schedule actually took instead of always defaulting to Else. */
+  vars?: Record<string, unknown> | null
 }) {
   if (!active) return null
-  const point = processTokenPosition(nodes, edges, clockMs, durationMs)
+  const point = processTokenPosition(nodes, edges, clockMs, durationMs, vars)
   if (!point) return null
   return createPortal(
     <div

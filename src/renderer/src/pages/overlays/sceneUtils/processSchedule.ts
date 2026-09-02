@@ -1,5 +1,5 @@
 import { Node, Edge, getBezierPath, Position } from "@xyflow/react";
-import { buildNodeMap, incoming, nextProcessNode } from "./graph";
+import { buildNodeMap, incoming, nextProcessNode, evaluateCondition } from "./graph";
 import { Anim, animationAttrs, animationFallbackMs } from "./animation";
 import { modifierStyle } from "./style";
 
@@ -13,22 +13,39 @@ export interface ScheduledTask {
 
 
 /**
- * Walks the linear Start → Task → Wait → ... → End sequence-flow chain into
- * a flat, time-resolved schedule: one entry per Task, `atMs` accumulated
- * from every Wait node's delay passed so far. A Task with no component
- * wired into it (via a plain data edge, same convention Box already uses
- * for its own children) is skipped. Returns null when there's no Start node
- * at all — see processTrigger, the caller that decides whether this applies.
+ * Safety cap on how many nodes buildProcessSchedule/processChainNodes will
+ * ever walk in one pass — Condition (see CONDITION_OUTPUTS) makes it
+ * possible to wire Else (or Then) back to an EARLIER step, an intentional
+ * "retry"-style loop; without a cap, one that never reaches End (or a
+ * genuine accidental cycle) would hang the walk and, in buildProcessSchedule,
+ * grow `schedule`/`atMs` without bound. Generous enough that no legitimate
+ * process — looped or not — should ever come close; mirrors
+ * MAX_PROCESS_STEPS in overlays/custom.html.
+ */
+export const MAX_PROCESS_STEPS = 500
+
+/**
+ * Walks the Start → Task → Wait → Condition → ... → End sequence-flow chain
+ * into a flat, time-resolved schedule: one entry per Task, `atMs`
+ * accumulated from every Wait node's delay passed so far. A Task with no
+ * component wired into it (via a plain data edge, same convention Box
+ * already uses for its own children) is skipped. A Condition (see
+ * nextProcessNode) picks Then or Else by evaluating its field/operator/
+ * value against `vars` — the SAME bag a Text/Image placeholder already
+ * reads (null outside a real alert-armed process, in which case every
+ * Condition falls to Else). Returns null when there's no Start node at all
+ * — see processTrigger, the caller that decides whether this applies.
  * Mirrors buildProcessSchedule in overlays/custom.html.
  */
-export function buildProcessSchedule(nodes: Node[], edges: Edge[]): { schedule: ScheduledTask[]; totalMs: number } | null {
+export function buildProcessSchedule(nodes: Node[], edges: Edge[], vars: Record<string, unknown> | null = null): { schedule: ScheduledTask[]; totalMs: number } | null {
   const map = buildNodeMap(nodes)
   const start = nodes.find((n) => n.type === 'start')
   if (!start) return null
   const schedule: ScheduledTask[] = []
   let atMs = 0
-  let current = nextProcessNode(start.id, edges, map)
-  while (current) {
+  let current = nextProcessNode(start.id, edges, map, vars)
+  let steps = 0
+  while (current && steps++ < MAX_PROCESS_STEPS) {
     if (current.type === 'wait') {
       atMs += (current.data.delay as number) || 1000
     } else if (current.type === 'task') {
@@ -50,7 +67,7 @@ export function buildProcessSchedule(nodes: Node[], edges: Edge[]): { schedule: 
     } else if (current.type === 'end') {
       break
     }
-    current = nextProcessNode(current.id, edges, map)
+    current = nextProcessNode(current.id, edges, map, vars)
   }
   return { schedule, totalMs: atMs }
 }
@@ -84,7 +101,7 @@ export function handleScreenCenter(nodeId: string, handleId: string): { x: numbe
 
 
 /**
- * The linear Start → Task → Wait → ... → End chain as a list of
+ * The Start → Task → Wait → Condition → ... → End chain as a list of
  * checkpoints, `atMs` being the process's own clock value (see
  * buildProcessSchedule, whose exact accumulation this mirrors) at the
  * moment the token reaches each one — used by processTokenPosition to
@@ -96,21 +113,38 @@ export function handleScreenCenter(nodeId: string, handleId: string): { x: numbe
  * time to pass through, matching how buildProcessSchedule only ever
  * advances `atMs` on a Wait (a Task immediately after a Wait still lands on
  * the same post-delay atMs buildProcessSchedule gives it — only the Wait
- * node's own checkpoint here is pre-delay). Returns an empty list when
- * there's no Start node.
+ * node's own checkpoint here is pre-delay). `fromHandle`: the source-side
+ * handle id of the PREVIOUS node's own outgoing edge that reached this
+ * checkpoint — 'output' for the plain generic handle every non-Condition
+ * process node has, or 'then'/'else' when the previous node was itself a
+ * Condition (see CONDITION_OUTPUTS) — since a Condition has no 'output'
+ * handle at all, processTokenPosition needs the REAL id to find the right
+ * Handle element on screen (see handleScreenCenter). Branches are resolved
+ * against `vars` exactly like buildProcessSchedule (null outside a real
+ * alert-armed process — every Condition then falls to Else). Returns an
+ * empty list when there's no Start node.
  */
-export function processChainNodes(nodes: Node[], edges: Edge[]): { node: Node; atMs: number }[] {
+export function processChainNodes(
+  nodes: Node[],
+  edges: Edge[],
+  vars: Record<string, unknown> | null = null
+): { node: Node; atMs: number; fromHandle: string }[] {
   const map = buildNodeMap(nodes)
   const start = nodes.find((n) => n.type === 'start')
   if (!start) return []
-  const chain: { node: Node; atMs: number }[] = [{ node: start, atMs: 0 }]
+  const chain: { node: Node; atMs: number; fromHandle: string }[] = [{ node: start, atMs: 0, fromHandle: 'output' }]
   let atMs = 0
-  let current = nextProcessNode(start.id, edges, map)
-  while (current) {
-    chain.push({ node: current, atMs })
+  let prevId = start.id
+  let current = nextProcessNode(start.id, edges, map, vars)
+  let steps = 0
+  while (current && steps++ < MAX_PROCESS_STEPS) {
+    const prevNode = map[prevId]
+    const fromHandle = prevNode?.type === 'condition' ? (evaluateCondition(prevNode.data, vars) ? 'then' : 'else') : 'output'
+    chain.push({ node: current, atMs, fromHandle })
     if (current.type === 'wait') atMs += (current.data.delay as number) || 1000
     if (current.type === 'end') break
-    current = nextProcessNode(current.id, edges, map)
+    prevId = current.id
+    current = nextProcessNode(current.id, edges, map, vars)
   }
   return chain
 }
@@ -179,13 +213,13 @@ export const PROCESS_TOKEN_MIN_SEGMENT_MS = 400
  * keeps that duration, so a long Wait still reads as proportionally slower
  * than a short one or an instant hop.
  */
-export function processTokenChain(nodes: Node[], edges: Edge[]): { node: Node; vAtMs: number }[] {
-  const chain = processChainNodes(nodes, edges)
+export function processTokenChain(nodes: Node[], edges: Edge[], vars: Record<string, unknown> | null = null): { node: Node; vAtMs: number; fromHandle: string }[] {
+  const chain = processChainNodes(nodes, edges, vars)
   if (chain.length === 0) return []
-  const virtual: { node: Node; vAtMs: number }[] = [{ node: chain[0].node, vAtMs: 0 }]
+  const virtual: { node: Node; vAtMs: number; fromHandle: string }[] = [{ node: chain[0].node, vAtMs: 0, fromHandle: chain[0].fromHandle }]
   for (let i = 1; i < chain.length; i++) {
     const realSpan = chain[i].atMs - chain[i - 1].atMs
-    virtual.push({ node: chain[i].node, vAtMs: virtual[i - 1].vAtMs + Math.max(realSpan, PROCESS_TOKEN_MIN_SEGMENT_MS) })
+    virtual.push({ node: chain[i].node, vAtMs: virtual[i - 1].vAtMs + Math.max(realSpan, PROCESS_TOKEN_MIN_SEGMENT_MS), fromHandle: chain[i].fromHandle })
   }
   return virtual
 }
@@ -200,20 +234,29 @@ export function processTokenChain(nodes: Node[], edges: Edge[]): { node: Node; v
  * whichever two checkpoints bracket it. `null` when there's no Start node,
  * or (transiently) if a handle isn't in the DOM yet.
  */
-export function processTokenPosition(nodes: Node[], edges: Edge[], clockMs: number, durationMs: number): { x: number; y: number } | null {
-  const chain = processTokenChain(nodes, edges)
+export function processTokenPosition(
+  nodes: Node[],
+  edges: Edge[],
+  clockMs: number,
+  durationMs: number,
+  vars: Record<string, unknown> | null = null
+): { x: number; y: number } | null {
+  const chain = processTokenChain(nodes, edges, vars)
   if (chain.length === 0) return null
-  if (chain.length === 1) return handleScreenCenter(chain[0].node.id, 'output')
+  if (chain.length === 1) return handleScreenCenter(chain[0].node.id, chain[0].fromHandle)
   const virtualTotal = chain[chain.length - 1].vAtMs
   const vClockMs = durationMs > 0 ? (Math.min(clockMs, durationMs) / durationMs) * virtualTotal : virtualTotal
   let i = chain.findIndex((c) => c.vAtMs >= vClockMs)
   if (i === -1) i = chain.length - 1 // past the final checkpoint — clamp to the last segment
-  if (i === 0) return handleScreenCenter(chain[0].node.id, 'output')
+  if (i === 0) return handleScreenCenter(chain[0].node.id, chain[0].fromHandle)
   const from = chain[i - 1]
   const to = chain[i]
   const span = to.vAtMs - from.vAtMs
   const t = span > 0 ? (vClockMs - from.vAtMs) / span : 1
-  const a = handleScreenCenter(from.node.id, 'output')
+  // `to.fromHandle` is the handle on FROM's own node that this segment's
+  // edge actually left from (see processChainNodes' own doc comment) — NOT
+  // from.fromHandle, which instead describes how FROM itself was reached.
+  const a = handleScreenCenter(from.node.id, to.fromHandle)
   const b = handleScreenCenter(to.node.id, 'event-in')
   if (!a || !b) return null
   return pointOnBezier(a.x, a.y, b.x, b.y, t)

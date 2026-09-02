@@ -122,16 +122,22 @@ export function useScenePlayback({
       // to the same Start.
       const alertTypes = proc.active ? proc.alertTypes : trigger!.alertTypes
       const audioArmed = proc.active ? proc.audioArmed : audioTrigger
-      setEventVars(
+      const nextEventVars =
         alertTypes.length > 0
           ? { type: alertTypes[0], ...SAMPLE_ALERT_VARS }
           : audioArmed
             ? { ...SAMPLE_AUDIO_VARS, source: 'spotify', isPlaying: true }
             : { ...SAMPLE_ROULETTE_VARS }
-      )
+      setEventVars(nextEventVars)
       setEventPhase('showing')
       if (proc.active) {
-        const built = buildProcessSchedule(nodes, edges)
+        // Condition nodes (see evaluateCondition in sceneUtils/graph.ts)
+        // only ever have real {user}/{amount}/{message}/{source} vars to
+        // branch on when the process is armed by an Event — audio/roulette-
+        // armed sample vars don't carry that shape, so every Condition just
+        // falls to Else during THOSE previews, same as the real overlay
+        // would with no matching alert.
+        const built = buildProcessSchedule(nodes, edges, alertTypes.length > 0 ? nextEventVars : null)
         const totalMs = built?.totalMs ?? 0
         // See processExitBufferMs's own doc comment: without the buffer,
         // whichever Task(s) fire at exactly totalMs get cut off before
