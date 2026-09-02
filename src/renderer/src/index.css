@@ -64,14 +64,29 @@
 /*
   Dashboard grid canvas (react-grid-layout, see DashboardPage.tsx): its
   bundled stylesheet hardcodes a black resize handle, invisible against a
-  dark theme, so it's re-themed here against this app's own tokens.
+  dark theme, so it's re-themed here against this app's own tokens. Each
+  card is also wrapped in BorderGlow (see GridCard.tsx), whose glow ring
+  traces the card's own rounded corner (borderRadius: 10 in DashboardPage.tsx's
+  CARD_GLOW_PROPS), so the handle is pulled in well past that curve — not
+  just past the corner point — and redrawn as a rounded dot (instead of the
+  default square-cornered arrow) so it reads as clearly inside the card
+  rather than sitting on top of the glow.
 */
 .react-grid-item > .react-resizable-handle {
   z-index: 1;
 }
+.react-grid-item > .react-resizable-handle.react-resizable-handle-se {
+  right: 14px;
+  bottom: 14px;
+}
 .react-grid-item > .react-resizable-handle::after {
-  border-right-color: var(--muted-foreground);
-  border-bottom-color: var(--muted-foreground);
+  right: 5px;
+  bottom: 5px;
+  width: 7px;
+  height: 7px;
+  border: none;
+  border-radius: 50%;
+  background: var(--muted-foreground);
 }
 .react-grid-item.react-grid-placeholder {
   background: var(--primary);

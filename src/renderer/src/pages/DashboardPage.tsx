@@ -6,6 +6,7 @@ import type { Layout } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import BorderGlow from '@/components/effects/BorderGlow'
 import { GridCard } from '@/components/dashboard/GridCard'
 import { IntegrationsCard } from '@/components/dashboard/IntegrationsCard'
 import { NowPlayingCard } from '@/components/dashboard/NowPlayingCard'
@@ -39,13 +40,21 @@ const GRID_COLS = 12
 const GRID_ROW_HEIGHT = 64
 const GRID_MARGIN: [number, number] = [16, 16]
 
+// How far each card's BorderGlow bleeds past its own box (see
+// CARD_GLOW_PROPS below). The grid's own containerPadding is set to match,
+// below, so that bleed has room to fade before hitting the ScrollArea's
+// overflow-hidden edge instead of getting hard-clipped there — with
+// containerPadding at [0, 0], a card on the grid's own top/left/right edge
+// had literally zero buffer, so its glow was clipped flush at the boundary.
+const CARD_GLOW_RADIUS = 16
+
 // react-grid-layout's minW/minH are in grid columns, not pixels — a column
 // shrinks along with the whole grid as the window narrows, so that alone
 // doesn't stop a card from being squeezed into an unusably thin sliver. This
 // floors the grid's own rendered width so columns never get thinner than
 // this, and lets it overflow (scroll) instead once the window can't fit it.
 const MIN_COL_WIDTH = GRID_ROW_HEIGHT
-const MIN_GRID_WIDTH = GRID_COLS * MIN_COL_WIDTH + (GRID_COLS + 1) * GRID_MARGIN[0]
+const MIN_GRID_WIDTH = GRID_COLS * MIN_COL_WIDTH + (GRID_COLS + 1) * GRID_MARGIN[0] + 2 * CARD_GLOW_RADIUS
 
 // Matches `main`'s own p-6 in App.tsx, so the grid's floor lines up with the
 // page's existing bottom padding instead of adding a second gap under it.
@@ -71,6 +80,25 @@ const MIN_SIZE: Record<CardId, { minW: number; minH: number }> = {
 }
 
 const LAYOUT_STORAGE_KEY = 'obscure:dashboard-layout-v2'
+
+// Matches this app's --radius-lg (0.625rem). Every color below is a CSS var
+// from the active theme (built-in or user-uploaded, see theme/*.json) rather
+// than a hardcoded hex, so the glow always tracks the current theme:
+// --card for the backing fill, and the sidebar's accent pair + --ring for
+// the mesh gradient/edge glow (the only genuinely chromatic tokens this
+// app's neutral palette defines — --primary/--accent are grayscale).
+// BorderGlow.css adds a light/dark override keyed off the same `.dark`
+// class this app already toggles, since --card is a CSS var rather than the
+// literal hex BorderGlow's own light/dark heuristic expects; BorderGlow.tsx's
+// buildGlowVars() similarly falls back to color-mix() for glowColor since a
+// var() can't be decomposed into H/S/L synchronously.
+const CARD_GLOW_PROPS = {
+  borderRadius: 10,
+  glowRadius: CARD_GLOW_RADIUS,
+  backgroundColor: 'var(--card)',
+  glowColor: 'var(--sidebar-primary)',
+  colors: ['var(--sidebar-primary)', 'var(--sidebar-primary-foreground)', 'var(--ring)']
+} as const
 
 /** Created once at module scope — recreating it on every render would remount the whole grid. */
 const Grid = WidthProvider(ReactGridLayout)
@@ -280,6 +308,17 @@ export function DashboardPage() {
     }
   }
 
+  // Wraps only the card's own content (not GridCard's `children`, see the
+  // note on GridCard) so react-grid-layout's resize-handle injection is
+  // unaffected — it lands as a sibling of this element, never inside it.
+  function renderGlowCard(id: CardId) {
+    return (
+      <BorderGlow className="h-full w-full flex-1 glow-compact-shadow" {...CARD_GLOW_PROPS}>
+        {renderCard(id)}
+      </BorderGlow>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
@@ -333,7 +372,7 @@ export function DashboardPage() {
               cols={GRID_COLS}
               rowHeight={GRID_ROW_HEIGHT}
               margin={GRID_MARGIN}
-              containerPadding={[0, 0]}
+              containerPadding={[CARD_GLOW_RADIUS, CARD_GLOW_RADIUS]}
               layout={rglLayout}
               onLayoutChange={handleLayoutChange}
               draggableHandle=".dashboard-drag-handle"
@@ -343,7 +382,7 @@ export function DashboardPage() {
               style={{ minWidth: MIN_GRID_WIDTH }}
             >
               {visibleIds.map((id) => (
-                <GridCard key={id}>{renderCard(id)}</GridCard>
+                <GridCard key={id}>{renderGlowCard(id)}</GridCard>
               ))}
             </Grid>
           </ScrollAreaPrimitive.Viewport>

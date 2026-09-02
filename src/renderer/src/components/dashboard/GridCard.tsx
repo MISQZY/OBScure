@@ -13,17 +13,19 @@ import { cn } from '@/lib/utils'
  * children array confuses React's reconciliation of that wrapper mid-drag.
  * Per-card scrolling lives inside DashboardCardSection instead, precisely to
  * avoid needing to touch this array at all.
+ *
+ * No border/background/rounding of its own: every card content passed in is
+ * wrapped in <BorderGlow> (see DashboardPage's renderCard), which supplies
+ * all of that chrome. `overflow-hidden` is deliberately absent too — clipping
+ * here would cut off BorderGlow's outer glow, which is meant to bloom past
+ * the card's own edge.
  */
 export const GridCard = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(function GridCard(
   { className, children, ...rest },
   ref
 ) {
   return (
-    <div
-      ref={ref}
-      className={cn('flex flex-col overflow-hidden rounded-lg border border-border bg-card/40', className)}
-      {...rest}
-    >
+    <div ref={ref} className={cn('flex flex-col', className)} {...rest}>
       {children}
     </div>
   )
