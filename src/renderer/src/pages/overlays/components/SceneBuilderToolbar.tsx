@@ -1,5 +1,5 @@
 import { Panel } from '@xyflow/react'
-import { Trash2, Check, X, Sparkles, FlaskConical, HelpCircle } from 'lucide-react'
+import { Trash2, Check, X, Sparkles, FlaskConical, HelpCircle, Download, Upload } from 'lucide-react'
 import type { CustomOverlay, OverlayUrls } from '@shared/types'
 import { CopyableUrl } from '@/components/CopyableUrl'
 import { slugify } from '@/lib/custom-overlays'
@@ -39,6 +39,13 @@ export function SceneBuilderToolbar({
   commitUrlKey,
   onDelete,
   onPrettify,
+  onExport,
+  onImport,
+  importInvalid,
+  onDismissImportInvalid,
+  pendingImportVersions,
+  onConfirmPendingImport,
+  onCancelPendingImport,
   saveStatus,
   onSave,
   testStatus,
@@ -58,6 +65,13 @@ export function SceneBuilderToolbar({
   commitUrlKey: () => void
   onDelete: () => void
   onPrettify: () => void
+  onExport: () => void
+  onImport: () => void
+  importInvalid: boolean
+  onDismissImportInvalid: () => void
+  pendingImportVersions: { saved: string; current: string } | null
+  onConfirmPendingImport: () => void
+  onCancelPendingImport: () => void
   saveStatus: SaveStatus
   onSave: () => void
   testStatus: 'idle' | 'testing' | 'error'
@@ -154,13 +168,29 @@ export function SceneBuilderToolbar({
       </div>
 
       <div className="flex items-center justify-between pt-2.5 border-t" data-tour="scene-builder-save">
-        <button
-          onClick={onPrettify}
-          title={t.sceneBuilder.nav.prettify}
-          className="flex items-center justify-center p-2 rounded-md border border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-        >
-          <Sparkles className="size-4" />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={onPrettify}
+            title={t.sceneBuilder.nav.prettify}
+            className="flex items-center justify-center p-2 rounded-md border border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <Sparkles className="size-4" />
+          </button>
+          <button
+            onClick={onExport}
+            title={t.sceneBuilder.nav.exportScene}
+            className="flex items-center justify-center p-2 rounded-md border border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <Download className="size-4" />
+          </button>
+          <button
+            onClick={onImport}
+            title={t.sceneBuilder.nav.importScene}
+            className="flex items-center justify-center p-2 rounded-md border border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <Upload className="size-4" />
+          </button>
+        </div>
         <div className="flex items-center gap-1.5">
           <button
             onClick={onSave}
@@ -204,6 +234,31 @@ export function SceneBuilderToolbar({
           <HelpCircle className="size-4" />
         </button>
       </div>
+
+      <AlertDialog open={importInvalid} onOpenChange={(open) => !open && onDismissImportInvalid()}>
+        <AlertDialogContent>
+          <AlertDialogTitle>{t.sceneBuilder.nav.importInvalid}</AlertDialogTitle>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={onDismissImportInvalid}>{t.common.ok}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={pendingImportVersions !== null} onOpenChange={(open) => !open && onCancelPendingImport()}>
+        <AlertDialogContent>
+          <AlertDialogTitle>
+            {pendingImportVersions &&
+              interpolate(t.sceneBuilder.nav.importVersionWarning, {
+                savedVersion: pendingImportVersions.saved,
+                currentVersion: pendingImportVersions.current
+              })}
+          </AlertDialogTitle>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={onCancelPendingImport}>{t.common.cancel}</AlertDialogCancel>
+            <AlertDialogAction onClick={onConfirmPendingImport}>{t.sceneBuilder.nav.importAnyway}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Panel>
   )
 }

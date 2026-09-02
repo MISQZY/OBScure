@@ -1,6 +1,7 @@
 import { ipcMain, net } from "electron";
 import type { ConfigStore } from "./configStore";
 import type { WhatsNewEntry, WhatsNewPayload } from "../shared/types";
+import { compareVersions } from "../shared/version";
 import { logError } from "./logger";
 
 const OWNER = "MISQZY";
@@ -9,24 +10,6 @@ const LAST_SEEN_VERSION_SETTING = "app.lastSeenVersion";
 
 /** Noise a commit-based changelog shouldn't repeat back to the user: the release's own version-bump commit and merge commits. Matches both "chore: bump version to X.Y.Z" (current convention) and the earlier "chore: bump to X.Y.Z". */
 const BUMP_COMMIT_RE = /^chore:\s*bump(?:\s+version)?\s+to\s+\d/i;
-
-function parseVersion(raw: string): number[] {
-  return raw
-    .replace(/^v/, "")
-    .split(".")
-    .map((part) => Number.parseInt(part, 10) || 0);
-}
-
-/** Plain X.Y.Z compare — this project's tags never carry prerelease/build metadata, so full semver parsing would be unused complexity. */
-function compareVersions(a: string, b: string): number {
-  const partsA = parseVersion(a);
-  const partsB = parseVersion(b);
-  for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
-    const diff = (partsA[i] ?? 0) - (partsB[i] ?? 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
-}
 
 interface GithubRelease {
   tag_name: string;

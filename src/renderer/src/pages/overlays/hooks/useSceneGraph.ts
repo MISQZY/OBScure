@@ -200,6 +200,28 @@ export function useSceneGraph(overlay: CustomOverlay | undefined, locked: boolea
   }
 
   /**
+   * Replaces the graph with an imported nodes/edges pair (see
+   * useSceneImportExport) — the same normalization the initial overlay-load
+   * effect above applies (sortNodesForParenting/withFrameZIndex/legacy edge
+   * migrations), so a file exported from an older build still lands
+   * correctly, plus the same beginMutation/fitView treatment as Prettify so
+   * it's one more undo-able step rather than bypassing history.
+   */
+  const importGraph = useCallback(
+    (importedNodes: Node[], importedEdges: Edge[]): void => {
+      if (!beginMutation()) return
+      setNodes(withFrameZIndex(sortNodesForParenting(importedNodes)))
+      setEdges(migrateLegacyAudioPlayerEdges(migrateLegacyModifierEdges(importedEdges)))
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          reactFlowInstanceRef.current?.fitView({ duration: 300, padding: 0.15 })
+        })
+      })
+    },
+    [beginMutation]
+  )
+
+  /**
    * Snapshots the pre-drag position for undo. React Flow streams a node's
    * position continuously through onNodesChange as the pointer moves (each
    * one already carries the NEW position, applied immediately), so there's
@@ -563,6 +585,7 @@ export function useSceneGraph(overlay: CustomOverlay | undefined, locked: boolea
     setEdges,
     reactFlowInstanceRef,
     handlePrettify,
+    importGraph,
     onNodeDragStart,
     onNodeDragStop,
     onNodesChange,

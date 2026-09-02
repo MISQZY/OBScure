@@ -16,6 +16,7 @@ import { displayEdges, minimapNodeColor, sceneTrigger, sceneAudioTrigger, proces
 import { ProcessToken } from './views'
 import { useSceneGraph } from './hooks/useSceneGraph'
 import { useOverlayMeta } from './hooks/useOverlayMeta'
+import { useSceneImportExport } from './hooks/useSceneImportExport'
 import { useScenePlayback } from './hooks/useScenePlayback'
 import { useResponsiveCanvasLayout } from './hooks/useResponsiveCanvasLayout'
 import { usePreviewResize } from './hooks/usePreviewResize'
@@ -53,6 +54,7 @@ export function SceneBuilderPage({
     edges,
     reactFlowInstanceRef,
     handlePrettify,
+    importGraph,
     onNodeDragStart,
     onNodeDragStop,
     onNodesChange,
@@ -79,6 +81,21 @@ export function SceneBuilderPage({
     handleSave,
     saveStatus
   } = useOverlayMeta({ overlay, overlays, saveOverlay, deleteOverlay, onNavigate, nodes, edges })
+
+  const {
+    handleExport,
+    handleImport,
+    importInvalid,
+    dismissImportInvalid,
+    pendingImportVersions,
+    confirmPendingImport,
+    cancelPendingImport
+  } = useSceneImportExport({
+    overlay,
+    nodes,
+    edges,
+    importGraph
+  })
 
   const [urls, setUrls] = useState<OverlayUrls | null>(null)
   useEffect(() => {
@@ -206,6 +223,13 @@ export function SceneBuilderPage({
             commitUrlKey={commitUrlKey}
             onDelete={() => void handleDelete()}
             onPrettify={handlePrettify}
+            onExport={() => void handleExport()}
+            onImport={() => void handleImport()}
+            importInvalid={importInvalid}
+            onDismissImportInvalid={dismissImportInvalid}
+            pendingImportVersions={pendingImportVersions}
+            onConfirmPendingImport={confirmPendingImport}
+            onCancelPendingImport={cancelPendingImport}
             saveStatus={saveStatus}
             onSave={() => void handleSave()}
             testStatus={testStatus}
