@@ -1,6 +1,7 @@
 import { Node, Edge } from "@xyflow/react";
 import { cn } from "@/lib/utils";
 import { useGlobalVariables } from "@/providers/GlobalVariablesProvider";
+import { useTwitchStats } from "@/providers/TwitchStatsProvider";
 import { progressSourceValue, variablePlaceholderValues, clockFormatFor, NodeMap, Anim } from "../sceneUtils";
 import { TextView } from "./TextView";
 
@@ -32,10 +33,11 @@ export function ProgressView({
   map: NodeMap
 }) {
   const { variables: globalVariables } = useGlobalVariables()
+  const twitchStats = useTwitchStats()
   const d = node.data
   const orientation = (d.orientation as string) === 'vertical' ? 'vertical' : 'horizontal'
-  const current = progressSourceValue(node.id, 'current', edges, map, globalVariables)
-  const target = progressSourceValue(node.id, 'target', edges, map, globalVariables)
+  const current = progressSourceValue(node.id, 'current', edges, map, globalVariables, twitchStats)
+  const target = progressSourceValue(node.id, 'target', edges, map, globalVariables, twitchStats)
   const percent = progressPercent(current, target)
   const thickness = (d.thickness as number) ?? 28
   const radius = (d.borderRadius as number) ?? 14
@@ -81,7 +83,7 @@ export function ProgressView({
             hiding={false}
             vars={null}
             contentValues={{
-              ...variablePlaceholderValues(Object.values(map), globalVariables),
+              ...variablePlaceholderValues(Object.values(map), globalVariables, twitchStats),
               current: String(current),
               target: String(target),
               percent: String(Math.round(percent))

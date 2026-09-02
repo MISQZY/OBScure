@@ -81,6 +81,11 @@ const api = {
   },
   getTwitchRewards: (): Promise<TwitchCustomReward[]> => ipcRenderer.invoke('integrations:twitch:getRewards'),
   getTwitchStats: (): Promise<TwitchChannelStats | null> => ipcRenderer.invoke('integrations:twitch:getStats'),
+  onTwitchStatsUpdate: (callback: (stats: TwitchChannelStats | null) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, stats: TwitchChannelStats | null): void => callback(stats)
+    ipcRenderer.on('twitch-stats:update', listener)
+    return () => ipcRenderer.off('twitch-stats:update', listener)
+  },
   getNowPlaying: (): Promise<NowPlayingPayload | null> => ipcRenderer.invoke('nowPlaying:get'),
   onNowPlaying: (callback: (payload: NowPlayingPayload | null) => void): (() => void) => {
     const listener = (_event: IpcRendererEvent, payload: NowPlayingPayload | null): void => callback(payload)

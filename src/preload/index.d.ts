@@ -59,6 +59,7 @@ export interface ObscureApi {
   onRouletteState: (callback: (state: RouletteStatePayload) => void) => () => void
   getTwitchRewards: () => Promise<TwitchCustomReward[]>
   getTwitchStats: () => Promise<TwitchChannelStats | null>
+  onTwitchStatsUpdate: (callback: (stats: TwitchChannelStats | null) => void) => () => void
   getNowPlaying: () => Promise<NowPlayingPayload | null>
   onNowPlaying: (callback: (payload: NowPlayingPayload | null) => void) => () => void
   getCustomOverlays: () => Promise<CustomOverlay[]>

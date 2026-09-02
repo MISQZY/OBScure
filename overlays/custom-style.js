@@ -61,13 +61,31 @@ function applyTextColor(el, value) {
 }
 
 function applyModifierStyle(el, mods) {
+  // Resolved BEFORE Position below on purpose — mirrors modifierStyle in
+  // sceneUtils/style.ts: sets marginLeft/marginTop as plain longhand so
+  // Position's own center-anchor trick (further down) can ADD its own
+  // offset on top instead of clobbering Spacing's margin outright.
+  const spacing = lastOfType(mods, 'spacing')
+  if (spacing) {
+    const d = spacing.data || {}
+    const paddingX = d.paddingX ?? 0
+    const paddingY = d.paddingY ?? 0
+    const marginX = d.marginX ?? 0
+    const marginY = d.marginY ?? 0
+    el.style.padding = `${paddingY}px ${paddingX}px`
+    el.style.marginTop = `${marginY}px`
+    el.style.marginBottom = `${marginY}px`
+    el.style.marginLeft = `${marginX}px`
+    el.style.marginRight = `${marginX}px`
+  }
+
   let transformStr = ''
   const transform = lastOfType(mods, 'transform')
   if (transform) {
     const d = transform.data || {}
     transformStr += `scale(${d.scaleX ?? 1}, ${d.scaleY ?? 1}) rotate(${d.rotation ?? 0}deg) `
   }
-  
+
   const position = lastOfType(mods, 'position')
   if (position) {
     const d = position.data || {}
@@ -83,14 +101,18 @@ function applyModifierStyle(el, mods) {
       if (anchor.includes('left')) el.style.left = `${x}px`
       if (anchor.includes('right')) el.style.right = `${x}px`
       
+      // += (not =): a wired Spacing may have already set marginLeft/marginTop
+      // above — this ADDS the center-anchor offset onto that rather than
+      // replacing it, so the two combine instead of Spacing's own margin
+      // silently vanishing the moment Position picks a center-ish anchor.
       if (anchor === 'center' || anchor === 'top-center' || anchor === 'bottom-center') {
         el.style.left = '50%'
-        el.style.marginLeft = `${x}px`
+        el.style.marginLeft = `${(parseFloat(el.style.marginLeft) || 0) + x}px`
         transformStr += 'translateX(-50%) '
       }
       if (anchor === 'center' || anchor === 'center-left' || anchor === 'center-right') {
         el.style.top = '50%'
-        el.style.marginTop = `${y}px`
+        el.style.marginTop = `${(parseFloat(el.style.marginTop) || 0) + y}px`
         transformStr += 'translateY(-50%) '
       }
     } else if (mode === 'relative') {

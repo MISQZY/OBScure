@@ -1,5 +1,5 @@
 import type { Node } from '@xyflow/react'
-import { ALERT_TYPES_BY_PLATFORM, type AlertPlatform, type GlobalVariable } from '@shared/types'
+import { ALERT_TYPES_BY_PLATFORM, type AlertPlatform, type GlobalVariable, type TwitchChannelStats } from '@shared/types'
 
 /**
  * `nodrag` is an @xyflow/react convention: without it, a click-drag inside
@@ -92,7 +92,29 @@ export const CONDITION_OPERATOR_LABELS: Record<ConditionOperator, string> = {
 /** Which way an Overflow node's Auto-scroll animates its content — see overflowAutoScroll in overlays/sceneUtils.tsx. 'up'/'down' pick the vertical keyframe, 'left'/'right' the horizontal one; 'down'/'right' just play the same keyframe in reverse. */
 export const SCROLL_DIRECTIONS = ['up', 'down', 'left', 'right'] as const
 
-export const VARIABLE_SCOPES = ['local', 'global'] as const
+export const VARIABLE_SCOPES = ['local', 'global', 'platform'] as const
+
+/**
+ * Which platforms currently expose a live stats feed a scope='platform'
+ * Variable node can read (see platformStatValue below) — the intersection
+ * VariableNode's own Platform picker offers is THIS list ∩ whichever
+ * platforms are actually connected right now (useIntegrationsStatus), same
+ * "selection among connected platforms" the user sees. Only Twitch has a
+ * feed today (TwitchIntegration's own pollStats/TwitchChannelStats) —
+ * YouTube is a valid AlertPlatform elsewhere (EventNode's own alert
+ * platform) but has no channel-stats fetch implemented yet (see
+ * main/integrations/youtube.ts), so it's deliberately absent here rather
+ * than offered as a picker option that would just always read 0.
+ */
+export const PLATFORM_STAT_SOURCES: AlertPlatform[] = ['twitch']
+
+/** Every stat id a platform in PLATFORM_STAT_SOURCES can expose — read through platformStatValue below. Currently all Twitch, so all three; a future second source would only add to this list if its own fields don't already fit. */
+export const PLATFORM_STAT_IDS = ['followers', 'subscribers', 'viewers'] as const
+export const PLATFORM_STAT_LABELS: Record<(typeof PLATFORM_STAT_IDS)[number], string> = {
+  followers: 'Followers',
+  subscribers: 'Subscribers',
+  viewers: 'Viewers'
+}
 
 /**
  * A Variable node's `data.name` (local scope) or a registered GlobalVariable's
@@ -124,17 +146,41 @@ export function variablePlaceholderName(node: Node, globalVariables: GlobalVaria
 }
 
 /**
+ * A scope='platform' Variable node's own resolved numeric value — whichever
+ * field of `twitchStats` its own `data.platformStat` picks, for whichever
+ * platform `data.platform` names (see PLATFORM_STAT_SOURCES above) — 0 for
+ * any platform with no live feed wired in here yet (only 'twitch' resolves
+ * today; a future second source would get its own branch alongside it, same
+ * as this one), or when the feed hasn't loaded (`twitchStats` null, or a
+ * null field on TwitchChannelStats itself — see its own doc comment in
+ * shared/types.ts) — same "unwired optional input" convention as every other
+ * not-yet-resolved value in this graph. Mirrors platformStatValue in
+ * overlays/custom-content-values.js.
+ */
+export function platformStatValue(platform: string, stat: string, twitchStats: TwitchChannelStats | null): number {
+  if (platform !== 'twitch') return 0
+  if (!twitchStats) return 0
+  if (stat === 'subscribers') return twitchStats.subscriberCount ?? 0
+  if (stat === 'viewers') return twitchStats.viewerCount ?? 0
+  return twitchStats.followerCount ?? 0
+}
+
+/**
  * A Variable node's own resolved numeric value — the referenced
  * GlobalVariable's `value` once scope=global (0 if nothing's picked, or the
  * picked entry has since been deleted, same "unwired optional input"
- * convention as everywhere else in this graph), otherwise this node's own
+ * convention as everywhere else in this graph), a live platform stat once
+ * scope=platform (see platformStatValue above), otherwise this node's own
  * `data.value`. Mirrors variablePlaceholderValue in
  * overlays/custom-content-values.js.
  */
-export function variablePlaceholderValue(node: Node, globalVariables: GlobalVariable[]): number {
+export function variablePlaceholderValue(node: Node, globalVariables: GlobalVariable[], twitchStats: TwitchChannelStats | null): number {
   if (node.data.scope === 'global') {
     const gv = globalVariables.find((v) => v.id === node.data.globalId)
     return gv ? gv.value : 0
+  }
+  if (node.data.scope === 'platform') {
+    return platformStatValue((node.data.platform as string) || 'twitch', (node.data.platformStat as string) || 'followers', twitchStats)
   }
   const raw = node.data.value
   return typeof raw === 'number' && Number.isFinite(raw) ? raw : 0

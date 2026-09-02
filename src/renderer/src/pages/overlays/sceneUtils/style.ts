@@ -27,14 +27,35 @@ export function shadowFilter(color: string, opacityPercent: number, offsetX: num
 
 
 /**
- * Position/Size/Transform/Opacity/Shadow/Hide modifier nodes wired into a
- * target, expressed as inline CSS — mirrors applyModifierStyle in
- * overlays/custom.html. Hide: a manual on/off switch (display: none unless
- * its own Hidden checkbox is off) — see HideNode's own doc comment in
- * components/nodes/index.tsx for how this differs from a Task's show/hide.
+ * Position/Size/Transform/Opacity/Shadow/Hide/Overflow/Spacing modifier
+ * nodes wired into a target, expressed as inline CSS — mirrors
+ * applyModifierStyle in overlays/custom-style.js. Hide: a manual on/off
+ * switch (display: none unless its own Hidden checkbox is off) — see
+ * HideNode's own doc comment in components/nodes/index.tsx for how this
+ * differs from a Task's show/hide.
  */
 export function modifierStyle(mods: Node[], baseMods?: Node[]): React.CSSProperties {
   const style: React.CSSProperties = {}
+
+  // Resolved BEFORE Position below on purpose: a wired Spacing sets
+  // marginTop/marginLeft as plain longhand (not the `margin` shorthand,
+  // which would make the two impossible to combine) so Position's own
+  // center-anchor trick (marginLeft/marginTop repurposed to offset a 50%-
+  // anchored element — see its own block below) can ADD its own offset on
+  // top instead of clobbering Spacing's margin outright. No such collision
+  // for paddingX/Y or marginRight/Bottom — nothing else here touches those.
+  const spacing = lastOfType(mods, 'spacing')
+  if (spacing) {
+    const paddingX = (spacing.data.paddingX as number) ?? 0
+    const paddingY = (spacing.data.paddingY as number) ?? 0
+    const marginX = (spacing.data.marginX as number) ?? 0
+    const marginY = (spacing.data.marginY as number) ?? 0
+    style.padding = `${paddingY}px ${paddingX}px`
+    style.marginTop = marginY
+    style.marginBottom = marginY
+    style.marginLeft = marginX
+    style.marginRight = marginX
+  }
 
   const size = lastOfType(mods, 'size')
   const baseSize = baseMods && lastOfType(baseMods, 'size')
@@ -109,14 +130,18 @@ export function modifierStyle(mods: Node[], baseMods?: Node[]): React.CSSPropert
       if (anchor.includes('left')) style.left = x
       if (anchor.includes('right')) style.right = x
 
+      // += (not =): a wired Spacing may have already set marginLeft/marginTop
+      // above — this ADDS the center-anchor offset onto that rather than
+      // replacing it, so the two combine instead of Spacing's own margin
+      // silently vanishing the moment Position picks a center-ish anchor.
       if (anchor === 'center' || anchor === 'top-center' || anchor === 'bottom-center') {
         style.left = '50%'
-        style.marginLeft = x
+        style.marginLeft = ((style.marginLeft as number) ?? 0) + x
         transformStr += 'translateX(-50%) '
       }
       if (anchor === 'center' || anchor === 'center-left' || anchor === 'center-right') {
         style.top = '50%'
-        style.marginTop = y
+        style.marginTop = ((style.marginTop as number) ?? 0) + y
         transformStr += 'translateY(-50%) '
       }
     } else if (mode === 'relative') {

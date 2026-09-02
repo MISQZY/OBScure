@@ -19,6 +19,7 @@ import type {
   OverlayUrls,
   RandomStatePayload,
   RouletteStatePayload,
+  TwitchChannelStats,
 } from "../shared/types";
 
 const MIME_TYPES: Record<string, string> = {
@@ -73,6 +74,7 @@ export class OverlayServer {
   private latestRouletteState: RouletteStatePayload | null = null;
   private latestRandomState: RandomStatePayload | null = null;
   private latestGlobalVariables: GlobalVariable[] = [];
+  private latestTwitchStats: TwitchChannelStats | null = null;
 
   constructor(options: OverlayServerOptions) {
     this.host = options.host;
@@ -109,6 +111,12 @@ export class OverlayServer {
   setGlobalVariables(variables: GlobalVariable[]): void {
     this.latestGlobalVariables = variables;
     this.broadcast("global-variables", variables);
+  }
+
+  /** Called on every periodic poll from TwitchIntegration (see its own pollStats) while connected, and with `null` on disconnect/profile switch — pushes to any already-open OBS Browser Source via the same live-broadcast pattern setGlobalVariables uses, and updates the late-joiner snapshot a page opened/reloaded afterward reads via GET /overlays/config/twitch-stats.json. */
+  pushTwitchStats(stats: TwitchChannelStats | null): void {
+    this.latestTwitchStats = stats;
+    this.broadcast("twitch-stats", stats);
   }
 
   setCustomOverlays(overlays: CustomOverlay[]): void {
@@ -253,6 +261,15 @@ export class OverlayServer {
         "Cache-Control": "no-store",
       });
       res.end(JSON.stringify(this.latestGlobalVariables));
+      return;
+    }
+
+    if (pathname === `${OVERLAYS_PREFIX}/config/twitch-stats.json`) {
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+      });
+      res.end(JSON.stringify(this.latestTwitchStats));
       return;
     }
 

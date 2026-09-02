@@ -8,6 +8,7 @@ import { SizeNode } from './SizeNode'
 import { OpacityNode } from './OpacityNode'
 import { ShadowNode } from './ShadowNode'
 import { OverflowNode } from './OverflowNode'
+import { SpacingNode } from './SpacingNode'
 import { TextNode } from './TextNode'
 import { TimerNode } from './TimerNode'
 import { AnimationNode } from './AnimationNode'
@@ -45,6 +46,7 @@ export const nodeTypes = {
   opacity: OpacityNode,
   shadow: ShadowNode,
   overflow: OverflowNode,
+  spacing: SpacingNode,
   text: TextNode,
   timer: TimerNode,
   animation: AnimationNode,

@@ -5,6 +5,14 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { BOX_SOCKETS, BOX_OUTPUTS } from './constants'
 import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect, numberInputClass, BOX_SHAPE_IDS } from './utils'
 
+/**
+ * No Padding fields of its own anymore — wire a Spacing node into its own
+ * Style socket instead (see MODIFIER_SOCKETS' own doc comment in
+ * constants.ts), same as Position/Size/Opacity/etc. already work. A Box
+ * saved before this change keeps rendering with whatever paddingX/paddingY
+ * it already had (see BoxView's own doc comment) until a Spacing node
+ * replaces it.
+ */
 export function BoxNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
   const saved = useSavedNodeData(id)
@@ -14,12 +22,6 @@ export function BoxNode({ id, data }: NodeProps) {
     <BaseNode id={id} data={data} title="Shape" labelable category="content" sockets={BOX_SOCKETS} outputSockets={BOX_OUTPUTS}>
       <Field label="Background">
         <ColorPicker value={(data.background as string) || '#18181b'} onChange={(val) => updateNodeData(id, { background: val })} />
-      </Field>
-      <Field label="Padding X">
-        <NumberInput value={data.paddingX as number} onChange={(v) => updateNodeData(id, { paddingX: v })} min={0} fallback={16} savedValue={saved.paddingX as number} className={numberInputClass} />
-      </Field>
-      <Field label="Padding Y">
-        <NumberInput value={data.paddingY as number} onChange={(v) => updateNodeData(id, { paddingY: v })} min={0} fallback={12} savedValue={saved.paddingY as number} className={numberInputClass} />
       </Field>
       <Field label="Shape">
         <NodeSelect value={shape} options={BOX_SHAPE_IDS} onChange={(next) => updateNodeData(id, { shape: next })} />

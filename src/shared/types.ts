@@ -132,6 +132,8 @@ export interface AppEvents {
   'integration-status': { key: IntegrationKey; status: string }
   /** Full registry, broadcast on every add/edit/delete from the "Данные → Переменные" page — see OverlayServer.setGlobalVariables. Lets an already-open OBS Browser Source pick up a value change instantly, same live pattern as roulette/random state. */
   'global-variables': GlobalVariable[]
+  /** Broadcast on every periodic Twitch stats poll while connected (see TwitchIntegration's own poll/OverlayServer.pushTwitchStats) — feeds a scope='twitch' Variable node's live follower/subscriber/viewer count, same live pattern as global-variables. Null once Twitch disconnects or a profile switch tears the integration down. */
+  'twitch-stats': TwitchChannelStats | null
 }
 
 export interface OverlayAddress {

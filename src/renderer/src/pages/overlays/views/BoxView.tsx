@@ -86,7 +86,16 @@ export function BoxView({
           // it's an invisible wrapper, not a card.
           ...(isBox
             ? {
-                padding: `${(node.data.paddingY as number) ?? 12}px ${(node.data.paddingX as number) ?? 16}px`,
+                // Padding comes from a wired Spacing modifier now (already in
+                // modStyle, spread above) — this only fills in a value for a
+                // Box saved BEFORE that existed, back when paddingX/paddingY
+                // lived directly on the node itself (see NODE_DEFAULTS.box's
+                // own doc comment); a Spacing wire always wins when both are
+                // present, and a brand-new Box has neither field set at all
+                // (undefined), so it just gets no padding until one's wired in.
+                ...(modStyle.padding == null && (node.data.paddingX != null || node.data.paddingY != null)
+                  ? { padding: `${(node.data.paddingY as number) ?? 12}px ${(node.data.paddingX as number) ?? 16}px` }
+                  : {}),
                 ...borderBoxStyle(node, (node.data.background as string) || '#18181b'),
                 ...boxShapeStyle(node)
               }

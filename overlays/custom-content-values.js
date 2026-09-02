@@ -231,6 +231,20 @@ function variablePlaceholderName(node) {
   return name || null
 }
 
+// A scope='platform' Variable node's own resolved numeric value — mirrors
+// platformStatValue in components/nodes/utils/constants.ts. Only 'twitch'
+// resolves today (a future second source would get its own branch
+// alongside it); `stats` is `latestTwitchStats` (see custom-state.js) — null
+// until Twitch is connected/the first poll lands, same "0 for an unresolved
+// value" convention as every other not-yet-resolved value here.
+function platformStatValue(platform, stat, stats) {
+  if (platform !== 'twitch') return 0
+  if (!stats) return 0
+  if (stat === 'subscribers') return stats.subscriberCount || 0
+  if (stat === 'viewers') return stats.viewerCount || 0
+  return stats.followerCount || 0
+}
+
 // A Variable node's own resolved numeric value — mirrors
 // variablePlaceholderValue in components/nodes/utils/constants.ts.
 function variablePlaceholderValue(node) {
@@ -238,6 +252,9 @@ function variablePlaceholderValue(node) {
   if (d.scope === 'global') {
     const gv = latestGlobalVariables.find((v) => v.id === d.globalId)
     return gv ? gv.value : 0
+  }
+  if (d.scope === 'platform') {
+    return platformStatValue(d.platform || 'twitch', d.platformStat || 'followers', latestTwitchStats)
   }
   return typeof d.value === 'number' && Number.isFinite(d.value) ? d.value : 0
 }
@@ -282,6 +299,14 @@ function progressSourceValue(nodeId, socketId, edges, map) {
 function hasGlobalVariableDeps(overlay) {
   const nodes = (overlay && overlay.nodes) || []
   return nodes.some((n) => n.type === 'variable' && n.data && n.data.scope === 'global')
+}
+
+// Whether ANY node in the graph is a scope=platform Variable node — same
+// gating role as hasGlobalVariableDeps above, for the 'twitch-stats' WS tick
+// instead of 'global-variables'.
+function hasTwitchStatDeps(overlay) {
+  const nodes = (overlay && overlay.nodes) || []
+  return nodes.some((n) => n.type === 'variable' && n.data && n.data.scope === 'platform')
 }
 
 // Whether a Random Widget node should currently be rendered at all —

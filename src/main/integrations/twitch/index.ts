@@ -26,6 +26,8 @@ import {
 import { getClientId, pollForDeviceToken, refreshAccessToken } from "./auth";
 import { TwitchSocket } from "./socket";
 
+const STATS_POLL_INTERVAL_MS = 60_000;
+
 export class TwitchIntegration extends BaseIntegration {
   private accessToken: string | null = null;
   private accessTokenExpiresAt = 0;
@@ -97,8 +99,18 @@ export class TwitchIntegration extends BaseIntegration {
       const tokens = await refreshAccessToken(clientId, refreshToken);
       this.applyTokens(tokens);
       await this.twitchSocket.openSession(EVENTSUB_WS_URL);
+      this.startPolling(() => this.pollStats(), STATS_POLL_INTERVAL_MS);
     } catch (error) {
       this.handleConnectFailure(error);
+    }
+  }
+
+  /** Feeds a scope='twitch' Variable node's live follower/subscriber/viewer count — see AppEvents' own 'twitch-stats' doc comment and OverlayServer.pushTwitchStats. Same 60s cadence DashboardPage.tsx already polls this same endpoint at (TWITCH_STATS_POLL_MS), just from the main process instead so an OBS Browser Source (which has no IPC to poll through) gets it too. */
+  private async pollStats(): Promise<void> {
+    try {
+      this.eventBus.emit("twitch-stats", await this.getChannelStats());
+    } catch (error) {
+      logWarn("twitch", "stats poll failed", error);
     }
   }
 
@@ -119,6 +131,7 @@ export class TwitchIntegration extends BaseIntegration {
 
   stop(): void {
     this.stopping = true;
+    this.stopPolling();
     this.twitchSocket.teardownAll();
   }
 
@@ -164,6 +177,7 @@ export class TwitchIntegration extends BaseIntegration {
 
     try {
       await this.twitchSocket.openSession(EVENTSUB_WS_URL);
+      this.startPolling(() => this.pollStats(), STATS_POLL_INTERVAL_MS);
     } catch (error) {
       this.setStatus("error");
       throw error;

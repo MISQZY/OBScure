@@ -556,12 +556,16 @@ if (!key) {
       .catch(() => null),
     fetch('/overlays/config/global-variables.json')
       .then((res) => res.json())
+      .catch(() => null),
+    fetch('/overlays/config/twitch-stats.json')
+      .then((res) => res.json())
       .catch(() => null)
   ])
-    .then(([overlay, nowPlaying, rouletteState, randomState, globalVariables]) => {
+    .then(([overlay, nowPlaying, rouletteState, randomState, globalVariables, twitchStats]) => {
       if (nowPlaying) latestNowPlaying = nowPlaying
       if (randomState) latestRandomState = randomState
       if (globalVariables) latestGlobalVariables = globalVariables
+      if (twitchStats) latestTwitchStats = twitchStats
       if (rouletteState) {
         latestRouletteState = rouletteState
         // A page opened/reloaded mid-round (or after one already
@@ -777,6 +781,14 @@ if (!key) {
         // scope=global Variable node somewhere in the graph.
         latestGlobalVariables = payload
         if (hasGlobalVariableDeps(latestOverlay)) render(latestOverlay, false)
+      } else if (type === 'twitch-stats') {
+        // Pushed every ~60s while Twitch is connected (see TwitchIntegration's
+        // own pollStats/OverlayServer.pushTwitchStats), and once with `null`
+        // on disconnect/profile switch. Silent refresh (animate=false), same
+        // reasoning as the 'global-variables' branch above — gated to scenes
+        // that actually have a scope=twitch Variable node somewhere.
+        latestTwitchStats = payload
+        if (hasTwitchStatDeps(latestOverlay)) render(latestOverlay, false)
       }
     }
     ws.onclose = () => setTimeout(connect, 1000)

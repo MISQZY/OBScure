@@ -389,7 +389,15 @@ function buildBox(node, edges, map, animate, vars, registry, depth = 0) {
   // index.tsx) skips all of these — it's an invisible wrapper, not a
   // card.
   if (isBox) {
-    container.style.padding = `${d.paddingY ?? 12}px ${d.paddingX ?? 16}px`
+    // Legacy fallback only, for a Box saved before Spacing existed (see
+    // NODE_DEFAULTS.box's own doc comment in components/nodes/constants.ts)
+    // — applyModifierStyle below runs AFTER this and sets el.style.padding
+    // itself whenever a Spacing node is actually wired in, taking priority
+    // over whatever's set here, same "wire always wins" precedence
+    // BoxView's own doc comment describes for the React side.
+    if (d.paddingX != null || d.paddingY != null) {
+      container.style.padding = `${d.paddingY ?? 12}px ${d.paddingX ?? 16}px`
+    }
     applyBoxShape(container, d)
     applyBorder(container, d, d.background || '#18181b')
   }

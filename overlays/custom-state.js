@@ -80,6 +80,14 @@ let latestRandomState = { phase: 'idle', hash: null, numbers: null, seed: null, 
 // latestRouletteState/latestRandomState above.
 let latestGlobalVariables = []
 
+// Live Twitch channel stats (followers/subscribers/viewers) — see
+// platformStatValue in custom-content-values.js. Null until the
+// twitch-stats.json fetch below resolves (or if Twitch isn't connected),
+// kept current afterward by the 'twitch-stats' WS broadcast (see
+// OverlayServer.pushTwitchStats), same live pattern as latestGlobalVariables
+// above.
+let latestTwitchStats = null
+
 // Per auto-scrolling node (keyed by node id): when its loop FIRST
 // started, and the measured size/duration its CURRENT pace is based
 // on — deliberately module-level (survives renderStatic's own

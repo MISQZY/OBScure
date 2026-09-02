@@ -1,5 +1,5 @@
 import { Edge, Node } from "@xyflow/react";
-import type { GlobalVariable } from "@shared/types";
+import type { GlobalVariable, TwitchChannelStats } from "@shared/types";
 import { variablePlaceholderName, variablePlaceholderValue } from "@/components/nodes";
 import { NodeMap } from "./graph";
 import { SAMPLE_AUDIO_VARS, SAMPLE_ROULETTE_STATE, SAMPLE_RANDOM_STATE } from "./sampleData";
@@ -132,12 +132,13 @@ export function progressSourceValue(
   socketId: 'current' | 'target',
   edges: Edge[],
   map: NodeMap,
-  globalVariables: GlobalVariable[]
+  globalVariables: GlobalVariable[],
+  twitchStats: TwitchChannelStats | null
 ): number {
   const edge = edges.find((e) => e.target === nodeId && e.targetHandle === socketId && map[e.source]?.type === 'variable')
   if (!edge) return 0
   const node = map[edge.source]
-  return node ? variablePlaceholderValue(node, globalVariables) : 0
+  return node ? variablePlaceholderValue(node, globalVariables, twitchStats) : 0
 }
 
 
@@ -152,13 +153,13 @@ export function progressSourceValue(
  * name, or scope=global with nothing picked) contributes nothing. Mirrors
  * variablePlaceholderValues in overlays/custom-content-values.js.
  */
-export function variablePlaceholderValues(nodes: Node[], globalVariables: GlobalVariable[]): Record<string, string> {
+export function variablePlaceholderValues(nodes: Node[], globalVariables: GlobalVariable[], twitchStats: TwitchChannelStats | null): Record<string, string> {
   const out: Record<string, string> = {}
   for (const n of nodes) {
     if (n.type !== 'variable') continue
     const name = variablePlaceholderName(n, globalVariables)
     if (!name) continue
-    out[name] = String(variablePlaceholderValue(n, globalVariables))
+    out[name] = String(variablePlaceholderValue(n, globalVariables, twitchStats))
   }
   return out
 }

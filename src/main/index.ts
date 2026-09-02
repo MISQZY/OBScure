@@ -235,6 +235,11 @@ eventBus.on("now-playing", (payload) => {
   overlayServer.pushNowPlaying(resolved);
 });
 
+eventBus.on("twitch-stats", (stats) => {
+  mainWindow?.webContents.send("twitch-stats:update", stats);
+  overlayServer.pushTwitchStats(stats);
+});
+
 eventBus.on("integration-status", () => {
   mainWindow?.webContents.send("integrations:status-update", {
     spotify: integrations.spotify.getStatus(),
@@ -250,6 +255,7 @@ async function reinitializeForActiveProfile(): Promise<void> {
   delete nowPlayingRaw.windows;
   nowPlayingFileCache.reset();
   overlayServer.pushNowPlaying(null);
+  overlayServer.pushTwitchStats(null);
 
   const profileDir = profileManager.getActiveProfileDir();
   config = new ConfigStore(profileDir);

@@ -40,16 +40,19 @@ export type InputSocket = {
  * The two grouped "modifier" roles shared by Text/Image/Video/Box (and,
  * minus Hide, by Task — see TASK_SOCKETS): Transform (Position + Size +
  * Transform/scale+rotate — anything that changes WHERE or HOW BIG something
- * is) and Style (Opacity + Shadow + Animation + Hide — anything that changes
- * how it LOOKS or whether it shows at all). Each is `multi: true`: wire in a
- * Position AND a Size AND a Transform node together to get all three at
- * once, same as before these were separate sockets — see modifierStyle's own
- * doc comment in SceneBuilderPage.tsx for how the values combine (and how a
- * second wire of the SAME type in one group is resolved).
+ * is) and Style (Opacity + Shadow + Animation + Hide + Overflow + Spacing —
+ * anything that changes how it LOOKS, whether it shows at all, or how much
+ * room it takes/leaves). Each is `multi: true`: wire in a Position AND a
+ * Size AND a Transform node together to get all three at once, same as
+ * before these were separate sockets — see modifierStyle's own doc comment
+ * in sceneUtils/style.ts for how the values combine (and how a second wire
+ * of the SAME type in one group is resolved). Spacing (padding/margin) is
+ * build-time only, like Overflow — neither is in TASK_SOCKETS' own narrower
+ * Style list, so a Task can't override either mid-process.
  */
 export const MODIFIER_SOCKETS: InputSocket[] = [
   { id: 'transform', label: 'Transform', accepts: ['position', 'size', 'transform'], kind: 'style', multi: true },
-  { id: 'style', label: 'Style', accepts: ['opacity', 'shadow', 'animation', 'hide', 'overflow'], kind: 'style', multi: true }
+  { id: 'style', label: 'Style', accepts: ['opacity', 'shadow', 'animation', 'hide', 'overflow', 'spacing'], kind: 'style', multi: true }
 ]
 
 // Lets an Audio Player's Content output (see AUDIO_PLAYER_OUTPUTS below) be
@@ -611,6 +614,7 @@ export const NODE_CATEGORY: Record<string, NodeCategory> = {
   ordering: 'style',
   hide: 'style',
   overflow: 'style',
+  spacing: 'style',
   event: 'data',
   randomSource: 'data',
   randomWidget: 'content',
@@ -644,7 +648,11 @@ export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
   text: { text: '', color: '#ffffff', fontSize: 32, letterSpacing: 0, align: 'left', verticalAlign: 'top', bold: true, italic: false },
   timer: { delay: 1000 },
   animation: { type: 'fade', duration: 500, subType: 'auto' },
-  box: { background: '#18181b', paddingX: 16, paddingY: 12, shape: 'rectangle', borderRadius: 10, borderEnabled: false, borderWidth: 2, borderColor: '#ffffff' },
+  // No padding of its own anymore — wire a Spacing node into its own Style
+  // socket for that (see MODIFIER_SOCKETS' own doc comment); a Box/Group
+  // saved before this change keeps whatever paddingX/paddingY it already had
+  // as a fallback (see BoxView/buildBox) until a Spacing node replaces it.
+  box: { background: '#18181b', shape: 'rectangle', borderRadius: 10, borderEnabled: false, borderWidth: 2, borderColor: '#ffffff' },
   frame: { collapsed: false, label: 'Layout Frame' },
   image: { borderRadius: 8, borderEnabled: false, borderWidth: 2, borderColor: '#ffffff' },
   video: { muted: true, loop: true, borderRadius: 8, borderEnabled: false, borderWidth: 2, borderColor: '#ffffff' },
@@ -659,14 +667,17 @@ export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
   // scope 'local' (default): name/value both live here, this node's own
   // placeholder token. scope 'global': name/value instead come from
   // whichever GlobalVariable `globalId` points at (registered on the
-  // "Данные → Переменные" page) — see VariableNode's own doc comment.
-  variable: { scope: 'local', name: '', value: 0, globalId: null },
+  // "Данные → Переменные" page). scope 'platform': value instead comes live
+  // from whichever connected platform `platform` names, whichever field
+  // `platformStat` picks — see VariableNode's own doc comment.
+  variable: { scope: 'local', name: '', value: 0, globalId: null, platform: 'twitch', platformStat: 'followers' },
   backgroundAnimation: { type: 'none', color: '#18181b', speed: 1, repeat: false },
   sound: { soundId: 'none', volume: 1 },
   event: { kind: 'alert', platform: 'twitch', alertType: ALERT_TYPES_BY_PLATFORM.twitch[0] },
   ordering: { layout: 'vertical', direction: 'direct', gap: 8 },
   hide: { hidden: true },
   overflow: { overflowX: 'hidden', overflowY: 'hidden', autoScroll: false, scrollDirection: 'up', scrollSpeed: 40 },
+  spacing: { paddingX: 0, paddingY: 0, marginX: 0, marginY: 0 },
   task: { action: 'show' },
   wait: { delay: 1000 },
   // A sensible starting example (raid size over 10) rather than an empty

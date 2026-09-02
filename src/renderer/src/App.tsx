@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState, type ComponentType } from 'react'
 import { CustomOverlaysProvider } from '@/providers/CustomOverlaysProvider'
 import { GlobalVariablesProvider } from '@/providers/GlobalVariablesProvider'
+import { TwitchStatsProvider } from '@/providers/TwitchStatsProvider'
 import { AppSidebar } from '@/components/layout/AppSidebar'
 import { TitleBar } from '@/components/layout/TitleBar'
 import { TourOverlay } from '@/components/TourOverlay'
@@ -119,12 +120,14 @@ function App() {
           <TourProvider>
             <CustomOverlaysProvider>
               <GlobalVariablesProvider>
-                <div className="flex h-screen flex-col overflow-hidden">
-                  <TitleBar />
-                  <div className="min-h-0 flex-1">
-                    <AppShell />
+                <TwitchStatsProvider>
+                  <div className="flex h-screen flex-col overflow-hidden">
+                    <TitleBar />
+                    <div className="min-h-0 flex-1">
+                      <AppShell />
+                    </div>
                   </div>
-                </div>
+                </TwitchStatsProvider>
               </GlobalVariablesProvider>
             </CustomOverlaysProvider>
           </TourProvider>
