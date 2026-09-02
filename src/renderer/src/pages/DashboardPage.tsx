@@ -283,13 +283,14 @@ export function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold">{t.dashboard.title}</h1>
+        <h1 className="min-w-0 flex-1 truncate text-xl font-semibold">{t.dashboard.title}</h1>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               type="button"
               variant="outline"
               size="icon-sm"
+              className="shrink-0"
               disabled={removableIds.length === 0}
               aria-label={t.dashboard.addCard}
               title={t.dashboard.addCard}
@@ -316,10 +317,19 @@ export function DashboardPage() {
         the bottom of the whole reserved canvas, far past the actual cards.
         Left alone here, the ScrollArea hugs the grid's real height and any
         leftover minHeight just becomes plain unscrollable blank canvas below it.
+
+        min-w-0 is load-bearing: as a flex item, this box's default auto
+        min-width is its content's min-content size — which, because the grid
+        below forces MIN_GRID_WIDTH, is huge — and that would otherwise widen
+        the whole flex column (pushing the header row's + button off-screen)
+        instead of staying inside this box's own horizontal scrollbar.
       */}
-      <div ref={gridAreaRef} style={{ minHeight }}>
+      <div ref={gridAreaRef} className="min-w-0" style={{ minHeight }}>
         <ScrollAreaPrimitive.Root type="auto" className="overflow-hidden">
-          <ScrollAreaPrimitive.Viewport className="w-full rounded-[inherit] [&>div]:!block">
+          {/* pb-4 keeps the horizontal scrollbar (an overlay pinned to the
+              bottom edge of Root, not part of normal flow) from sitting flush
+              against — and visually fighting with — the last row of cards. */}
+          <ScrollAreaPrimitive.Viewport className="w-full rounded-[inherit] pb-4 [&>div]:!block">
             <Grid
               cols={GRID_COLS}
               rowHeight={GRID_ROW_HEIGHT}
