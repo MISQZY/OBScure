@@ -5,6 +5,10 @@
     "tools": "Инструменты",
     "data": "Данные",
     "integrations": "Интеграции",
+    "integrationGroups": {
+      "platform": "Платформы",
+      "music": "Музыка"
+    },
     "settings": "Настройки",
     "releaseNotes": "Список изменений на GitHub",
     "deleteFolderConfirm": "Удалить папку «{name}»? Оверлеи внутри не будут удалены.",

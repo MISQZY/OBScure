@@ -27,7 +27,7 @@ import { ProfileSwitcher } from '@/components/layout/ProfileSwitcher'
 import { IconPicker } from '@/components/IconPicker'
 import { cn } from '@/lib/utils'
 import type { NavKey } from '@/lib/nav'
-import { INTEGRATION_KEYS, INTEGRATIONS_META } from '@/lib/integrations-meta'
+import { INTEGRATION_GROUP_ORDER, INTEGRATION_KEYS_BY_GROUP, INTEGRATIONS_META } from '@/lib/integrations-meta'
 import { EVENT_KEYS, EVENTS_META, eventLabels } from '@/lib/events-meta'
 import { useI18n } from '@/providers/I18nProvider'
 import { useCustomOverlays } from '@/providers/CustomOverlaysProvider'
@@ -501,23 +501,32 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
 
                 {integrationsOpen && (
                   <SidebarMenuSub>
-                    {INTEGRATION_KEYS.map((key) => {
-                      const { navKey, label, icon: Icon } = INTEGRATIONS_META[key]
-                      return (
-                        <SidebarMenuSubItem key={key}>
-                          <SidebarMenuSubButton
-                            isActive={active === navKey}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              onNavigate(navKey)
-                            }}
-                          >
-                            <Icon />
-                            <span>{label}</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      )
-                    })}
+                    {INTEGRATION_GROUP_ORDER.map((group) => (
+                      <SidebarMenuSubItem key={group} className="group/menu-sub-group">
+                        <div className="px-2 pt-1.5 pb-0.5 text-[10px] font-medium uppercase tracking-wide text-sidebar-foreground/50">
+                          {t.sidebar.integrationGroups[group]}
+                        </div>
+                        <ul className="flex min-w-0 flex-col gap-1">
+                          {INTEGRATION_KEYS_BY_GROUP[group].map((key) => {
+                            const { navKey, label, icon: Icon } = INTEGRATIONS_META[key]
+                            return (
+                              <SidebarMenuSubItem key={key}>
+                                <SidebarMenuSubButton
+                                  isActive={active === navKey}
+                                  onClick={(event) => {
+                                    event.preventDefault()
+                                    onNavigate(navKey)
+                                  }}
+                                >
+                                  <Icon />
+                                  <span>{label}</span>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            )
+                          })}
+                        </ul>
+                      </SidebarMenuSubItem>
+                    ))}
                   </SidebarMenuSub>
                 )}
               </SidebarMenuItem>

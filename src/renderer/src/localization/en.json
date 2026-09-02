@@ -5,6 +5,10 @@
     "tools": "Tools",
     "data": "Data",
     "integrations": "Integrations",
+    "integrationGroups": {
+      "platform": "Platforms",
+      "music": "Music"
+    },
     "settings": "Settings",
     "releaseNotes": "View release notes on GitHub",
     "deleteFolderConfirm": "Delete folder \"{name}\"? Overlays inside will not be deleted.",
