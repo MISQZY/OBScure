@@ -1,7 +1,7 @@
 {
   "name": "obscure",
   "productName": "OBScure",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": "MISQZY",
   "private": true,
   "description": "Control panel for custom OBS Browser Source overlays, on-stream tools (Random/Roulette), and Spotify/Twitch/YouTube integrations",
