@@ -9,7 +9,7 @@ import {
   computeTaskState,
   modifierStyle,
   animationAttrs,
-  borderStyle,
+  borderBoxStyle,
   boxShapeStyle,
   MAX_BOX_DEPTH,
   NodeMap,
@@ -75,9 +75,8 @@ export function BoxView({
           // it's an invisible wrapper, not a card.
           ...(isBox
             ? {
-                background: (node.data.background as string) || '#18181b',
                 padding: `${(node.data.paddingY as number) ?? 12}px ${(node.data.paddingX as number) ?? 16}px`,
-                border: borderStyle(node),
+                ...borderBoxStyle(node, (node.data.background as string) || '#18181b'),
                 ...boxShapeStyle(node)
               }
             : {}),

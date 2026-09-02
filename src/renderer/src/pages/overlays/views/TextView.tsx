@@ -1,7 +1,7 @@
 import { useRef, useLayoutEffect, useState } from "react";
 import { Node } from "@xyflow/react";
 import { cn } from "@/lib/utils";
-import { interpolate, Anim, OverflowAutoScroll } from "../sceneUtils";
+import { interpolate, textColorStyle, Anim, OverflowAutoScroll } from "../sceneUtils";
 
 /**
  * Renders `children` twice back-to-back inside a track animated by CSS
@@ -183,7 +183,7 @@ export function TextView({
           letterSpacing: `${(node.data.letterSpacing as number) ?? 0}px`,
           lineHeight: node.data.lineHeight != null ? (node.data.lineHeight as number) : undefined,
           ...style,
-          color: (node.data.color as string) || '#ffffff',
+          ...textColorStyle((node.data.color as string) || '#ffffff'),
           textAlign: align,
           fontFamily: node.data.fontFamily ? `"${node.data.fontFamily as string}"` : undefined,
           ...(anim?.duration ? { '--anim-duration': `${anim.duration}ms` } : {})

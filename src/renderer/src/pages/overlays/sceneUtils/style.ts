@@ -1,5 +1,6 @@
 import { Node } from "@xyflow/react";
 import { lastOfType } from "./graph";
+import { backgroundLayer, gradientStopColors, isGradientColor } from "@/lib/gradient";
 
 /** `#rrggbb` + an opacity percent -> `rgba(...)` — for the Shadow node's color+opacity fields, which (unlike Text/Box's own plain colors) need an alpha channel a hex string alone can't carry. */
 export function hexToRgba(hex: string, opacityPercent: number): string {
@@ -8,6 +9,20 @@ export function hexToRgba(hex: string, opacityPercent: number): string {
   const g = parseInt(clean.slice(2, 4), 16) || 0
   const b = parseInt(clean.slice(4, 6), 16) || 0
   return `rgba(${r}, ${g}, ${b}, ${opacityPercent / 100})`
+}
+
+
+/**
+ * A Shadow modifier's color+opacity+offset+blur as a `filter` value.
+ * `filter: drop-shadow()` (unlike `box-shadow`) has no gradient equivalent —
+ * a gradient color stacks one drop-shadow per stop instead (same offset/blur
+ * on all of them), which reads as a soft multi-color glow rather than a
+ * literal gradient-shaded shadow, the closest CSS gets to the real thing.
+ * Mirrors shadowFilter in overlays/custom.html.
+ */
+export function shadowFilter(color: string, opacityPercent: number, offsetX: number, offsetY: number, blur: number): string {
+  const colors = isGradientColor(color) ? gradientStopColors(color) : [color]
+  return colors.map((c) => `drop-shadow(${offsetX}px ${offsetY}px ${blur}px ${hexToRgba(c, opacityPercent)})`).join(' ')
 }
 
 
@@ -127,19 +142,23 @@ export function modifierStyle(mods: Node[], baseMods?: Node[]): React.CSSPropert
 
   const shadow = lastOfType(mods, 'shadow')
   if (shadow) {
-    const color = hexToRgba((shadow.data.color as string) || '#000000', (shadow.data.opacity as number) ?? 60)
-    const offsetX = (shadow.data.offsetX as number) ?? 0
-    const offsetY = (shadow.data.offsetY as number) ?? 2
-    const blur = (shadow.data.blur as number) ?? 6
-    style.filter = `drop-shadow(${offsetX}px ${offsetY}px ${blur}px ${color})`
+    style.filter = shadowFilter(
+      (shadow.data.color as string) || '#000000',
+      (shadow.data.opacity as number) ?? 60,
+      (shadow.data.offsetX as number) ?? 0,
+      (shadow.data.offsetY as number) ?? 2,
+      (shadow.data.blur as number) ?? 6
+    )
   } else if (baseMods) {
     const baseShadow = lastOfType(baseMods, 'shadow')
     if (baseShadow) {
-      const color = hexToRgba((baseShadow.data.color as string) || '#000000', (baseShadow.data.opacity as number) ?? 60)
-      const offsetX = (baseShadow.data.offsetX as number) ?? 0
-      const offsetY = (baseShadow.data.offsetY as number) ?? 2
-      const blur = (baseShadow.data.blur as number) ?? 6
-      style.filter = `drop-shadow(${offsetX}px ${offsetY}px ${blur}px ${color})`
+      style.filter = shadowFilter(
+        (baseShadow.data.color as string) || '#000000',
+        (baseShadow.data.opacity as number) ?? 60,
+        (baseShadow.data.offsetX as number) ?? 0,
+        (baseShadow.data.offsetY as number) ?? 2,
+        (baseShadow.data.blur as number) ?? 6
+      )
     }
   }
 
@@ -155,10 +174,41 @@ export function modifierStyle(mods: Node[], baseMods?: Node[]): React.CSSPropert
 }
 
 
-/** A node's own border fields (borderEnabled/borderWidth/borderColor — same shape as BoxNode's) as a CSS border value, or undefined when off. Shared by ImageView/VideoView; BoxView computes its own inline since it also needs the fields for other purposes. */
-export function borderStyle(node: Node): string | undefined {
-  if (!node.data.borderEnabled) return undefined
-  return `${(node.data.borderWidth as number) ?? 2}px solid ${(node.data.borderColor as string) || '#ffffff'}`
+/**
+ * A node's own border fields (borderEnabled/borderWidth/borderColor — same
+ * shape as BoxNode's) plus its fill, as `background`/`border` — combined
+ * into one because a gradient border needs `background` itself (there's no
+ * `border-color: <gradient>`): two layers, the fill clipped to padding-box
+ * (on top) and the border color clipped to border-box (below, showing only
+ * in the ring the top layer doesn't cover) with the real `border` made
+ * transparent. This is the classic gradient-border-with-radius trick — unlike
+ * `border-image`, it respects border-radius/clip-path (see boxShapeStyle)
+ * with no separate wrapper element. A solid border needs none of that, same
+ * output as the old borderStyle. Shared by BoxView/ImageView/VideoView —
+ * mirrors applyBorder in overlays/custom.html.
+ */
+export function borderBoxStyle(node: Node, fill: string): { background: string; border?: string } {
+  if (!node.data.borderEnabled) return { background: fill }
+  const width = (node.data.borderWidth as number) ?? 2
+  const color = (node.data.borderColor as string) || '#ffffff'
+  if (!isGradientColor(color)) return { background: fill, border: `${width}px solid ${color}` }
+  return {
+    background: `${backgroundLayer(fill, 'padding-box')}, ${backgroundLayer(color, 'border-box')}`,
+    border: `${width}px solid transparent`
+  }
+}
+
+
+/** A Text/etc. node's own color field as `color` (solid) or a `background-clip: text` gradient — `color` itself has no gradient equivalent. Mirrors applyTextColor in overlays/custom.html. */
+export function textColorStyle(value: string): React.CSSProperties {
+  if (!isGradientColor(value)) return { color: value }
+  return {
+    backgroundImage: value,
+    WebkitBackgroundClip: 'text',
+    backgroundClip: 'text',
+    color: 'transparent',
+    WebkitTextFillColor: 'transparent'
+  } as React.CSSProperties
 }
 
 

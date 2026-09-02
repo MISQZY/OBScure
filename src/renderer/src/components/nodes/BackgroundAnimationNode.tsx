@@ -50,7 +50,7 @@ export function BackgroundAnimationNode({ id, data }: NodeProps) {
         />
       </Field>
       <Field label="Color">
-        <ColorPicker value={(data.color as string) || '#18181b'} onChange={(val) => updateNodeData(id, { color: val })} />
+        <ColorPicker value={(data.color as string) || '#18181b'} onChange={(val) => updateNodeData(id, { color: val })} allowGradient={false} />
       </Field>
       <Field label="Speed">
         <NumberInput value={data.speed as number} onChange={(v) => updateNodeData(id, { speed: v })} min={0.5} max={2.5} fallback={1} savedValue={saved.speed as number} className={numberInputClass} />

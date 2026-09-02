@@ -519,14 +519,12 @@
         const shadow = lastOfType(orderedMods, 'shadow')
         if (shadow) {
           const d = shadow.data || {}
-          const color = hexToRgba(d.color || '#000000', d.opacity ?? 60)
-          style.filter = `drop-shadow(${d.offsetX ?? 0}px ${d.offsetY ?? 2}px ${d.blur ?? 6}px ${color})`
+          style.filter = shadowFilter(d.color || '#000000', d.opacity ?? 60, d.offsetX ?? 0, d.offsetY ?? 2, d.blur ?? 6)
         } else {
           const baseShadow = lastOfType(baseMods, 'shadow')
           if (baseShadow) {
             const d = baseShadow.data || {}
-            const color = hexToRgba(d.color || '#000000', d.opacity ?? 60)
-            style.filter = `drop-shadow(${d.offsetX ?? 0}px ${d.offsetY ?? 2}px ${d.blur ?? 6}px ${color})`
+            style.filter = shadowFilter(d.color || '#000000', d.opacity ?? 60, d.offsetX ?? 0, d.offsetY ?? 2, d.blur ?? 6)
           }
         }
 
@@ -929,6 +927,53 @@
         return `rgba(${r}, ${g}, ${b}, ${opacityPercent / 100})`
       }
 
+      // A color field (Box's background/border, Text's color, Shadow's
+      // color, ...) is either a plain `#rrggbb` or a `linear-gradient(...)`
+      // CSS string from ColorPicker's Gradient tab — mirrors isGradientColor/
+      // gradientStopColors/backgroundLayer in lib/gradient.ts. Only ever
+      // needs to round-trip strings that ColorPicker itself produced (hex
+      // stops, always a `<n>%` position), same scope as the TS parser.
+      function isGradientColor(value) {
+        return typeof value === 'string' && value.trim().startsWith('linear-gradient(')
+      }
+      function gradientStopColors(value) {
+        const match = /^linear-gradient\(([\s\S]*)\)$/.exec(value.trim())
+        if (!match) return []
+        const parts = match[1].split(',').map((s) => s.trim()).filter(Boolean)
+        const rest = /^-?\d+(\.\d+)?deg$/.test(parts[0]) ? parts.slice(1) : parts
+        return rest.map((p) => p.split(/\s+/)[0])
+      }
+      // A solid or gradient color as one `background` layer, always as a
+      // background-image (never background-color) — the `background`
+      // shorthand only allows a plain color in its LAST layer, and the
+      // gradient-border trick (applyBorder below) needs the fill as a
+      // non-last layer.
+      function backgroundLayer(value, box) {
+        const image = isGradientColor(value) ? value : `linear-gradient(${value}, ${value})`
+        return `${image} ${box}`
+      }
+      // Mirrors shadowFilter in sceneUtils/style.ts — filter: drop-shadow()
+      // has no gradient equivalent, so a gradient color stacks one
+      // drop-shadow per stop (same offset/blur) as a soft multi-color glow.
+      function shadowFilter(color, opacityPercent, offsetX, offsetY, blur) {
+        const colors = isGradientColor(color) ? gradientStopColors(color) : [color]
+        return colors.map((c) => `drop-shadow(${offsetX}px ${offsetY}px ${blur}px ${hexToRgba(c, opacityPercent)})`).join(' ')
+      }
+      // Mirrors applyTextColor's counterpart, textColorStyle in
+      // sceneUtils/style.ts — `color` has no gradient equivalent, so a
+      // gradient value paints via background-clip: text instead.
+      function applyTextColor(el, value) {
+        if (!isGradientColor(value)) {
+          el.style.color = value
+          return
+        }
+        el.style.backgroundImage = value
+        el.style.webkitBackgroundClip = 'text'
+        el.style.backgroundClip = 'text'
+        el.style.color = 'transparent'
+        el.style.webkitTextFillColor = 'transparent'
+      }
+
       function applyModifierStyle(el, mods) {
         let transformStr = ''
         const transform = lastOfType(mods, 'transform')
@@ -1008,8 +1053,7 @@
         const shadow = lastOfType(mods, 'shadow')
         if (shadow) {
           const d = shadow.data || {}
-          const color = hexToRgba(d.color || '#000000', d.opacity ?? 60)
-          el.style.filter = `drop-shadow(${d.offsetX ?? 0}px ${d.offsetY ?? 2}px ${d.blur ?? 6}px ${color})`
+          el.style.filter = shadowFilter(d.color || '#000000', d.opacity ?? 60, d.offsetX ?? 0, d.offsetY ?? 2, d.blur ?? 6)
         }
         // Hide — a manual on/off switch, mirrors modifierStyle in
         // SceneBuilderPage.tsx. Hidden (the default) unless its own Hidden
@@ -1210,7 +1254,7 @@
           span.textContent = text
           return span
         }, node.id)
-        el.style.color = d.color || '#ffffff'
+        applyTextColor(el, d.color || '#ffffff')
         const align = d.align || 'left'
         const verticalAlign = d.verticalAlign || 'top'
         el.style.textAlign = align
@@ -1253,10 +1297,25 @@
       }
 
       // Same borderEnabled/borderWidth/borderColor shape as Box's own fields
-      // — shared by buildImage/buildVideo; buildBox sets its own border
-      // inline since it also needs the fields for other purposes.
-      function applyBorder(el, d) {
-        if (d.borderEnabled) el.style.border = `${d.borderWidth ?? 2}px solid ${d.borderColor || '#ffffff'}`
+      // — shared by buildImage/buildVideo/buildBox. Also sets `fill` as
+      // `el`'s background, since a gradient border needs `background` itself
+      // (no `border-color: <gradient>`) — see borderBoxStyle's own doc
+      // comment in sceneUtils/style.ts for the padding-box/border-box trick
+      // this mirrors.
+      function applyBorder(el, d, fill) {
+        if (!d.borderEnabled) {
+          el.style.background = fill
+          return
+        }
+        const width = d.borderWidth ?? 2
+        const color = d.borderColor || '#ffffff'
+        if (isGradientColor(color)) {
+          el.style.background = `${backgroundLayer(fill, 'padding-box')}, ${backgroundLayer(color, 'border-box')}`
+          el.style.border = `${width}px solid transparent`
+        } else {
+          el.style.background = fill
+          el.style.border = `${width}px solid ${color}`
+        }
       }
 
       // A Box's corner treatment (see BOX_SHAPE_IDS' own doc comment in
@@ -1289,7 +1348,7 @@
         wrap.style.width = '96px'
         wrap.style.height = '96px'
         wrap.style.borderRadius = `${d.borderRadius ?? 8}px`
-        applyBorder(wrap, d)
+        applyBorder(wrap, d, 'rgba(255, 255, 255, 0.08)')
         // An explicit Content wire (forceAudioCover, from Audio Player's own
         // Content output into this node's Content socket — see hasAudioCover/
         // AUDIO_PLAYER_OUTPUTS in components/nodes/index.tsx) takes priority
@@ -1342,7 +1401,7 @@
         wrap.style.width = '320px'
         wrap.style.height = '180px'
         wrap.style.borderRadius = `${d.borderRadius ?? 8}px`
-        applyBorder(wrap, d)
+        applyBorder(wrap, d, 'rgba(255, 255, 255, 0.08)')
         if (d.src) {
           const video = document.createElement('video')
           video.src = d.src
@@ -1845,10 +1904,9 @@
         // index.tsx) skips all of these — it's an invisible wrapper, not a
         // card.
         if (isBox) {
-          container.style.background = d.background || '#18181b'
           container.style.padding = `${d.paddingY ?? 12}px ${d.paddingX ?? 16}px`
           applyBoxShape(container, d)
-          applyBorder(container, d)
+          applyBorder(container, d, d.background || '#18181b')
         }
         container.style.position = 'relative'
         container.style.flexDirection = orderingFlexDirection(incomingNodes)

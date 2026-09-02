@@ -2,7 +2,7 @@ import { Node } from "@xyflow/react";
 import { Music, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OverlayUrls } from "@shared/types";
-import { borderStyle, Anim } from "../sceneUtils";
+import { borderBoxStyle, Anim } from "../sceneUtils";
 
 export function ImageView({
   node,
@@ -40,7 +40,6 @@ export function ImageView({
       data-animation={anim?.type}
       style={
         {
-          background: 'rgba(255, 255, 255, 0.08)',
           // No own Width/Height field (see ImageNode's own doc comment in
           // components/nodes/index.tsx) — 96x96 here is only the fallback;
           // `...style` (a wired Size node's width/height, from
@@ -49,7 +48,7 @@ export function ImageView({
           height: 96,
           ...style,
           borderRadius: `${(node.data.borderRadius as number) ?? 8}px`,
-          border: borderStyle(node),
+          ...borderBoxStyle(node, 'rgba(255, 255, 255, 0.08)'),
           ...(anim?.duration ? { '--anim-duration': `${anim.duration}ms` } : {})
         } as React.CSSProperties
       }
