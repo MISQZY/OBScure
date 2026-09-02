@@ -13,6 +13,12 @@
     "downloading": "Downloading... {percent}%",
     "installing": "Installing..."
   },
+  "whatsNew": {
+    "title": "What's new",
+    "description": "Updated from {from} to {to}",
+    "noNotes": "No release notes for this version.",
+    "close": "Got it"
+  },
   "profiles": {
     "menuLabel": "Profiles",
     "manage": "Manage profiles...",

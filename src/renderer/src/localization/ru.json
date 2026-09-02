@@ -13,6 +13,12 @@
     "downloading": "Загрузка... {percent}%",
     "installing": "Установка..."
   },
+  "whatsNew": {
+    "title": "Что нового",
+    "description": "Обновлено с {from} до {to}",
+    "noNotes": "Для этой версии нет описания изменений.",
+    "close": "Понятно"
+  },
   "profiles": {
     "menuLabel": "Профили",
     "manage": "Управление профилями...",

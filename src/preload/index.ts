@@ -13,7 +13,8 @@ import type {
   RouletteStatePayload,
   SettingKey,
   TwitchChannelStats,
-  TwitchCustomReward
+  TwitchCustomReward,
+  WhatsNewPayload
 } from '../shared/types'
 import type { EventsConfigs, EventTarget } from '../shared/eventsConfig'
 import type { CanvasConfig } from '../shared/canvasConfig'
@@ -115,7 +116,8 @@ const api = {
     const listener = (_event: IpcRendererEvent, status: AppUpdaterStatus): void => callback(status)
     ipcRenderer.on('updater:status', listener)
     return () => ipcRenderer.off('updater:status', listener)
-  }
+  },
+  getWhatsNew: (): Promise<WhatsNewPayload | null> => ipcRenderer.invoke('whatsNew:get')
 }
 
 contextBridge.exposeInMainWorld('obscure', api)

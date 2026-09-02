@@ -12,7 +12,8 @@ import type {
   RouletteStatePayload,
   SettingKey,
   TwitchChannelStats,
-  TwitchCustomReward
+  TwitchCustomReward,
+  WhatsNewPayload
 } from '../shared/types'
 import type { EventsConfigs, EventTarget } from '../shared/eventsConfig'
 import type { CanvasConfig } from '../shared/canvasConfig'
@@ -78,6 +79,7 @@ export interface ObscureApi {
   getUpdaterStatus: () => Promise<AppUpdaterStatus>
   downloadUpdate: () => Promise<void>
   onUpdaterStatus: (callback: (status: AppUpdaterStatus) => void) => () => void
+  getWhatsNew: () => Promise<WhatsNewPayload | null>
 }
 
 declare global {

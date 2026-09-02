@@ -25,6 +25,7 @@ import { registerEventsHandlers } from "./ipc/eventsHandlers";
 import { registerProfileHandlers } from "./ipc/profileHandlers";
 import { registerIntegrationsHandlers } from "./ipc/integrationsHandlers";
 import { initUpdater } from "./updater";
+import { initWhatsNew } from "./whatsNew";
 import { initLogger, logError, logInfo, logWarn } from "./logger";
 import type { NowPlayingPayload } from "../shared/types";
 import type { CustomLocalePack } from "../shared/customConfig";
@@ -398,6 +399,7 @@ app.whenReady().then(async () => {
 
   createMainWindow();
   initUpdater(() => mainWindow);
+  initWhatsNew(config, app.getVersion());
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();

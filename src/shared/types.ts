@@ -174,3 +174,17 @@ export type AppUpdaterStatus =
   | { state: 'downloaded'; version: string }
   | { state: 'error'; message: string }
   | { state: 'unsupported' }
+
+/** One GitHub release's notes, as shown in the "what's new" dialog (src/main/whatsNew.ts). */
+export interface WhatsNewEntry {
+  version: string
+  /** Commit subject lines between this release and the one before it (merge commits and the release's own version-bump commit filtered out) — built from git history rather than GitHub's PR-based --generate-notes, since this project pushes directly to main. */
+  notes: string[]
+}
+
+/** Computed once per launch: every release between the version this profile last saw (exclusive) and the one now running (inclusive), newest first. Null means there's nothing to show — first run, no version change since last launch, or the GitHub fetch failed. */
+export interface WhatsNewPayload {
+  fromVersion: string
+  toVersion: string
+  entries: WhatsNewEntry[]
+}

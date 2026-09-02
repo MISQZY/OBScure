@@ -3,6 +3,7 @@ import { CustomOverlaysProvider } from '@/providers/CustomOverlaysProvider'
 import { AppSidebar } from '@/components/layout/AppSidebar'
 import { TitleBar } from '@/components/layout/TitleBar'
 import { TourOverlay } from '@/components/TourOverlay'
+import { WhatsNewDialog } from '@/components/WhatsNewDialog'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -102,6 +103,7 @@ function AppShell() {
         </SidebarInset>
       </SidebarProvider>
       <TourOverlay />
+      <WhatsNewDialog />
     </TooltipProvider>
   )
 }
