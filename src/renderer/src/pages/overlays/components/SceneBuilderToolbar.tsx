@@ -114,7 +114,7 @@ export function SceneBuilderToolbar({
               ;(e.target as HTMLInputElement).blur()
             }
           }}
-          aria-label="Scene name"
+          aria-label={t.sceneBuilder.nav.sceneName}
           className="min-w-0 flex-1 bg-transparent text-lg font-semibold tracking-tight text-foreground outline-none border-b border-transparent rounded-sm px-0.5 -mx-0.5 hover:border-border focus:border-primary transition-colors"
         />
         <AlertDialog>

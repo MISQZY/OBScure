@@ -1,6 +1,7 @@
 import { useRef, useLayoutEffect, useState } from "react";
 import { Node } from "@xyflow/react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/providers/I18nProvider";
 import { interpolate, textColorStyle, Anim, OverflowAutoScroll } from "../sceneUtils";
 
 /**
@@ -130,6 +131,7 @@ export function TextView({
    */
   crossAxis: 'horizontal' | 'vertical'
 }) {
+  const { t } = useI18n()
   // Bold defaults true (data.bold !== false) — see the matching comment on
   // TextNode in components/nodes/index.tsx: font-weight:700 used to be
   // hardcoded here unconditionally, so every pre-existing Text node must
@@ -196,7 +198,7 @@ export function TextView({
           // state. An empty Text node has zero natural width, so without this
           // it (and any Box wrapping only it) collapses to a near-invisible
           // sliver once scaled down for the preview panel.
-          <span className="opacity-40 italic">{replaceText != null ? 'No entrants' : 'Empty text'}</span>
+          <span className="opacity-40 italic">{replaceText != null ? t.sceneBuilder.preview.noEntrants : t.sceneBuilder.preview.emptyText}</span>
         )
         return autoScroll ? <AutoScrollTrack scroll={autoScroll}>{content}</AutoScrollTrack> : content
       })()}

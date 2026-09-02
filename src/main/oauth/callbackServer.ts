@@ -1,5 +1,8 @@
 import { createServer, type Server } from "node:http";
 
+/** Loopback port every OAuth redirect URI (Spotify, YouTube) is registered against with its provider — shared so the two integrations can't drift apart. */
+export const OAUTH_CALLBACK_PORT = 47891;
+
 interface WaitForRedirectOptions {
   port: number;
 

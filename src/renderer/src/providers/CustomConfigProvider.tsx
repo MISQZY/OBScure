@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Palette } from 'lucide-react'
 import type { CustomLocalePack, CustomThemePack } from '@shared/customConfig'
 import { BUILTIN_THEMES, type ThemeDefinition } from '@/lib/theme'
@@ -131,11 +131,11 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
   // Re-derives titleBarOverlay before caching so theme-init.js's bootstrap
   // cache — which applies a custom theme's overlay directly, with no
   // conversion logic of its own — never reads a stale/hand-authored value.
-  const cacheThemePacks = (packs: CustomThemePack[]): CustomThemePack[] => {
+  const cacheThemePacks = useCallback((packs: CustomThemePack[]): CustomThemePack[] => {
     const normalized = packs.map(normalizeThemePack)
     writeCache(THEME_CACHE_KEY, normalized)
     return normalized
-  }
+  }, [])
 
   useEffect(() => {
     window.obscure.getCustomThemes().then((packs) => {
@@ -145,20 +145,20 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
       writeCache(LOCALE_CACHE_KEY, packs)
       setCustomLocales(packs.map(packToLocaleEntry))
     })
-  }, [])
+  }, [cacheThemePacks])
 
-  const deleteCustomTheme = async (id: string): Promise<void> => {
+  const deleteCustomTheme = useCallback(async (id: string): Promise<void> => {
     const packs = await window.obscure.deleteCustomTheme(id)
     setCustomThemes(cacheThemePacks(packs).map(packToThemeDefinition))
-  }
+  }, [cacheThemePacks])
 
-  const deleteCustomLocale = async (id: string): Promise<void> => {
+  const deleteCustomLocale = useCallback(async (id: string): Promise<void> => {
     const packs = await window.obscure.deleteCustomLocale(id)
     writeCache(LOCALE_CACHE_KEY, packs)
     setCustomLocales(packs.map(packToLocaleEntry))
-  }
+  }, [])
 
-  const uploadTheme = async (): Promise<UploadOutcome> => {
+  const uploadTheme = useCallback(async (): Promise<UploadOutcome> => {
     const file = await window.obscure.openConfigFile()
     if (!file) return 'cancelled'
 
@@ -192,9 +192,9 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
     const packs = await window.obscure.saveCustomTheme(pack)
     setCustomThemes(cacheThemePacks(packs).map(packToThemeDefinition))
     return 'ok'
-  }
+  }, [customThemes, cacheThemePacks])
 
-  const uploadLocale = async (): Promise<UploadOutcome> => {
+  const uploadLocale = useCallback(async (): Promise<UploadOutcome> => {
     const file = await window.obscure.openConfigFile()
     if (!file) return 'cancelled'
 
@@ -229,9 +229,9 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
     writeCache(LOCALE_CACHE_KEY, packs)
     setCustomLocales(packs.map(packToLocaleEntry))
     return 'ok'
-  }
+  }, [customLocales])
 
-  const downloadExampleTheme = async (): Promise<boolean> => {
+  const downloadExampleTheme = useCallback(async (): Promise<boolean> => {
     const lightTheme = BUILTIN_THEMES.find((t) => t.id === 'light') ?? BUILTIN_THEMES[0]
     // titleBarOverlay is deliberately omitted: it's derived from --titlebar /
     // --muted-foreground in `colors` on upload, so the example doesn't need
@@ -243,9 +243,9 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
       colors: lightTheme.colors
     }
     return window.obscure.saveConfigFile('example-theme.json', JSON.stringify(payload, null, 2))
-  }
+  }, [])
 
-  const downloadExampleLocale = async (): Promise<boolean> => {
+  const downloadExampleLocale = useCallback(async (): Promise<boolean> => {
     const payload: CustomLocalePack = {
       id: 'example-lang',
       name: 'Example language',
@@ -253,24 +253,32 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
       dictionary: en
     }
     return window.obscure.saveConfigFile('example-lang.json', JSON.stringify(payload, null, 2))
-  }
+  }, [])
 
-  return (
-    <CustomConfigContext.Provider
-      value={{
-        customThemes,
-        customLocales,
-        uploadTheme,
-        uploadLocale,
-        deleteCustomTheme,
-        deleteCustomLocale,
-        downloadExampleTheme,
-        downloadExampleLocale
-      }}
-    >
-      {children}
-    </CustomConfigContext.Provider>
+  const value = useMemo<CustomConfigContextValue>(
+    () => ({
+      customThemes,
+      customLocales,
+      uploadTheme,
+      uploadLocale,
+      deleteCustomTheme,
+      deleteCustomLocale,
+      downloadExampleTheme,
+      downloadExampleLocale
+    }),
+    [
+      customThemes,
+      customLocales,
+      uploadTheme,
+      uploadLocale,
+      deleteCustomTheme,
+      deleteCustomLocale,
+      downloadExampleTheme,
+      downloadExampleLocale
+    ]
   )
+
+  return <CustomConfigContext.Provider value={value}>{children}</CustomConfigContext.Provider>
 }
 
 export function useCustomConfig(): CustomConfigContextValue {

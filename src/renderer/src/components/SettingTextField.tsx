@@ -3,6 +3,7 @@ import { Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { TRANSIENT_FEEDBACK_MS } from '@/components/constants'
 import { useI18n } from '@/providers/I18nProvider'
 import type { SettingKey } from '@shared/types'
 
@@ -39,7 +40,7 @@ export function SettingTextField({
   const save = (): void => {
     void window.obscure.setSetting(settingKey, value).then(() => {
       setSaved(true)
-      setTimeout(() => setSaved(false), 1500)
+      setTimeout(() => setSaved(false), TRANSIENT_FEEDBACK_MS)
     })
   }
 

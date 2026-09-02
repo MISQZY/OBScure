@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Node, Edge } from "@xyflow/react";
 import type { OverlayUrls } from "@shared/types";
+import { useI18n } from "@/providers/I18nProvider";
 import { pickRandomVariant, MAX_BOX_DEPTH, NodeMap, ScheduledTask } from "../sceneUtils";
 import { ContentView } from "./ContentView";
 
@@ -51,6 +52,7 @@ export function RandomPickView({
   depth?: number
   crossAxis: 'horizontal' | 'vertical'
 }) {
+  const { t } = useI18n()
   // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately NOT keyed on edges/map/node, whose identity changes on nearly every unrelated graph edit; see this component's own doc comment for why only playToken (plus node.id, in case two Random Pick nodes ever shared a key) should trigger a fresh pick.
   const picked = useMemo(() => (depth >= MAX_BOX_DEPTH ? null : pickRandomVariant(node, edges, map)), [node.id, playToken])
   if (!picked) {
@@ -59,7 +61,7 @@ export function RandomPickView({
       // shape" placeholder — without this, an unwired Random Pick just
       // silently renders nothing, which reads as broken rather than empty.
       <span className="text-white/30 italic whitespace-nowrap" style={{ fontSize: 20 }}>
-        Empty Random Pick — wire Text, Image, Video, Shape, Group or another Random Pick into it
+        {t.sceneBuilder.preview.emptyRandomPick}
       </span>
     )
   }

@@ -13,6 +13,7 @@ const TOOLTIP_WIDTH = 320
 const FIND_RETRY_MS = 50
 const FIND_MAX_ATTEMPTS = 60
 const RECT_POLL_MS = 300
+const SPOTLIGHT_PAD = 6
 
 interface Position {
   top: number
@@ -134,7 +135,6 @@ export function TourOverlay() {
   const content = t.onboarding.steps[step.id]
   const isFirst = stepIndex === 0
   const isLast = stepIndex === totalSteps - 1
-  const spotlightPad = 6
 
   return createPortal(
     <div className="fixed inset-0 z-[1000]" role="dialog" aria-modal="true">
@@ -145,10 +145,10 @@ export function TourOverlay() {
         <div
           className="pointer-events-none fixed rounded-lg shadow-[0_0_0_3px_rgba(255,255,255,0.9),0_0_0_9999px_rgba(0,0,0,0.65)] transition-[top,left,width,height] duration-200 ease-out"
           style={{
-            top: rect.top - spotlightPad,
-            left: rect.left - spotlightPad,
-            width: rect.width + spotlightPad * 2,
-            height: rect.height + spotlightPad * 2
+            top: rect.top - SPOTLIGHT_PAD,
+            left: rect.left - SPOTLIGHT_PAD,
+            width: rect.width + SPOTLIGHT_PAD * 2,
+            height: rect.height + SPOTLIGHT_PAD * 2
           }}
         />
       )}

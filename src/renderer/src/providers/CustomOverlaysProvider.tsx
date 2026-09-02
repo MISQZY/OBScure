@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { CustomOverlay, OverlayFolder } from '@shared/types'
 
 interface CustomOverlaysContextValue {
@@ -34,42 +34,41 @@ export function CustomOverlaysProvider({ children }: { children: ReactNode }) {
     window.obscure.getCustomOverlayFolders().then(setFolders)
   }, [])
 
-  const saveOverlay = async (overlay: CustomOverlay): Promise<void> => {
+  const saveOverlay = useCallback(async (overlay: CustomOverlay): Promise<void> => {
     setOverlays(await window.obscure.saveCustomOverlay(overlay))
-  }
+  }, [])
 
-  const deleteOverlay = async (id: string): Promise<void> => {
+  const deleteOverlay = useCallback(async (id: string): Promise<void> => {
     setOverlays(await window.obscure.deleteCustomOverlay(id))
-  }
+  }, [])
 
-  const testOverlay = async (overlay: CustomOverlay): Promise<void> => {
+  const testOverlay = useCallback(async (overlay: CustomOverlay): Promise<void> => {
     await window.obscure.testCustomOverlay(overlay)
-  }
+  }, [])
 
-  const saveFolder = async (folder: OverlayFolder): Promise<void> => {
+  const saveFolder = useCallback(async (folder: OverlayFolder): Promise<void> => {
     setFolders(await window.obscure.saveCustomOverlayFolder(folder))
-  }
+  }, [])
 
-  const deleteFolder = async (id: string): Promise<void> => {
+  const deleteFolder = useCallback(async (id: string): Promise<void> => {
     setFolders(await window.obscure.deleteCustomOverlayFolder(id))
     setOverlays((current) =>
       current.map((o) => (o.folderId === id ? { ...o, folderId: undefined } : o))
     )
-  }
+  }, [])
 
-  const moveOverlayToFolder = async (overlayId: string, folderId: string | undefined): Promise<void> => {
+  const moveOverlayToFolder = useCallback(async (overlayId: string, folderId: string | undefined): Promise<void> => {
     const overlay = overlays.find((o) => o.id === overlayId)
     if (!overlay || overlay.folderId === folderId) return
     await saveOverlay({ ...overlay, folderId })
-  }
+  }, [overlays, saveOverlay])
 
-  return (
-    <CustomOverlaysContext.Provider
-      value={{ overlays, saveOverlay, deleteOverlay, testOverlay, folders, saveFolder, deleteFolder, moveOverlayToFolder }}
-    >
-      {children}
-    </CustomOverlaysContext.Provider>
+  const value = useMemo<CustomOverlaysContextValue>(
+    () => ({ overlays, saveOverlay, deleteOverlay, testOverlay, folders, saveFolder, deleteFolder, moveOverlayToFolder }),
+    [overlays, saveOverlay, deleteOverlay, testOverlay, folders, saveFolder, deleteFolder, moveOverlayToFolder]
   )
+
+  return <CustomOverlaysContext.Provider value={value}>{children}</CustomOverlaysContext.Provider>
 }
 
 export function useCustomOverlays(): CustomOverlaysContextValue {

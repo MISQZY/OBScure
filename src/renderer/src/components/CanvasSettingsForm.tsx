@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { TRANSIENT_FEEDBACK_MS } from '@/components/constants'
 import { useI18n } from '@/providers/I18nProvider'
 import {
   ASPECT_RATIO_IDS,
@@ -81,7 +82,7 @@ export function CanvasSettingsForm({ current, onUpdated }: CanvasSettingsFormPro
       })
       onUpdated(config)
       setSaved(true)
-      setTimeout(() => setSaved(false), 1500)
+      setTimeout(() => setSaved(false), TRANSIENT_FEEDBACK_MS)
     } finally {
       setPending(false)
     }

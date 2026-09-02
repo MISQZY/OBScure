@@ -6,7 +6,14 @@
     "integrations": "Integrations",
     "settings": "Settings",
     "releaseNotes": "View release notes on GitHub",
-    "deleteFolderConfirm": "Delete folder \"{name}\"? Overlays inside will not be deleted."
+    "deleteFolderConfirm": "Delete folder \"{name}\"? Overlays inside will not be deleted.",
+    "newOverlayPlaceholder": "Overlay name...",
+    "newFolderPlaceholder": "Folder name...",
+    "newOverlayInFolder": "New overlay in folder",
+    "deleteFolder": "Delete folder",
+    "newFolder": "New folder",
+    "emptyFolder": "Empty",
+    "noOverlays": "No overlays yet"
   },
   "updater": {
     "update": "Update",
@@ -345,7 +352,27 @@
       "saved": "Saved",
       "saveFailed": "Save failed",
       "test": "Test — plays this scene, including unsaved changes, live in a connected Browser Source without saving.",
-      "tutorial": "Tutorial — a detailed walkthrough of Scene Builder."
+      "tutorial": "Tutorial — a detailed walkthrough of Scene Builder.",
+      "sceneName": "Scene name"
+    },
+    "noScene": {
+      "title": "No Scene Selected",
+      "description": "Please select an overlay from the sidebar or create a new one using the \"+\" button under \"Overlays\"."
+    },
+    "preview": {
+      "label": "Preview",
+      "hide": "Hide preview",
+      "show": "Show preview",
+      "play": "Play animations & sound",
+      "resize": "Drag to resize preview",
+      "waitingForTypes": "Waiting for {types} — press Play to simulate it.",
+      "waitingForFallback": "a track change or round start",
+      "nothingConnected": "Nothing connected to Scene yet — wire a Text, Image, Video, Shape or Group into it.",
+      "emptyShape": "Empty shape — wire a Text, Image, Video, Shape or Group into it",
+      "emptyGroup": "Empty group — wire a Text, Image, Video, Shape or Group into it",
+      "noEntrants": "No entrants",
+      "emptyText": "Empty text",
+      "emptyRandomPick": "Empty Random Pick — wire Text, Image, Video, Shape, Group or another Random Pick into it"
     },
     "tooltip": {
       "expand": "Expand",

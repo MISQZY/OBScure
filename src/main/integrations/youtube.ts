@@ -1,10 +1,10 @@
 import { net, shell } from "electron";
 import { BaseIntegration } from "./types";
-import { waitForRedirect } from "../oauth/callbackServer";
+import { OAUTH_CALLBACK_PORT, waitForRedirect } from "../oauth/callbackServer";
 import { generateState } from "../oauth/pkce";
 import { logError } from "../logger";
 
-const REDIRECT_PORT = 47891;
+const REDIRECT_PORT = OAUTH_CALLBACK_PORT;
 const REDIRECT_PATH = "/callback/youtube";
 const REDIRECT_URI = `http://127.0.0.1:${REDIRECT_PORT}${REDIRECT_PATH}`;
 const SCOPES = "https://www.googleapis.com/auth/youtube.readonly";

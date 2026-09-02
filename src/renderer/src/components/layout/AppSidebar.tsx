@@ -102,7 +102,7 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
       >
         <input
           autoFocus
-          placeholder="Overlay name..."
+          placeholder={t.sidebar.newOverlayPlaceholder}
           className="w-full bg-background border rounded px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary"
           value={newOverlayName}
           onChange={(e) => setNewOverlayName(e.target.value)}
@@ -237,7 +237,7 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
               setNewOverlayName('')
             }}
             className="ml-auto flex items-center justify-center p-1 rounded opacity-0 group-hover/folder:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground shrink-0"
-            title="New overlay in folder"
+            title={t.sidebar.newOverlayInFolder}
           >
             <Plus className="size-3.5" />
           </button>
@@ -246,7 +246,7 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
               <button
                 onClick={(e) => e.stopPropagation()}
                 className="flex items-center justify-center p-1 rounded opacity-0 group-hover/folder:opacity-100 hover:bg-destructive/10 hover:text-destructive shrink-0"
-                title="Delete folder"
+                title={t.sidebar.deleteFolder}
               >
                 <Trash2 className="size-3.5" />
               </button>
@@ -272,7 +272,7 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
             {folderOverlays.length === 0 && creatingOverlayFolderId !== folder.id && (
               <SidebarMenuSubItem>
                 <SidebarMenuSubButton className="opacity-50 pointer-events-none">
-                  <span>Empty</span>
+                  <span>{t.sidebar.emptyFolder}</span>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
             )}
@@ -324,7 +324,7 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
                         setNewFolderName('')
                       }}
                       className="ml-auto flex items-center justify-center p-1 rounded hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                      title="New folder"
+                      title={t.sidebar.newFolder}
                     >
                       <FolderPlus className="size-4" />
                     </button>
@@ -368,7 +368,7 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
                         >
                           <input
                             autoFocus
-                            placeholder="Folder name..."
+                            placeholder={t.sidebar.newFolderPlaceholder}
                             className="w-full bg-background border rounded px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary"
                             value={newFolderName}
                             onChange={(e) => setNewFolderName(e.target.value)}
@@ -399,7 +399,7 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
                     {overlays.length === 0 && folders.length === 0 && !isCreatingFolder && creatingOverlayFolderId === undefined && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton className="opacity-50 pointer-events-none">
-                          <span>No overlays yet</span>
+                          <span>{t.sidebar.noOverlays}</span>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}

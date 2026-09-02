@@ -3,6 +3,7 @@ import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area'
 import { Check, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollBar } from '@/components/ui/scroll-area'
+import { TRANSIENT_FEEDBACK_MS } from '@/components/constants'
 import { useI18n } from '@/providers/I18nProvider'
 import { cn } from '@/lib/utils'
 
@@ -30,7 +31,7 @@ export function CopyableUrl({ url, className }: CopyableUrlProps) {
   const copy = async (): Promise<void> => {
     await navigator.clipboard.writeText(url)
     setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+    setTimeout(() => setCopied(false), TRANSIENT_FEEDBACK_MS)
   }
 
   return (

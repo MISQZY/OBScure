@@ -19,6 +19,11 @@ import { useEffect, useState } from 'react'
  * RandomWidgetView) the same way RouletteWheel's own `size` prop does,
  * without hand-picking new Tailwind size classes for every scale.
  */
+/** Stop delay for the i-th rolling digit — staggered so they don't all land at once. */
+export function slotStopDelayMs(i: number): number {
+  return 1500 + i * 400
+}
+
 export function SlotMachineNumber({
   targetNumber,
   min,
@@ -115,7 +120,7 @@ export function RandomSlotMachine({
       style={{ flexDirection, flexWrap: flexDirection === 'row' || flexDirection === 'row-reverse' ? 'wrap' : 'nowrap', gap: gap * scale }}
     >
       {numbers.map((n, i) => (
-        <SlotMachineNumber key={i} targetNumber={n} min={min} max={max} stopDelayMs={1500 + i * 400} animate={animate} scale={scale} />
+        <SlotMachineNumber key={i} targetNumber={n} min={min} max={max} stopDelayMs={slotStopDelayMs(i)} animate={animate} scale={scale} />
       ))}
     </div>
   )

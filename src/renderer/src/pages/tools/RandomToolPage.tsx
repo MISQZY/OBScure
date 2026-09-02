@@ -6,7 +6,7 @@ import { CopyableValue } from '@/components/CopyableValue'
 import { useI18n } from '@/providers/I18nProvider'
 import { DEFAULT_RANDOM_CONFIG, type RandomConfig } from '@shared/eventsConfig'
 import type { RandomStatePayload } from '@shared/types'
-import { SlotMachineNumber } from './RandomSlotMachine'
+import { SlotMachineNumber, slotStopDelayMs } from './RandomSlotMachine'
 
 const IDLE_STATE: RandomStatePayload = {
   phase: 'idle',
@@ -73,7 +73,7 @@ export function RandomToolPage() {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="random-count">{t.events.random.countLabel || 'Количество'}</Label>
+          <Label htmlFor="random-count">{t.events.random.countLabel}</Label>
           <Input
             id="random-count"
             type="number"
@@ -100,7 +100,7 @@ export function RandomToolPage() {
                     targetNumber={n} 
                     min={state.min} 
                     max={state.max} 
-                    stopDelayMs={1500 + i * 400} 
+                    stopDelayMs={slotStopDelayMs(i)}
                   />
                 ))}
               </div>

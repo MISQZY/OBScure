@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ReactFlow, Controls, Background, MiniMap } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import './scene-preview-animations.css'
@@ -12,6 +12,7 @@ import type { NavKey } from '@/lib/nav'
 import type { OverlayUrls } from '@shared/types'
 import { CanvasConfig, DEFAULT_CANVAS_CONFIG } from '@shared/canvasConfig'
 import { useTour } from '@/providers/TourProvider'
+import { useI18n } from '@/providers/I18nProvider'
 import { displayEdges, minimapNodeColor, sceneTrigger, sceneAudioTrigger, processTrigger, buildProcessSchedule, processExitBufferMs } from './sceneUtils'
 import { ProcessToken } from './views'
 import { useSceneGraph } from './hooks/useSceneGraph'
@@ -31,6 +32,7 @@ export function SceneBuilderPage({
   customOverlayId?: string
   onNavigate: (key: NavKey) => void
 }) {
+  const { t } = useI18n()
   const { resolvedThemeId, themes } = useTheme()
   const isDark = themes.find((t) => t.id === resolvedThemeId)?.mode === 'dark'
 
@@ -118,18 +120,6 @@ export function SceneBuilderPage({
   const { canvasWrapperRef, isCompact, isNarrow } = useResponsiveCanvasLayout()
   const { previewWidth, handlePreviewResizeStart } = usePreviewResize()
 
-  if (!overlay) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
-        <Workflow className="w-16 h-16 mb-4 opacity-50" />
-        <h2 className="text-xl font-semibold text-foreground">No Scene Selected</h2>
-        <p className="mt-2 text-center max-w-sm">
-          Please select an overlay from the sidebar or create a new one using the "+" button under "Overlays".
-        </p>
-      </div>
-    )
-  }
-
   // A Start node (processTrigger) takes priority over the plain
   // Event+Timer→Scene model (sceneTrigger), which itself takes priority
   // over Audio-Player-driven visibility (sceneAudioTrigger) — see the doc
@@ -138,9 +128,18 @@ export function SceneBuilderPage({
   // default, optionally gated per-widget via its own Visibility socket
   // instead (see ROULETTE_OUTPUTS' own doc comment in components/nodes/
   // constants.ts).
-  const proc = processTrigger(nodes, edges)
-  const trigger = proc.active ? null : sceneTrigger(nodes, edges)
-  const audioTrigger = !proc.active && !trigger?.active && sceneAudioTrigger(nodes, edges)
+  // proc/trigger/audioTrigger only depend on the graph's own structure
+  // (types/edges), never on positions or on any of this page's own UI state
+  // (name/url-key input, locked, preview resize, ...) — memoized so typing
+  // in the toolbar or dragging the preview resize handle, which re-render
+  // this page on every keystroke/pixel, don't re-walk the whole graph for a
+  // result that hasn't changed.
+  const { proc, trigger, audioTrigger } = useMemo(() => {
+    const proc = processTrigger(nodes, edges)
+    const trigger = proc.active ? null : sceneTrigger(nodes, edges)
+    const audioTrigger = !proc.active && !trigger?.active && sceneAudioTrigger(nodes, edges)
+    return { proc, trigger, audioTrigger }
+  }, [nodes, edges])
   const eventActive = proc.active || Boolean(trigger?.active) || audioTrigger
   const eventState = {
     active: eventActive,
@@ -149,7 +148,13 @@ export function SceneBuilderPage({
     vars: eventActive ? eventVars : null,
     alertTypes: proc.active ? proc.alertTypes : (trigger?.alertTypes ?? [])
   }
-  const processBuilt = proc.active ? buildProcessSchedule(nodes, edges, eventState.vars) : null
+  // Walking the Start->End chain (up to MAX_PROCESS_STEPS) is the most
+  // expensive piece of the above — same reasoning, memoized against the same
+  // unrelated re-renders.
+  const processBuilt = useMemo(
+    () => (proc.active ? buildProcessSchedule(nodes, edges, eventState.vars) : null),
+    [proc.active, nodes, edges, eventState.vars]
+  )
   const processSchedule = processBuilt?.schedule ?? []
   // Real length (ms) of a running Process preview, totalMs plus the same
   // exit-animation buffer handlePlay's own rAF loop runs the clock out to —
@@ -161,6 +166,19 @@ export function SceneBuilderPage({
   // exit animation — mirrors overlays/custom.html's hideTriggeredContent,
   // which calls applyBackgroundFx(undefined, ...) before playExitAnimations.
   const previewPlayed = eventState.active ? eventPhase === 'showing' : playToken > 0
+  // Purely cosmetic per-edge styling pass (see displayEdges' own doc
+  // comment) — same unrelated-re-render reasoning as proc/trigger above.
+  const edgesForDisplay = useMemo(() => displayEdges(nodes, edges), [nodes, edges])
+
+  if (!overlay) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
+        <Workflow className="w-16 h-16 mb-4 opacity-50" />
+        <h2 className="text-xl font-semibold text-foreground">{t.sceneBuilder.noScene.title}</h2>
+        <p className="mt-2 text-center max-w-sm">{t.sceneBuilder.noScene.description}</p>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -173,7 +191,7 @@ export function SceneBuilderPage({
       <SavedNodeDataProvider savedNodes={overlay.nodes}>
         <ReactFlow
           nodes={nodes}
-          edges={displayEdges(nodes, edges)}
+          edges={edgesForDisplay}
           onNodesChange={onNodesChange}
           onNodeDragStart={onNodeDragStart}
           onNodeDragStop={onNodeDragStop}

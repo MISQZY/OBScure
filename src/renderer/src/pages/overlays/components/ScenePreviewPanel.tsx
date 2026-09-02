@@ -3,6 +3,7 @@ import { Panel, Node, Edge } from '@xyflow/react'
 import { PanelRight, Play } from 'lucide-react'
 import type { OverlayUrls } from '@shared/types'
 import { CanvasConfig } from '@shared/canvasConfig'
+import { useI18n } from '@/providers/I18nProvider'
 import { findBackgroundFx, findBackgroundFxLabel, ScheduledTask } from '../sceneUtils'
 import { BackgroundFxLayer, ScenePreview, PreviewEventState } from '../views'
 
@@ -43,6 +44,7 @@ export function ScenePreviewPanel({
   processClockMs: number
   previewPlayed: boolean
 }) {
+  const { t } = useI18n()
   const [previewOpen, setPreviewOpen] = useState(false)
   const backgroundFxNode = findBackgroundFx(nodes, edges)
 
@@ -52,7 +54,7 @@ export function ScenePreviewPanel({
         <button
           type="button"
           onClick={() => setPreviewOpen((open) => !open)}
-          title={previewOpen ? 'Hide preview' : 'Show preview'}
+          title={previewOpen ? t.sceneBuilder.preview.hide : t.sceneBuilder.preview.show}
           className="flex items-center justify-center p-2.5 rounded-lg border bg-card shadow-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
         >
           <PanelRight className="size-4" />
@@ -67,11 +69,11 @@ export function ScenePreviewPanel({
           }}
         >
           <div className="absolute z-10 top-2 right-2 flex items-center gap-1.5 bg-black/70 rounded-full pl-2.5 pr-1 py-1">
-            <span className="text-white text-xs font-medium">Preview</span>
+            <span className="text-white text-xs font-medium">{t.sceneBuilder.preview.label}</span>
             <button
               type="button"
               onClick={onPlay}
-              title="Play animations & sound"
+              title={t.sceneBuilder.preview.play}
               className="pointer-events-auto flex items-center justify-center size-5 rounded-full bg-white/15 text-white hover:bg-white/30 transition-colors cursor-pointer"
             >
               <Play className="size-3 fill-current" />
@@ -80,7 +82,7 @@ export function ScenePreviewPanel({
           {/* Bottom-left corner: the one corner that actually moves as this top-right-anchored box grows/shrinks — see usePreviewResize's own doc comment. Themed bg-card/border chip (not bare white lines) so the grip stays visible regardless of what color the scene underneath happens to be — a plain white icon disappeared against light overlay content. */}
           <div
             onMouseDown={onResizeStart}
-            title="Drag to resize preview"
+            title={t.sceneBuilder.preview.resize}
             className="pointer-events-auto absolute z-10 bottom-1 left-1 flex items-center justify-center size-4 rounded-sm bg-card/90 border border-border cursor-sw-resize opacity-70 hover:opacity-100 transition-opacity"
           >
             <div className="size-1.5 border-b-2 border-l-2 border-foreground/80 rounded-bl-sm" />

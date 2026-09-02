@@ -1,6 +1,7 @@
 import { Node, Edge } from "@xyflow/react";
 import { cn } from "@/lib/utils";
 import type { OverlayUrls } from "@shared/types";
+import { useI18n } from "@/providers/I18nProvider";
 import {
   incoming,
   orderingClass,
@@ -42,6 +43,7 @@ export function BoxView({
   urls: OverlayUrls | null
   depth?: number
 }) {
+  const { t } = useI18n()
   const isBox = node.type === 'box'
   const incomingNodes = incoming(node.id, edges, map)
   const children =
@@ -101,7 +103,7 @@ export function BoxView({
         // content (see TextView) so it survives the same scale-down instead
         // of vanishing at 10px.
         <span className="text-white/30 italic whitespace-nowrap" style={{ fontSize: 20 }}>
-          {isBox ? 'Empty shape' : 'Empty group'} — wire a Text, Image, Video, Shape or Group into it
+          {isBox ? t.sceneBuilder.preview.emptyShape : t.sceneBuilder.preview.emptyGroup}
         </span>
       )}
       {children.map((child) => (

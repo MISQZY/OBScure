@@ -217,6 +217,25 @@ export function pickRandomVariant(node: Node, edges: Edge[], map: NodeMap): Node
  * Image/Box's own outputSockets are all kind 'content' anyway (matching
  * their node-level category), so this changes nothing for them.
  */
+
+/**
+ * Raw hex mirror of CATEGORY_STYLES' own Tailwind tints (components/nodes/
+ * index.tsx: indigo = process, emerald = content, amber = style, sky blue =
+ * data, gray = fallback) — displayEdges' `style`/`markerEnd` and
+ * minimapNodeColor below both need real CSS color values (SVG stroke/marker
+ * `color`/React Flow's `nodeColor`), not a className, so this is the one
+ * place those tints get spelled out as literals. Centralized so displayEdges'
+ * several uses of each color and minimapNodeColor's own copy can't drift
+ * apart from one another.
+ */
+const CATEGORY_HEX = {
+  process: '#6366f1',
+  content: '#10b981',
+  style: '#f59e0b',
+  data: '#0ea5e9',
+  fallback: '#94a3b8'
+} as const
+
 export function displayEdges(nodes: Node[], edges: Edge[]): Edge[] {
   const map = buildNodeMap(nodes)
   const result: Edge[] = []
@@ -236,40 +255,40 @@ export function displayEdges(nodes: Node[], edges: Edge[]): Edge[] {
       const isElseBranch = sourceType === 'condition' && e.sourceHandle === 'else'
       styled = {
         ...e,
-        style: isElseBranch ? { stroke: '#a5b4fc', strokeWidth: 2, strokeDasharray: '6 4' } : { stroke: '#6366f1', strokeWidth: 3 },
+        style: isElseBranch ? { stroke: '#a5b4fc', strokeWidth: 2, strokeDasharray: '6 4' } : { stroke: CATEGORY_HEX.process, strokeWidth: 3 },
         animated: !isElseBranch,
         zIndex: 10,
-        markerEnd: { type: MarkerType.ArrowClosed, color: isElseBranch ? '#a5b4fc' : '#6366f1', width: 12, height: 12 }
+        markerEnd: { type: MarkerType.ArrowClosed, color: isElseBranch ? '#a5b4fc' : CATEGORY_HEX.process, width: 12, height: 12 }
       }
     } else if (targetType === 'task' && isContentSource) {
       styled = {
         ...e,
-        style: { stroke: '#10b981', strokeWidth: 2, strokeDasharray: '5 3' },
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#10b981', width: 16, height: 16 }
+        style: { stroke: CATEGORY_HEX.content, strokeWidth: 2, strokeDasharray: '5 3' },
+        markerEnd: { type: MarkerType.ArrowClosed, color: CATEGORY_HEX.content, width: 16, height: 16 }
       }
     } else if (isContentSource) {
       styled = {
         ...e,
-        style: { stroke: '#10b981', strokeWidth: 1.5 },
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#10b981', width: 12, height: 12 }
+        style: { stroke: CATEGORY_HEX.content, strokeWidth: 1.5 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: CATEGORY_HEX.content, width: 12, height: 12 }
       }
     } else if (sourceType && STYLE_TYPES.has(sourceType)) {
       styled = {
         ...e,
-        style: { stroke: '#f59e0b', strokeWidth: 1.25, strokeDasharray: '2 3' },
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#f59e0b', width: 12, height: 12 }
+        style: { stroke: CATEGORY_HEX.style, strokeWidth: 1.25, strokeDasharray: '2 3' },
+        markerEnd: { type: MarkerType.ArrowClosed, color: CATEGORY_HEX.style, width: 12, height: 12 }
       }
     } else if (sourceType && DATA_TYPES.has(sourceType)) {
       styled = {
         ...e,
-        style: { stroke: '#0ea5e9', strokeWidth: 1.25, strokeDasharray: '2 3' },
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#0ea5e9', width: 12, height: 12 }
+        style: { stroke: CATEGORY_HEX.data, strokeWidth: 1.25, strokeDasharray: '2 3' },
+        markerEnd: { type: MarkerType.ArrowClosed, color: CATEGORY_HEX.data, width: 12, height: 12 }
       }
     } else {
       styled = {
         ...e,
-        style: { stroke: '#94a3b8', strokeWidth: 1.25, strokeDasharray: '2 3' },
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8', width: 12, height: 12 }
+        style: { stroke: CATEGORY_HEX.fallback, strokeWidth: 1.25, strokeDasharray: '2 3' },
+        markerEnd: { type: MarkerType.ArrowClosed, color: CATEGORY_HEX.fallback, width: 12, height: 12 }
       }
     }
 
@@ -315,11 +334,11 @@ export function displayEdges(nodes: Node[], edges: Edge[]): Edge[] {
  * matching the graph's own header tints instead of one more color to learn.
  */
 export function minimapNodeColor(node: Node): string {
-  if (node.type && PROCESS_TYPES.has(node.type)) return '#6366f1'
-  if (node.type && CONTENT_TYPES_WITH_SCENE.has(node.type)) return '#10b981'
-  if (node.type && STYLE_TYPES.has(node.type)) return '#f59e0b'
-  if (node.type && DATA_TYPES.has(node.type)) return '#0ea5e9'
-  return '#94a3b8'
+  if (node.type && PROCESS_TYPES.has(node.type)) return CATEGORY_HEX.process
+  if (node.type && CONTENT_TYPES_WITH_SCENE.has(node.type)) return CATEGORY_HEX.content
+  if (node.type && STYLE_TYPES.has(node.type)) return CATEGORY_HEX.style
+  if (node.type && DATA_TYPES.has(node.type)) return CATEGORY_HEX.data
+  return CATEGORY_HEX.fallback
 }
 
 

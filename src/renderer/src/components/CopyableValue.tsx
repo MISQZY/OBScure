@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { TRANSIENT_FEEDBACK_MS } from '@/components/constants'
 import { useI18n } from '@/providers/I18nProvider'
 import { cn } from '@/lib/utils'
 
@@ -17,7 +18,7 @@ export function CopyableValue({ value, className }: CopyableValueProps) {
   const copy = async (): Promise<void> => {
     await navigator.clipboard.writeText(value)
     setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+    setTimeout(() => setCopied(false), TRANSIENT_FEEDBACK_MS)
   }
 
   return (

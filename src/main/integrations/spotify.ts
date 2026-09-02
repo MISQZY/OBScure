@@ -1,6 +1,6 @@
 import { net, shell } from "electron";
 import { BaseIntegration } from "./types";
-import { waitForRedirect } from "../oauth/callbackServer";
+import { OAUTH_CALLBACK_PORT, waitForRedirect } from "../oauth/callbackServer";
 import { logError, logInfo, logWarn } from "../logger";
 import {
   generateCodeChallenge,
@@ -8,7 +8,7 @@ import {
   generateState,
 } from "../oauth/pkce";
 
-const REDIRECT_PORT = 47891;
+const REDIRECT_PORT = OAUTH_CALLBACK_PORT;
 const REDIRECT_PATH = "/callback/spotify";
 const REDIRECT_URI = `http://127.0.0.1:${REDIRECT_PORT}${REDIRECT_PATH}`;
 const SCOPES = "user-read-currently-playing user-read-playback-state";

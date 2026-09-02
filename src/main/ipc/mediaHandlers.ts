@@ -14,7 +14,7 @@ interface MediaHandlersDeps {
 
 async function handleMediaUpload(
   mainWindow: BrowserWindow | null,
-  filters: { name: string; extensions: string[] }[],
+  filterName: string,
   allowedExtensions: string[],
   destDir: string,
   previousFileName: string | null,
@@ -23,7 +23,11 @@ async function handleMediaUpload(
 
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ["openFile"],
-    filters,
+    // Dialog filters take extensions without the leading dot — derived from
+    // allowedExtensions so the two lists can't drift apart.
+    filters: [
+      { name: filterName, extensions: allowedExtensions.map((ext) => ext.replace(/^\./, "")) },
+    ],
   });
   if (result.canceled || result.filePaths.length === 0) return null;
 
@@ -73,7 +77,7 @@ export function registerMediaHandlers(deps: MediaHandlersDeps): void {
     (_event, previousFileName: string | null) =>
       handleMediaUpload(
         mainWindow(),
-        [{ name: "Audio", extensions: ["mp3", "wav", "ogg"] }],
+        "Audio",
         allowedSoundExtensions,
         customSoundsDir,
         previousFileName,
@@ -88,7 +92,7 @@ export function registerMediaHandlers(deps: MediaHandlersDeps): void {
     (_event, previousFileName: string | null) =>
       handleMediaUpload(
         mainWindow(),
-        [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
+        "Images",
         allowedImageExtensions,
         customImagesDir,
         previousFileName,

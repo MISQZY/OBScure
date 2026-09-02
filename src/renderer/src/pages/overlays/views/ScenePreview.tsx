@@ -1,6 +1,8 @@
 import { Node, Edge } from "@xyflow/react";
 import { cn } from "@/lib/utils";
 import type { OverlayUrls } from "@shared/types";
+import { useI18n } from "@/providers/I18nProvider";
+import { interpolate } from "@/lib/i18n/interpolate";
 import { buildNodeMap, incoming, orderingClass, orderingGap, crossAxisFor, ScheduledTask } from "../sceneUtils";
 import { ImageView } from "./ImageView";
 import { VideoView } from "./VideoView";
@@ -54,6 +56,7 @@ export function ScenePreview({
   clockMs: number
   urls: OverlayUrls | null
 }) {
+  const { t } = useI18n()
   const map = buildNodeMap(nodes)
   const scene = nodes.find((n) => n.type === 'scene')
 
@@ -95,7 +98,9 @@ export function ScenePreview({
     return (
       <span className="text-white/40 text-xs text-center px-4">
         {/* alertTypes is empty when armed purely by Audio Player/Roulette (no Event — see processTrigger's audioArmed/rouletteArmed), neither of which has a "type" to name — describe the trigger instead of joining an empty list into a bare "Waiting for  —". */}
-        Waiting for {eventState.alertTypes.length > 0 ? eventState.alertTypes.join(' / ') : 'a track change or round start'} — press Play to simulate it.
+        {interpolate(t.sceneBuilder.preview.waitingForTypes, {
+          types: eventState.alertTypes.length > 0 ? eventState.alertTypes.join(' / ') : t.sceneBuilder.preview.waitingForFallback
+        })}
       </span>
     )
   }
@@ -113,7 +118,7 @@ export function ScenePreview({
       n.type === 'randomWidget'
   )
   if (renderable.length === 0) {
-    return <span className="text-white/40 text-xs text-center px-4">Nothing connected to Scene yet — wire a Text, Image, Video, Shape or Group into it.</span>
+    return <span className="text-white/40 text-xs text-center px-4">{t.sceneBuilder.preview.nothingConnected}</span>
   }
 
   const played = eventState.active || playToken > 0
