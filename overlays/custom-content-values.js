@@ -26,6 +26,20 @@ function hasAudioCover(nodeId, edges, map) {
   return edges.some((e) => e.target === nodeId && e.targetHandle === 'imageContent' && map[e.source] && map[e.source].type === 'audioPlayer')
 }
 
+// The Format field of whichever Clock node is wired into this node's own
+// Content socket, or null when none is — deliberately the FORMAT, not an
+// already-formatted string: {time} needs a fresh `new Date()` every second,
+// which only the actual renderer (buildText's own textClockElements/
+// tickTextClocks, in custom-builders.js) is positioned to do — this only
+// identifies WHICH format string to feed it. Mirrors clockFormatFor in
+// sceneUtils/contentValues.ts.
+function clockFormatFor(nodeId, edges, map) {
+  const edge = edges.find((e) => e.target === nodeId && e.targetHandle === 'content' && map[e.source] && map[e.source].type === 'clock')
+  if (!edge) return null
+  const source = map[edge.source]
+  return (source.data && source.data.format) || 'HH:mm:ss'
+}
+
 // Whether ANY node in the graph has a Content-socket wire to Audio
 // Player (see audioContentValues/hasAudioCover above) — doesn't
 // bother checking reachability from Scene, since a wire on a node
@@ -190,6 +204,84 @@ function hasRandomContentDeps(overlay) {
     if (!src) return false
     return src.type === 'randomSource' && (e.targetHandle === 'source' || e.targetHandle === 'visible' || e.targetHandle === 'content')
   })
+}
+
+// Mirrors sanitizePlaceholderName in components/nodes/utils/constants.ts —
+// strips a Variable node's name (local) / a registered GlobalVariable's own
+// name (global) down to \w+ so it's always a valid interpolate() token.
+function sanitizePlaceholderName(raw) {
+  return String(raw || '').replace(/[^\w]/g, '').slice(0, 40)
+}
+
+// A Variable node's own resolved placeholder token, or null if it doesn't
+// have one yet — reads `latestGlobalVariables` (the always-current global
+// populated from GET /overlays/config/global-variables.json + the
+// 'global-variables' WS broadcast — see custom-render.js), same convention
+// audioContentValues above reads `latestNowPlaying` by. Mirrors
+// variablePlaceholderName in components/nodes/utils/constants.ts (which
+// takes the equivalent list as an explicit param instead, since the React
+// side has no ambient global to read — it's Context state).
+function variablePlaceholderName(node) {
+  const d = node.data || {}
+  if (d.scope === 'global') {
+    const gv = latestGlobalVariables.find((v) => v.id === d.globalId)
+    return gv ? sanitizePlaceholderName(gv.name) || null : null
+  }
+  const name = sanitizePlaceholderName(d.name || '')
+  return name || null
+}
+
+// A Variable node's own resolved numeric value — mirrors
+// variablePlaceholderValue in components/nodes/utils/constants.ts.
+function variablePlaceholderValue(node) {
+  const d = node.data || {}
+  if (d.scope === 'global') {
+    const gv = latestGlobalVariables.find((v) => v.id === d.globalId)
+    return gv ? gv.value : 0
+  }
+  return typeof d.value === 'number' && Number.isFinite(d.value) ? d.value : 0
+}
+
+// `{name}` -> resolved value for every Variable node present ANYWHERE in
+// `nodes` — mere presence registers it, no wiring required (same
+// "available without wiring" convention EVENT_PLACEHOLDERS already uses).
+// Mirrors variablePlaceholderValues in sceneUtils/contentValues.ts.
+function variablePlaceholderValues(nodes) {
+  const out = {}
+  for (const n of nodes) {
+    if (n.type !== 'variable') continue
+    const name = variablePlaceholderName(n)
+    if (!name) continue
+    out[name] = String(variablePlaceholderValue(n))
+  }
+  return out
+}
+
+// A Progress Bar's own Current/Target value — the wired Variable node's own
+// resolved value (see variablePlaceholderValue above) for whichever socket,
+// or 0 when nothing's wired. `current`/`target` land on the SAME accepted
+// type ('variable'), unlike every other paired-socket lookup in this file,
+// so this resolves by socket id via `edges` directly rather than
+// lastOfType-ing a flat `mods` list, which can't tell two same-typed wires
+// on different sockets apart. Mirrors progressSourceValue in
+// sceneUtils/contentValues.ts.
+function progressSourceValue(nodeId, socketId, edges, map) {
+  const edge = edges.find((e) => e.target === nodeId && e.targetHandle === socketId && map[e.source] && map[e.source].type === 'variable')
+  if (!edge) return 0
+  const node = map[edge.source]
+  return node ? variablePlaceholderValue(node) : 0
+}
+
+// Whether ANY node in the graph is a scope=global Variable node — mirrors
+// hasAudioContentDeps' own reasoning: gates whether a 'global-variables' WS
+// tick bothers re-rendering this overlay at all. Doesn't check reachability
+// from Scene (same harmless-if-imprecise reasoning as that function), and
+// deliberately ignores scope=local Variable nodes — a local one's own value
+// only ever changes via a Save (already a full re-render on its own), never
+// via this live channel.
+function hasGlobalVariableDeps(overlay) {
+  const nodes = (overlay && overlay.nodes) || []
+  return nodes.some((n) => n.type === 'variable' && n.data && n.data.scope === 'global')
 }
 
 // Whether a Random Widget node should currently be rendered at all —

@@ -1,4 +1,5 @@
-import { ALERT_TYPES_BY_PLATFORM, type AlertPlatform } from '@shared/types'
+import type { Node } from '@xyflow/react'
+import { ALERT_TYPES_BY_PLATFORM, type AlertPlatform, type GlobalVariable } from '@shared/types'
 
 /**
  * `nodrag` is an @xyflow/react convention: without it, a click-drag inside
@@ -90,3 +91,105 @@ export const CONDITION_OPERATOR_LABELS: Record<ConditionOperator, string> = {
 }
 /** Which way an Overflow node's Auto-scroll animates its content — see overflowAutoScroll in overlays/sceneUtils.tsx. 'up'/'down' pick the vertical keyframe, 'left'/'right' the horizontal one; 'down'/'right' just play the same keyframe in reverse. */
 export const SCROLL_DIRECTIONS = ['up', 'down', 'left', 'right'] as const
+
+export const VARIABLE_SCOPES = ['local', 'global'] as const
+
+/**
+ * A Variable node's `data.name` (local scope) or a registered GlobalVariable's
+ * own `name` (global scope) is also its `{name}` template placeholder — this
+ * strips it down to `\w+` (letters/digits/underscore) so it's always a valid
+ * match for interpolate()'s own `\{(\w+)\}` regex, regardless of what the
+ * user actually typed. Applied live as the field is edited (VariableNode's
+ * own Placeholder input, VariablesPage's own Name input), not just at
+ * resolution time, so what's shown on screen always matches what actually
+ * works when typed as `{name}` into a Text node.
+ */
+export function sanitizePlaceholderName(raw: string): string {
+  return (raw || '').replace(/[^\w]/g, '').slice(0, 40)
+}
+
+/**
+ * A Variable node's own resolved placeholder token, or null if it doesn't
+ * have one yet (an empty local name, or scope=global with nothing picked/the
+ * picked entry since deleted) — see sanitizePlaceholderName's own doc
+ * comment. Mirrors variablePlaceholderName in overlays/custom-content-values.js.
+ */
+export function variablePlaceholderName(node: Node, globalVariables: GlobalVariable[]): string | null {
+  if (node.data.scope === 'global') {
+    const gv = globalVariables.find((v) => v.id === node.data.globalId)
+    return gv ? sanitizePlaceholderName(gv.name) || null : null
+  }
+  const name = sanitizePlaceholderName((node.data.name as string) || '')
+  return name || null
+}
+
+/**
+ * A Variable node's own resolved numeric value — the referenced
+ * GlobalVariable's `value` once scope=global (0 if nothing's picked, or the
+ * picked entry has since been deleted, same "unwired optional input"
+ * convention as everywhere else in this graph), otherwise this node's own
+ * `data.value`. Mirrors variablePlaceholderValue in
+ * overlays/custom-content-values.js.
+ */
+export function variablePlaceholderValue(node: Node, globalVariables: GlobalVariable[]): number {
+  if (node.data.scope === 'global') {
+    const gv = globalVariables.find((v) => v.id === node.data.globalId)
+    return gv ? gv.value : 0
+  }
+  const raw = node.data.value
+  return typeof raw === 'number' && Number.isFinite(raw) ? raw : 0
+}
+
+/** A Progress Bar's fill axis — 'horizontal' fills left-to-right (width), 'vertical' fills bottom-to-top (height), same convention a volume/health bar reads by. */
+export const PROGRESS_ORIENTATIONS = ['horizontal', 'vertical'] as const
+
+/** Every token formatClockDate recognizes — YYYY/MM/DD/HH/hh/mm/ss/A only, no locale month/weekday names (no date-formatting library in this app). Shared by formatClockDate's own replace() and isValidClockFormat's own validation below, so the two can never drift apart. */
+export const CLOCK_FORMAT_TOKENS = ['YYYY', 'MM', 'DD', 'HH', 'hh', 'mm', 'ss', 'A'] as const
+const CLOCK_FORMAT_TOKEN_PATTERN = new RegExp(CLOCK_FORMAT_TOKENS.join('|'), 'g')
+
+/** A few starting points ClockNode offers as quick-fill buttons next to its free-text Format field — not an exhaustive or enforced list, just common on-stream clock shapes built from CLOCK_FORMAT_TOKENS. */
+export const CLOCK_FORMAT_PRESETS = ['HH:mm:ss', 'HH:mm', 'hh:mm A', 'DD.MM.YYYY', 'DD.MM.YYYY HH:mm'] as const
+
+/**
+ * Expands a Format string (ClockNode's own free-text field) against `date` —
+ * mirrors formatClockDate in overlays/custom-builders.js. Any character NOT
+ * part of a recognized token (see CLOCK_FORMAT_TOKENS) passes through
+ * literally — a separator, a label, anything — same as every other
+ * template-token system in this app (interpolate's own `{word}` tokens).
+ */
+export function formatClockDate(date: Date, format: string): string {
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  const hours24 = date.getHours()
+  const hours12raw = hours24 % 12
+  const hours12 = hours12raw === 0 ? 12 : hours12raw
+  const tokens: Record<string, string> = {
+    YYYY: String(date.getFullYear()),
+    MM: pad(date.getMonth() + 1),
+    DD: pad(date.getDate()),
+    HH: pad(hours24),
+    hh: pad(hours12),
+    mm: pad(date.getMinutes()),
+    ss: pad(date.getSeconds()),
+    A: hours24 < 12 ? 'AM' : 'PM'
+  }
+  return format.replace(CLOCK_FORMAT_TOKEN_PATTERN, (token) => tokens[token])
+}
+
+/**
+ * Whether a Format string is worth keeping — non-empty AND contains at
+ * least one real token (see CLOCK_FORMAT_TOKENS), so the clock actually
+ * shows live time/date rather than silently rendering as static text (an
+ * easy typo to make by hand now that this is free-text, not a fixed preset
+ * picker). Deliberately permissive beyond that: literal text around/between
+ * tokens ("Time: HH:mm", "HH'h'mm") is a legitimate format, not an error, so
+ * this never requires the WHOLE string to be tokens-only. Purely a UI
+ * warning (ClockNode still saves whatever's typed either way) — an "invalid"
+ * format still renders, just as literal text with no live value in it,
+ * exactly like formatClockDate already handles gracefully on its own.
+ */
+export function isValidClockFormat(format: string): boolean {
+  const trimmed = format.trim()
+  if (!trimmed) return false
+  CLOCK_FORMAT_TOKEN_PATTERN.lastIndex = 0
+  return CLOCK_FORMAT_TOKEN_PATTERN.test(trimmed)
+}

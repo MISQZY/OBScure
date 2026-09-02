@@ -13,6 +13,7 @@ import type { EventBus } from "./eventBus";
 import type {
   AppEvents,
   CustomOverlay,
+  GlobalVariable,
   NowPlayingPayload,
   OverlayAddress,
   OverlayUrls,
@@ -45,6 +46,7 @@ interface OverlayServerOptions extends OverlayAddress {
 
   customImagesDir: string;
   initialCustomOverlays?: CustomOverlay[];
+  initialGlobalVariables?: GlobalVariable[];
 }
 
 const OVERLAYS_PREFIX = "/overlays";
@@ -70,6 +72,7 @@ export class OverlayServer {
   // Snapshot-for-late-joiners pattern — see docs/main-process.md ("Overlay Server").
   private latestRouletteState: RouletteStatePayload | null = null;
   private latestRandomState: RandomStatePayload | null = null;
+  private latestGlobalVariables: GlobalVariable[] = [];
 
   constructor(options: OverlayServerOptions) {
     this.host = options.host;
@@ -84,6 +87,7 @@ export class OverlayServer {
         overlay,
       ]),
     );
+    this.latestGlobalVariables = options.initialGlobalVariables ?? [];
 
     this.eventBus.on("alert", (payload) => this.broadcast("alert", payload));
     this.eventBus.on("roulette-state", (payload) => {
@@ -99,6 +103,12 @@ export class OverlayServer {
   pushNowPlaying(payload: NowPlayingPayload | null): void {
     this.latestNowPlaying = payload;
     this.broadcast("now-playing", payload);
+  }
+
+  /** Called on every add/edit/delete from the "Данные → Переменные" page (see registerCustomPackHandlers' own `onSet` in ipc/overlayHandlers.ts) — pushes the full registry to any already-open OBS Browser Source via the same live-broadcast pattern Random/Roulette use, and updates the late-joiner snapshot a page opened/reloaded afterward reads via GET /overlays/config/global-variables.json. */
+  setGlobalVariables(variables: GlobalVariable[]): void {
+    this.latestGlobalVariables = variables;
+    this.broadcast("global-variables", variables);
   }
 
   setCustomOverlays(overlays: CustomOverlay[]): void {
@@ -234,6 +244,15 @@ export class OverlayServer {
         "Cache-Control": "no-store",
       });
       res.end(JSON.stringify(this.latestRandomState));
+      return;
+    }
+
+    if (pathname === `${OVERLAYS_PREFIX}/config/global-variables.json`) {
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+      });
+      res.end(JSON.stringify(this.latestGlobalVariables));
       return;
     }
 

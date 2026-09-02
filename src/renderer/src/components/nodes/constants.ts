@@ -68,7 +68,7 @@ export const MODIFIER_SOCKETS: InputSocket[] = [
 // as Box's 'children'/Scene's own 'content' socket, so its dot reads green
 // like theirs instead of the data-source violet/sky-blue tint.
 export const TEXT_SOCKETS: InputSocket[] = [
-  { id: 'content', label: 'Content', accepts: ['audioPlayer', 'rouletteEntrants', 'randomSource'], kind: 'content', multi: true },
+  { id: 'content', label: 'Content', accepts: ['audioPlayer', 'rouletteEntrants', 'randomSource', 'clock'], kind: 'content', multi: true },
   ...MODIFIER_SOCKETS
 ]
 // The mandatory Roulette Widget's own two inputs — Source (accepts ONLY
@@ -127,7 +127,33 @@ export const RANDOM_WIDGET_SOCKETS: InputSocket[] = [
 // Content output can reach either (see AUDIO_PLAYER_OUTPUTS' own `feeds`).
 export const IMAGE_SOCKETS: InputSocket[] = [{ id: 'imageContent', label: 'Content', accepts: ['audioPlayer'], kind: 'content' }, ...MODIFIER_SOCKETS]
 export const VIDEO_SOCKETS: InputSocket[] = MODIFIER_SOCKETS
-
+/**
+ * A Progress Bar's own sockets: Label (optional — wire a Text node in to
+ * caption the bar with THAT node's own full styling: color/font/size/align/
+ * bold/italic, not just its plain text — see ProgressView/buildProgress,
+ * which render the wired Text node directly rather than reading only its
+ * `.data.text` the way BackgroundAnimation's own Caption socket does).
+ * Socket id is 'caption', not 'label' — it has to match one of Text's own
+ * NODE_OUTPUTS entries' `feeds` list (see isValidConnection in
+ * hooks/useSceneGraph.ts, which checks BOTH the target socket's `accepts`
+ * AND the specific dragged-from output socket's `feeds`), and Text already
+ * has exactly this role as CAPTION_OUTPUT (`feeds: ['caption']`, the "As
+ * Caption" output row) — reusing it here means dragging from that row Just
+ * Works instead of needing a fourth Text output role for what's the same
+ * "plug this Text in as a caption" concept BackgroundAnimation's own Caption
+ * socket already uses. The user-visible `label` field below is independent
+ * of `id` and still reads "Label" on the node itself.
+ * Current/Target (each a single wired Variable node's `.data.value` — see
+ * VariableNode — 0 when nothing's wired into a socket, same as any other
+ * unwired optional input), plus the same Transform/Style modifiers every
+ * other leaf content node takes.
+ */
+export const PROGRESS_SOCKETS: InputSocket[] = [
+  { id: 'caption', label: 'Label', accepts: ['text'], kind: 'content' },
+  { id: 'current', label: 'Current', accepts: ['variable'], kind: 'data' },
+  { id: 'target', label: 'Target', accepts: ['variable'], kind: 'data' },
+  ...MODIFIER_SOCKETS
+]
 /**
  * Shared by Box AND Group (see GroupNode's own doc comment for how the two
  * differ) — accepts 'box'/'group' too, either one nesting either one (see
@@ -140,7 +166,7 @@ export const VIDEO_SOCKETS: InputSocket[] = MODIFIER_SOCKETS
  * nested, same as at the top level.
  */
 export const BOX_SOCKETS: InputSocket[] = [
-  { id: 'children', label: 'Children', accepts: ['text', 'image', 'video', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true },
+  { id: 'children', label: 'Children', accepts: ['text', 'image', 'video', 'progress', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true },
   ...MODIFIER_SOCKETS,
   { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' }
 ]
@@ -158,11 +184,11 @@ export const BOX_SOCKETS: InputSocket[] = [
  * RandomPickNode/RandomPickView's own doc comments for the rest.
  */
 export const RANDOM_PICK_SOCKETS: InputSocket[] = [
-  { id: 'children', label: 'Options', accepts: ['text', 'image', 'video', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true }
+  { id: 'children', label: 'Options', accepts: ['text', 'image', 'video', 'progress', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true }
 ]
 
 export const SCENE_SOCKETS: InputSocket[] = [
-  { id: 'content', label: 'Content', accepts: ['box', 'group', 'text', 'image', 'video', 'randomPick', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true },
+  { id: 'content', label: 'Content', accepts: ['box', 'group', 'text', 'image', 'video', 'progress', 'randomPick', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true },
   // kind 'data', not 'style' — Background FX is category 'data' (see its own
   // doc comment below), so this socket's dot/wire should match ITS color,
   // not the per-component style modifiers (Position/Animation/...) it has
@@ -202,7 +228,7 @@ export const START_SOCKETS: InputSocket[] = [
 ]
 
 export const TASK_SOCKETS: InputSocket[] = [
-  { id: 'target', label: 'Target', accepts: ['text', 'image', 'box', 'group', 'video', 'rouletteWidget'], kind: 'content' },
+  { id: 'target', label: 'Target', accepts: ['text', 'image', 'box', 'group', 'video', 'progress', 'rouletteWidget'], kind: 'content' },
   // Same Transform/Style grouping as MODIFIER_SOCKETS, minus Hide (a Task's
   // visibility is already its own show/hide Action field, not a separate
   // modifier) — these are what THIS step changes, layered on top of the
@@ -223,6 +249,7 @@ export const NODE_SOCKETS: Record<string, InputSocket[]> = {
   text: TEXT_SOCKETS,
   image: IMAGE_SOCKETS,
   video: VIDEO_SOCKETS,
+  progress: PROGRESS_SOCKETS,
   box: BOX_SOCKETS,
   group: BOX_SOCKETS,
   scene: SCENE_SOCKETS,
@@ -287,7 +314,21 @@ export const CAPTION_OUTPUT: OutputSocket = {
 export const TEXT_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT, CAPTION_OUTPUT]
 export const IMAGE_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
 export const VIDEO_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
+export const PROGRESS_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
 export const BOX_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
+
+/**
+ * Clock's single role: the `{time}` placeholder for whichever Text socket
+ * it's wired into (its own Format field decides what's IN that string —
+ * "14:30:00" vs. "02.09.2026" — the receiving Text still decides how it
+ * LOOKS, same as Audio Player's own Content wire's own `{artist}`/`{title}`
+ * split). `kind: 'content'` (not the node's own 'data' category) so this
+ * wire reads green like the Content sockets it feeds, matching
+ * AUDIO_PLAYER_OUTPUTS' own reasoning exactly. Not Structural/Target like
+ * Text/Image/Box's outputs — Clock has no visual presence of its own
+ * anymore to place in Scene/a Box/a Task, only this one value to supply.
+ */
+export const CLOCK_OUTPUTS: OutputSocket[] = [{ id: 'content', label: 'Content', kind: 'content', feeds: ['content'], helpKey: 'clockContent' }]
 
 /**
  * Audio Player's two roles for its single Now Playing feed, collapsed from
@@ -477,6 +518,8 @@ export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
   text: TEXT_OUTPUTS,
   image: IMAGE_OUTPUTS,
   video: VIDEO_OUTPUTS,
+  progress: PROGRESS_OUTPUTS,
+  clock: CLOCK_OUTPUTS,
   box: BOX_OUTPUTS,
   group: BOX_OUTPUTS,
   audioPlayer: AUDIO_PLAYER_OUTPUTS,
@@ -539,6 +582,9 @@ export const NODE_CATEGORY: Record<string, NodeCategory> = {
   text: 'content',
   image: 'content',
   video: 'content',
+  progress: 'content',
+  clock: 'data',
+  variable: 'data',
   box: 'content',
   group: 'content',
   randomPick: 'content',
@@ -594,6 +640,19 @@ export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
   frame: { collapsed: false, label: 'Layout Frame' },
   image: { borderRadius: 8, borderEnabled: false, borderWidth: 2, borderColor: '#ffffff' },
   video: { muted: true, loop: true, borderRadius: 8, borderEnabled: false, borderWidth: 2, borderColor: '#ffffff' },
+  // current/target/label all come from wired nodes now (see PROGRESS_SOCKETS'
+  // own doc comment) — nothing left here but the bar's own look.
+  progress: { orientation: 'horizontal', barColor: '#8b5cf6', trackColor: '#3f3f46', thickness: 28, borderRadius: 14 },
+  // Reads the system clock directly — no data wired in. format is free
+  // text (see isValidClockFormat/formatClockDate in components/nodes/utils/
+  // constants.ts). No styling fields anymore — wire its Content output into
+  // a Text node and style THAT (see CLOCK_OUTPUTS' own doc comment).
+  clock: { format: 'HH:mm:ss' },
+  // scope 'local' (default): name/value both live here, this node's own
+  // placeholder token. scope 'global': name/value instead come from
+  // whichever GlobalVariable `globalId` points at (registered on the
+  // "Данные → Переменные" page) — see VariableNode's own doc comment.
+  variable: { scope: 'local', name: '', value: 0, globalId: null },
   backgroundAnimation: { type: 'none', color: '#18181b', speed: 1, repeat: false },
   sound: { soundId: 'none', volume: 1 },
   event: { kind: 'alert', platform: 'twitch', alertType: ALERT_TYPES_BY_PLATFORM.twitch[0] },

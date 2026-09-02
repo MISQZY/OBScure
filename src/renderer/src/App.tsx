@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState, type ComponentType } from 'react'
 import { CustomOverlaysProvider } from '@/providers/CustomOverlaysProvider'
+import { GlobalVariablesProvider } from '@/providers/GlobalVariablesProvider'
 import { AppSidebar } from '@/components/layout/AppSidebar'
 import { TitleBar } from '@/components/layout/TitleBar'
 import { TourOverlay } from '@/components/TourOverlay'
@@ -24,6 +25,7 @@ import { YoutubePage } from '@/pages/integrations/YoutubePage'
 import { SceneBuilderPage } from '@/pages/overlays/SceneBuilderPage'
 import { RandomToolPage } from '@/pages/tools/RandomToolPage'
 import { RouletteToolPage } from '@/pages/tools/RouletteToolPage'
+import { VariablesPage } from '@/pages/data/VariablesPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { getNavBreadcrumbs, type NavKey } from '@/lib/nav'
 import { I18nProvider, useI18n } from '@/providers/I18nProvider'
@@ -34,6 +36,7 @@ import { TourProvider, useTour } from '@/providers/TourProvider'
 const PAGES: Partial<Record<NavKey, ComponentType>> = {
   'tools/random': RandomToolPage,
   'tools/roulette': RouletteToolPage,
+  'data/variables': VariablesPage,
   'integrations/spotify': SpotifyPage,
   'integrations/windows-media': WindowsMediaPage,
   'integrations/twitch': TwitchPage,
@@ -115,12 +118,14 @@ function App() {
         <I18nProvider>
           <TourProvider>
             <CustomOverlaysProvider>
-              <div className="flex h-screen flex-col overflow-hidden">
-                <TitleBar />
-                <div className="min-h-0 flex-1">
-                  <AppShell />
+              <GlobalVariablesProvider>
+                <div className="flex h-screen flex-col overflow-hidden">
+                  <TitleBar />
+                  <div className="min-h-0 flex-1">
+                    <AppShell />
+                  </div>
                 </div>
-              </div>
+              </GlobalVariablesProvider>
             </CustomOverlaysProvider>
           </TourProvider>
         </I18nProvider>

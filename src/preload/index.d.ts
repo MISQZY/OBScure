@@ -2,6 +2,7 @@ import type {
   AppUpdaterStatus,
   ConnectResult,
   CustomOverlay,
+  GlobalVariable,
   IntegrationKey,
   IntegrationsStatusMap,
   NowPlayingPayload,
@@ -74,6 +75,9 @@ export interface ObscureApi {
   getCustomLocales: () => Promise<CustomLocalePack[]>
   saveCustomLocale: (pack: CustomLocalePack) => Promise<CustomLocalePack[]>
   deleteCustomLocale: (id: string) => Promise<CustomLocalePack[]>
+  getGlobalVariables: () => Promise<GlobalVariable[]>
+  saveGlobalVariable: (variable: GlobalVariable) => Promise<GlobalVariable[]>
+  deleteGlobalVariable: (id: string) => Promise<GlobalVariable[]>
   openConfigFile: () => Promise<{ fileName: string; content: string } | null>
   saveConfigFile: (defaultFileName: string, content: string) => Promise<boolean>
   getUpdaterStatus: () => Promise<AppUpdaterStatus>

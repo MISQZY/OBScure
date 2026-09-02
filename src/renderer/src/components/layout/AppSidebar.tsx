@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { ChevronRight, Download, Folder, FolderPlus, LayoutDashboard, Layers, Plug, Settings, Trash2, Workflow, Wrench, Plus } from 'lucide-react'
+import { ChevronRight, Database, Download, Folder, FolderPlus, LayoutDashboard, Layers, Plug, Settings, Trash2, Workflow, Wrench, Plus } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -47,11 +47,13 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
   const { t } = useI18n()
   const eventLabelsByKey = eventLabels(t)
   const [toolsOpen, setToolsOpen] = useState(true)
+  const [dataOpen, setDataOpen] = useState(true)
   const [integrationsOpen, setIntegrationsOpen] = useState(true)
   const [overlaysOpen, setOverlaysOpen] = useState(true)
   const { overlays, saveOverlay, folders, saveFolder, deleteFolder, moveOverlayToFolder } = useCustomOverlays()
 
   const isToolsActive = active.startsWith('tools/')
+  const isDataActive = active.startsWith('data/')
   const isIntegrationsActive = active.startsWith('integrations/')
 
   // undefined = not creating an overlay; null = creating at the top level (no folder); a folder id = creating inside that folder.
@@ -437,6 +439,34 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
                         </SidebarMenuSubItem>
                       )
                     })}
+                  </SidebarMenuSub>
+                )}
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={isDataActive && !dataOpen}
+                  tooltip={t.sidebar.data}
+                  onClick={() => setDataOpen((open) => !open)}
+                >
+                  <Database />
+                  <span>{t.sidebar.data}</span>
+                  <ChevronRight className={cn('ml-auto transition-transform', dataOpen && 'rotate-90')} />
+                </SidebarMenuButton>
+
+                {dataOpen && (
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton
+                        isActive={active === 'data/variables'}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          onNavigate('data/variables')
+                        }}
+                      >
+                        <span>{t.variables.title}</span>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
                   </SidebarMenuSub>
                 )}
               </SidebarMenuItem>

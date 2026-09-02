@@ -82,7 +82,16 @@ function renderStatic(overlay, animate) {
   sceneEl.style.flexDirection = orderingFlexDirection(members)
   sceneEl.style.gap = `${orderingGap(members)}px`
   const renderable = members.filter(
-    (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'randomPick' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
+    (n) =>
+      n.type === 'box' ||
+      n.type === 'group' ||
+      n.type === 'text' ||
+      n.type === 'image' ||
+      n.type === 'video' ||
+      n.type === 'progress' ||
+      n.type === 'randomPick' ||
+      n.type === 'rouletteWidget' ||
+      n.type === 'randomWidget'
   )
   const crossAxis = crossAxisFor(members)
 
@@ -117,7 +126,16 @@ function showTriggeredContent(overlay, vars, durationMs) {
   sceneEl.style.flexDirection = orderingFlexDirection(members)
   sceneEl.style.gap = `${orderingGap(members)}px`
   const renderable = members.filter(
-    (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'randomPick' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
+    (n) =>
+      n.type === 'box' ||
+      n.type === 'group' ||
+      n.type === 'text' ||
+      n.type === 'image' ||
+      n.type === 'video' ||
+      n.type === 'progress' ||
+      n.type === 'randomPick' ||
+      n.type === 'rouletteWidget' ||
+      n.type === 'randomWidget'
   )
   const crossAxis = crossAxisFor(members)
   for (const n of renderable) {
@@ -166,7 +184,16 @@ function showProcessContent(overlay, vars, schedule, totalMs) {
   sceneEl.style.flexDirection = orderingFlexDirection(members)
   sceneEl.style.gap = `${orderingGap(members)}px`
   const renderable = members.filter(
-    (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'randomPick' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
+    (n) =>
+      n.type === 'box' ||
+      n.type === 'group' ||
+      n.type === 'text' ||
+      n.type === 'image' ||
+      n.type === 'video' ||
+      n.type === 'progress' ||
+      n.type === 'randomPick' ||
+      n.type === 'rouletteWidget' ||
+      n.type === 'randomWidget'
   )
   const crossAxis = crossAxisFor(members)
   const registry = {}
@@ -301,7 +328,16 @@ function showAudioContent(overlay, vars, animate) {
   sceneEl.style.flexDirection = orderingFlexDirection(members)
   sceneEl.style.gap = `${orderingGap(members)}px`
   const renderable = members.filter(
-    (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'randomPick' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
+    (n) =>
+      n.type === 'box' ||
+      n.type === 'group' ||
+      n.type === 'text' ||
+      n.type === 'image' ||
+      n.type === 'video' ||
+      n.type === 'progress' ||
+      n.type === 'randomPick' ||
+      n.type === 'rouletteWidget' ||
+      n.type === 'randomWidget'
   )
   const crossAxis = crossAxisFor(members)
   for (const n of renderable) {
@@ -517,11 +553,15 @@ if (!key) {
       .catch(() => null),
     fetch('/overlays/config/random-state.json')
       .then((res) => res.json())
+      .catch(() => null),
+    fetch('/overlays/config/global-variables.json')
+      .then((res) => res.json())
       .catch(() => null)
   ])
-    .then(([overlay, nowPlaying, rouletteState, randomState]) => {
+    .then(([overlay, nowPlaying, rouletteState, randomState, globalVariables]) => {
       if (nowPlaying) latestNowPlaying = nowPlaying
       if (randomState) latestRandomState = randomState
+      if (globalVariables) latestGlobalVariables = globalVariables
       if (rouletteState) {
         latestRouletteState = rouletteState
         // A page opened/reloaded mid-round (or after one already
@@ -727,6 +767,16 @@ if (!key) {
         // so the widget picks up its roll-in transition; otherwise
         // false, same reasoning as showAudioContent's own animate arg.
         if (!processArmedThisTick && hasRandomContentDeps(latestOverlay)) render(latestOverlay, randomRevealArmed)
+      } else if (type === 'global-variables') {
+        // Full registry, broadcast on every add/edit/delete from the
+        // "Данные → Переменные" page — see OverlayServer.setGlobalVariables.
+        // Silent refresh (animate=false), same reasoning as the
+        // 'now-playing' branch's own poll-tick refresh: this can fire for
+        // an edit that has nothing to do with what's currently on screen,
+        // so hasGlobalVariableDeps gates it to scenes that actually have a
+        // scope=global Variable node somewhere in the graph.
+        latestGlobalVariables = payload
+        if (hasGlobalVariableDeps(latestOverlay)) render(latestOverlay, false)
       }
     }
     ws.onclose = () => setTimeout(connect, 1000)

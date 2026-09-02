@@ -1,4 +1,6 @@
-import { Edge } from "@xyflow/react";
+import { Edge, Node } from "@xyflow/react";
+import type { GlobalVariable } from "@shared/types";
+import { variablePlaceholderName, variablePlaceholderValue } from "@/components/nodes";
 import { NodeMap } from "./graph";
 import { SAMPLE_AUDIO_VARS, SAMPLE_ROULETTE_STATE, SAMPLE_RANDOM_STATE } from "./sampleData";
 import { interpolate } from "./sceneTrigger";
@@ -39,6 +41,22 @@ export function rouletteEntrantRows(entrants: { name: string; weight: number }[]
 export function audioContentValues(nodeId: string, edges: Edge[], map: NodeMap): { artist?: string; title?: string } | null {
   const hasAudioContent = edges.some((e) => e.target === nodeId && e.targetHandle === 'content' && map[e.source]?.type === 'audioPlayer')
   return hasAudioContent ? { artist: SAMPLE_AUDIO_VARS.artist, title: SAMPLE_AUDIO_VARS.title } : null
+}
+
+
+/**
+ * The Format field of whichever Clock node is wired into this node's own
+ * Content socket, or null when none is (see CLOCK_OUTPUTS' own doc comment
+ * in components/nodes/constants.ts) — deliberately the FORMAT, not an
+ * already-formatted string: `{time}` needs a fresh `new Date()` every
+ * second, which only the actual renderer (TextView, ticking its own 1s
+ * interval) is positioned to do — this only identifies WHICH format string
+ * to feed it. Mirrors clockFormatFor in overlays/custom-content-values.js.
+ */
+export function clockFormatFor(nodeId: string, edges: Edge[], map: NodeMap): string | null {
+  const edge = edges.find((e) => e.target === nodeId && e.targetHandle === 'content' && map[e.source]?.type === 'clock')
+  if (!edge) return null
+  return (map[edge.source]?.data.format as string) || 'HH:mm:ss'
 }
 
 
@@ -94,4 +112,53 @@ export function randomContentValues(nodeId: string, edges: Edge[], map: NodeMap)
 /** Whether this Image's `imageContent` socket is wired to Audio Player's Content output. Mirrors hasAudioCover in overlays/custom.html. */
 export function hasAudioCover(nodeId: string, edges: Edge[], map: NodeMap): boolean {
   return edges.some((e) => e.target === nodeId && e.targetHandle === 'imageContent' && map[e.source]?.type === 'audioPlayer')
+}
+
+
+/**
+ * A Progress Bar's own Current/Target value — the wired Variable node's own
+ * resolved value (local `data.value`, or the referenced GlobalVariable's
+ * once scope=global — see variablePlaceholderValue) for whichever socket, or
+ * 0 when nothing's wired (same as any other unwired optional input, see
+ * PROGRESS_SOCKETS' own doc comment). `current`/`target` land on the SAME
+ * accepted type ('variable'), unlike every other paired-socket lookup in
+ * this file (Audio Player's `content` vs. `event`, say), so this resolves by
+ * socket id via `edges` directly rather than `lastOfType`-ing a flat `mods`
+ * list, which can't tell two same-typed wires on different sockets apart.
+ * Mirrors progressSourceValue in overlays/custom-content-values.js.
+ */
+export function progressSourceValue(
+  nodeId: string,
+  socketId: 'current' | 'target',
+  edges: Edge[],
+  map: NodeMap,
+  globalVariables: GlobalVariable[]
+): number {
+  const edge = edges.find((e) => e.target === nodeId && e.targetHandle === socketId && map[e.source]?.type === 'variable')
+  if (!edge) return 0
+  const node = map[edge.source]
+  return node ? variablePlaceholderValue(node, globalVariables) : 0
+}
+
+
+/**
+ * `{name}` -> resolved value for every Variable node present ANYWHERE in
+ * `nodes` (mere presence "registers" it — no wiring required, same
+ * "available without wiring" convention EVENT_PLACEHOLDERS already uses, see
+ * useAvailablePlaceholders/VariableNode's own doc comments), merged into
+ * EVERY Text node's own `contentValues` (see ContentView.tsx) so `{myVar}`
+ * resolves the same way whether typed into Scene's own content or a
+ * Progress Bar's Label. A node with no resolved placeholder yet (empty local
+ * name, or scope=global with nothing picked) contributes nothing. Mirrors
+ * variablePlaceholderValues in overlays/custom-content-values.js.
+ */
+export function variablePlaceholderValues(nodes: Node[], globalVariables: GlobalVariable[]): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const n of nodes) {
+    if (n.type !== 'variable') continue
+    const name = variablePlaceholderName(n, globalVariables)
+    if (!name) continue
+    out[name] = String(variablePlaceholderValue(n, globalVariables))
+  }
+  return out
 }

@@ -3,6 +3,7 @@
     "dashboard": "Dashboard",
     "overlays": "Overlays",
     "tools": "Tools",
+    "data": "Data",
     "integrations": "Integrations",
     "settings": "Settings",
     "releaseNotes": "View release notes on GitHub",
@@ -227,6 +228,18 @@
       "helpFormula": "roll = parseInt(SHA-256(seed).slice(0, 8), 16) % totalWeight\nwinner = first entrant (in join order) whose running weight total > roll"
     }
   },
+  "variables": {
+    "title": "Variables",
+    "description": "Named numeric variables shared across every scene. Place a Variable node in Scene Builder and wire it to a global variable — its value can then be typed as a {name} placeholder in any text, or wired into a Progress Bar's Current/Target.",
+    "namePlaceholder": "Variable name",
+    "valueLabel": "Value",
+    "add": "Add",
+    "empty": "No global variables yet",
+    "deleteTooltip": "Delete variable",
+    "deleteConfirm": "Delete variable \"{name}\"? Variable nodes referencing it will be left with no value.",
+    "placeholderLabel": "Placeholder",
+    "nameTaken": "A variable with that name already exists"
+  },
   "settings": {
     "title": "Settings",
     "description": "General application settings.",
@@ -422,6 +435,7 @@
         "rouletteEvent": "The round's phase signal. Wire into a Process-section entry point to arm it the moment a round starts, or into the paired widget's Visibility socket to hide it outside an active round — both at once is fine.",
         "rouletteEntrantsContent": "Wire into a Content-section node's own Content socket to replace its template with this list's formatted rows — that node's own text field goes read-only while connected. Its styling fields stay its own; only row formatting lives here.",
         "randomContent": "Wire into this node's own paired display widget's Source socket (a permanent pairing), or into any Content-section node's own Content socket to fill its placeholders — the template stays editable.",
+        "clockContent": "The {time} placeholder in the picked format. Wire it into a Content-section node's own Content socket to use it in a template — that node's own styling stays untouched.",
         "randomEvent": "The roll's phase signal. Wire into a Process-section entry point to arm it the moment a roll is committed, or into the paired widget's Visibility socket to hide it outside an active roll — both at once is fine.",
         "conditionThen": "Wire into the next step to take when this Condition matches. Same Event socket every other process step uses (Task/Wait/Condition/End).",
         "conditionElse": "Wire into the next step to take when this Condition does NOT match — including whenever there's no real alert to check at all (an Audio Player/Roulette/Random-armed process, or a missing Field)."

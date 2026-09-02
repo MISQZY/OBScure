@@ -17,6 +17,9 @@ import { RandomPickNode } from './RandomPickNode'
 import { FrameNode } from './FrameNode'
 import { ImageNode } from './ImageNode'
 import { VideoNode } from './VideoNode'
+import { ProgressNode } from './ProgressNode'
+import { ClockNode } from './ClockNode'
+import { VariableNode } from './VariableNode'
 import { BackgroundAnimationNode } from './BackgroundAnimationNode'
 import { SoundNode } from './SoundNode'
 import { EventNode } from './EventNode'
@@ -51,6 +54,9 @@ export const nodeTypes = {
   frame: FrameNode,
   image: ImageNode,
   video: VideoNode,
+  progress: ProgressNode,
+  clock: ClockNode,
+  variable: VariableNode,
   backgroundAnimation: BackgroundAnimationNode,
   sound: SoundNode,
   event: EventNode,

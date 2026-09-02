@@ -1,7 +1,8 @@
-import { useRef, useLayoutEffect, useState } from "react";
+import { useEffect, useRef, useLayoutEffect, useState } from "react";
 import { Node } from "@xyflow/react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/providers/I18nProvider";
+import { formatClockDate } from "@/components/nodes";
 import { interpolate, textColorStyle, Anim, OverflowAutoScroll } from "../sceneUtils";
 
 /**
@@ -104,7 +105,8 @@ export function TextView({
   contentValues,
   replaceText,
   crossAxis,
-  autoScroll
+  autoScroll,
+  clockFormat
 }: {
   node: Node
   style: React.CSSProperties
@@ -120,6 +122,8 @@ export function TextView({
   replaceText: string | null
   /** From the same Overflow modifier `style` was built from — see overflowAutoScroll's own doc comment. Null renders the text plainly (unchanged from before this existed); set, it wraps the text in an AutoScrollTrack instead. */
   autoScroll?: OverflowAutoScroll
+  /** From clockFormatFor — the Format of whichever Clock node is wired into THIS node's own Content socket, or null/undefined when none is. Unlike contentValues above (computed once by the caller, e.g. ContentView, and only ever refreshed when THAT re-renders), this drives its own 1s tick (see the useEffect below) since `{time}` needs a fresh `new Date()` every second regardless of anything else changing. */
+  clockFormat?: string | null
   /**
    * The CROSS axis of whichever Box/Scene this Text is a direct child of
    * (crossAxisFor, computed by the caller off THAT parent's own Ordering) —
@@ -132,6 +136,20 @@ export function TextView({
   crossAxis: 'horizontal' | 'vertical'
 }) {
   const { t } = useI18n()
+  // Forces a re-render every second while a Clock feeds this node's own
+  // Content socket (see clockFormatFor) — `{time}` needs a fresh `new
+  // Date()` each tick, and nothing else about this render would otherwise
+  // change to trigger one. The tick's own value is never read, only its
+  // change; cleaned up (and restarted) whenever clockFormat itself changes,
+  // including going from set to null (an edit that unwires the Clock).
+  const [, setClockTick] = useState(0)
+  useEffect(() => {
+    if (!clockFormat) return
+    const id = setInterval(() => setClockTick((n) => n + 1), 1000)
+    return () => clearInterval(id)
+  }, [clockFormat])
+  const clockValues = clockFormat ? { time: formatClockDate(new Date(), clockFormat) } : null
+  const mergedValues = contentValues || clockValues ? { ...contentValues, ...clockValues } : null
   // Bold defaults true (data.bold !== false) — see the matching comment on
   // TextNode in components/nodes/index.tsx: font-weight:700 used to be
   // hardcoded here unconditionally, so every pre-existing Text node must
@@ -193,7 +211,7 @@ export function TextView({
       }
     >
       {(() => {
-        const content = (replaceText != null ? replaceText : interpolate((node.data.text as string) ?? '', contentValues ? { ...vars, ...contentValues } : vars)) || (
+        const content = (replaceText != null ? replaceText : interpolate((node.data.text as string) ?? '', mergedValues ? { ...vars, ...mergedValues } : vars)) || (
           // Editor-only affordance — see the matching one on BoxView's empty
           // state. An empty Text node has zero natural width, so without this
           // it (and any Box wrapping only it) collapses to a near-invisible

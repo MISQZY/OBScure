@@ -81,6 +81,22 @@ export interface RouletteStatePayload {
   seed: string | null
 }
 
+/**
+ * One registered global variable — shared across every scene, unlike a
+ * local Variable node's own `data.value` (see PROGRESS_SOCKETS/VariableNode's
+ * own doc comments in components/nodes). Managed on the "Данные →
+ * Переменные" page (pages/data/VariablesPage.tsx), referenced from a Variable
+ * node via `data.globalId` once `data.scope === 'global'`. `name` doubles as
+ * its `{name}` placeholder token — sanitized to `\w+` (see
+ * sanitizePlaceholderName in components/nodes/utils/constants.ts) so it's
+ * always a valid template placeholder.
+ */
+export interface GlobalVariable {
+  id: string
+  name: string
+  value: number
+}
+
 export interface ChatMessagePayload {
   source: 'twitch'
   user: string
@@ -114,6 +130,8 @@ export interface AppEvents {
   /** Tells connected custom-scene pages to actually play: replay entrance animations and fire any non-repeating Background FX once. Sent by the Scene Builder's Test button — see OverlayServer.testCustomOverlay. */
   'custom-overlay-trigger': { urlKey: string }
   'integration-status': { key: IntegrationKey; status: string }
+  /** Full registry, broadcast on every add/edit/delete from the "Данные → Переменные" page — see OverlayServer.setGlobalVariables. Lets an already-open OBS Browser Source pick up a value change instantly, same live pattern as roulette/random state. */
+  'global-variables': GlobalVariable[]
 }
 
 export interface OverlayAddress {
@@ -142,6 +160,7 @@ export type SettingKey =
   | 'customOverlays'
   | 'customOverlayFolders'
   | 'customLocales'
+  | 'globalVariables'
 
 export interface ConnectResult {
   ok: boolean

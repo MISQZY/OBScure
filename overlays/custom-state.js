@@ -72,6 +72,14 @@ let latestRouletteState = { phase: 'idle', entrants: [], winner: null }
 // own 'random-state' WS message.
 let latestRandomState = { phase: 'idle', hash: null, numbers: null, seed: null, min: 0, max: 0, count: 1 }
 
+// The full global-variable registry ("Данные → Переменные" page) — see
+// variablePlaceholderName/variablePlaceholderValue/progressSourceValue in
+// custom-content-values.js. Empty until the global-variables.json fetch
+// below resolves; kept current afterward by the 'global-variables' WS
+// broadcast (see OverlayServer.setGlobalVariables), same live pattern as
+// latestRouletteState/latestRandomState above.
+let latestGlobalVariables = []
+
 // Per auto-scrolling node (keyed by node id): when its loop FIRST
 // started, and the measured size/duration its CURRENT pace is based
 // on — deliberately module-level (survives renderStatic's own

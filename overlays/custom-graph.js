@@ -177,7 +177,15 @@ function buildProcessSchedule(nodes, edges, vars) {
     } else if (current.type === 'task') {
       const incomingNodes = incoming(current.id, edges, map)
       const target = incomingNodes.find(
-        (n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
+        (n) =>
+          n.type === 'text' ||
+          n.type === 'image' ||
+          n.type === 'video' ||
+          n.type === 'progress' ||
+          n.type === 'box' ||
+          n.type === 'group' ||
+          n.type === 'rouletteWidget' ||
+          n.type === 'randomWidget'
       )
       if (target) {
         schedule.push({
@@ -207,7 +215,7 @@ function buildProcessSchedule(nodes, edges, vars) {
 // CONTENT_TYPES in pages/overlays/sceneUtils/graph.ts) rather than
 // reusing one of the several near-identical inline filters already in
 // this file, since none of THOSE are shared constants either.
-const RANDOM_PICK_VARIANT_TYPES = new Set(['text', 'image', 'video', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'])
+const RANDOM_PICK_VARIANT_TYPES = new Set(['text', 'image', 'video', 'progress', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'])
 
 // Nesting can go as deep as the graph wants (see BOX_SOCKETS' own doc
 // comment in components/nodes/index.tsx) — this cap is only a safety

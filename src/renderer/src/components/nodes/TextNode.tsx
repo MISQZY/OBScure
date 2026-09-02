@@ -4,6 +4,7 @@ import { Bold, Italic } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSystemFonts } from '@/hooks/use-system-fonts'
 import { useI18n } from '@/providers/I18nProvider'
+import { useGlobalVariables } from '@/providers/GlobalVariablesProvider'
 
 import { TEXT_SOCKETS, TEXT_OUTPUTS } from './constants'
 import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect, PlaceholderPicker, numberInputClass, textAreaClass, SYSTEM_DEFAULT_FONT, TEXT_ALIGN_BUTTONS, TEXT_VERTICAL_BUTTONS, IconToggleGroup, useHasIncomingEdgeFromType, useAvailablePlaceholders } from './utils'
@@ -23,7 +24,8 @@ export function TextNode({ id, data }: NodeProps) {
   // set" already meant.
   const bold = data.bold !== false
   const italic = Boolean(data.italic)
-  const availablePlaceholders = useAvailablePlaceholders(id)
+  const { variables: globalVariables } = useGlobalVariables()
+  const availablePlaceholders = useAvailablePlaceholders(id, globalVariables)
   // Roulette Entrants' Content output REPLACES this Text's own template
   // outright (see ROULETTE_ENTRANTS_OUTPUTS' own doc comment in
   // constants.ts / rouletteEntrantsTextValue in overlays/sceneUtils.tsx) —

@@ -113,6 +113,7 @@ export function ScenePreview({
       n.type === 'text' ||
       n.type === 'image' ||
       n.type === 'video' ||
+      n.type === 'progress' ||
       n.type === 'randomPick' ||
       n.type === 'rouletteWidget' ||
       n.type === 'randomWidget'

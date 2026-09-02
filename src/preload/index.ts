@@ -3,6 +3,7 @@ import type {
   AppUpdaterStatus,
   ConnectResult,
   CustomOverlay,
+  GlobalVariable,
   IntegrationKey,
   IntegrationsStatusMap,
   NowPlayingPayload,
@@ -106,6 +107,10 @@ const api = {
   saveCustomLocale: (pack: CustomLocalePack): Promise<CustomLocalePack[]> =>
     ipcRenderer.invoke('locale:saveCustomLocale', pack),
   deleteCustomLocale: (id: string): Promise<CustomLocalePack[]> => ipcRenderer.invoke('locale:deleteCustomLocale', id),
+  getGlobalVariables: (): Promise<GlobalVariable[]> => ipcRenderer.invoke('variables:getGlobal'),
+  saveGlobalVariable: (variable: GlobalVariable): Promise<GlobalVariable[]> =>
+    ipcRenderer.invoke('variables:saveGlobal', variable),
+  deleteGlobalVariable: (id: string): Promise<GlobalVariable[]> => ipcRenderer.invoke('variables:deleteGlobal', id),
   openConfigFile: (): Promise<{ fileName: string; content: string } | null> =>
     ipcRenderer.invoke('config:openJsonFile'),
   saveConfigFile: (defaultFileName: string, content: string): Promise<boolean> =>

@@ -16,7 +16,38 @@
 // pixel-identical to before this existed. Skipped when the caller
 // never wired an Ordering-bearing parent (`crossAxis` omitted — the
 // legacy pre-Scene fallback below).
-function buildText(node, mods, animate, vars, registry, crossAxis, contentValues, replaceText) {
+// Text elements currently showing a live `{time}` placeholder (see
+// clockFormatFor in custom-content-values.js) — one shared 1s interval (not
+// one per node) recomputes each one's actual displayed text fresh against a
+// new `new Date()`, started lazily on the first such Text and stopped once
+// none are left, self-pruning via `span.isConnected` on every tick — same
+// pattern the old buildClock/clockElements/tickClocks used before Clock
+// itself stopped being independently rendered (see CLOCK_OUTPUTS' own doc
+// comment in components/nodes/constants.ts). Mirrors TextView.tsx's own
+// per-instance useEffect tick — there, each Text component's own React
+// state naturally isolates this; here, with no component lifecycle, one
+// shared interval covers every instance the same way.
+let textClockElements = []
+let textClockTickIntervalId = null
+
+function tickTextClocks() {
+  textClockElements = textClockElements.filter(({ span }) => span.isConnected)
+  if (textClockElements.length === 0) {
+    clearInterval(textClockTickIntervalId)
+    textClockTickIntervalId = null
+    return
+  }
+  const now = new Date()
+  for (const entry of textClockElements) {
+    // replaceText (Roulette Entrants) always wins outright, same as the
+    // initial build below — never ticks, just keeps agreeing with it.
+    if (entry.replaceText != null) continue
+    const merged = { ...entry.contentValues, time: formatClockDate(now, entry.format) }
+    entry.span.textContent = interpolate(entry.node.data.text ?? '', entry.vars ? { ...entry.vars, ...merged } : merged)
+  }
+}
+
+function buildText(node, mods, animate, vars, registry, crossAxis, contentValues, replaceText, clockFormat) {
   const d = node.data || {}
   const el = document.createElement('div')
   el.className = 'text-node'
@@ -31,13 +62,22 @@ function buildText(node, mods, animate, vars, registry, crossAxis, contentValues
   // render already carries, so a template like "{user}: {artist} —
   // {title}" keeps working whether that data comes from an
   // Event/Audio-Player-triggered Scene's vars, a direct Content wire,
-  // or (typically) not at all.
-  const text = replaceText != null ? replaceText : interpolate(d.text ?? '', contentValues ? { ...vars, ...contentValues } : vars)
+  // or (typically) not at all. clockFormat (from clockFormatFor) adds
+  // {time} the same way, just recomputed fresh every second afterward —
+  // see tickTextClocks above.
+  const mergedValues = clockFormat ? { ...contentValues, time: formatClockDate(new Date(), clockFormat) } : contentValues
+  const text = replaceText != null ? replaceText : interpolate(d.text ?? '', mergedValues ? { ...vars, ...mergedValues } : vars)
+  let leafSpan = null
   applyAutoScrollContent(el, mods, () => {
     const span = document.createElement('span')
     span.textContent = text
+    leafSpan = span
     return span
   }, node.id)
+  if (clockFormat && leafSpan) {
+    textClockElements.push({ span: leafSpan, node, vars, contentValues, replaceText, format: clockFormat })
+    if (textClockTickIntervalId == null) textClockTickIntervalId = setInterval(tickTextClocks, 1000)
+  }
   applyTextColor(el, d.color || '#ffffff')
   const align = d.align || 'left'
   const verticalAlign = d.verticalAlign || 'top'
@@ -168,6 +208,105 @@ function buildVideo(node, mods, animate, registry) {
   return wrap
 }
 
+// current/target clamped to a 0-100 fill percent — mirrors progressPercent
+// in ProgressView.tsx. 0 when target isn't positive (no divide-by-zero/
+// negative-width fill).
+function progressPercent(current, target) {
+  if (!(target > 0)) return 0
+  return Math.max(0, Math.min(100, (current / target) * 100))
+}
+
+function buildProgress(node, edges, map, mods, animate, registry) {
+  const d = node.data || {}
+  const orientation = d.orientation === 'vertical' ? 'vertical' : 'horizontal'
+  const current = progressSourceValue(node.id, 'current', edges, map)
+  const target = progressSourceValue(node.id, 'target', edges, map)
+  const percent = progressPercent(current, target)
+  const thickness = d.thickness ?? 28
+  const radius = d.borderRadius ?? 14
+
+  const wrap = document.createElement('div')
+  wrap.className = 'progress-node'
+  wrap.style.position = 'relative'
+  wrap.style.width = orientation === 'horizontal' ? '240px' : `${thickness}px`
+  wrap.style.height = orientation === 'horizontal' ? `${thickness}px` : '240px'
+  wrap.style.borderRadius = `${radius}px`
+  wrap.style.overflow = 'hidden'
+  wrap.style.background = d.trackColor || '#3f3f46'
+  wrap.style.flexShrink = '0'
+
+  const fill = document.createElement('div')
+  fill.style.position = 'absolute'
+  fill.style.left = '0'
+  fill.style.bottom = '0'
+  fill.style.background = d.barColor || '#8b5cf6'
+  fill.style.transition = 'width 300ms ease, height 300ms ease'
+  if (orientation === 'horizontal') {
+    fill.style.top = '0'
+    fill.style.width = `${percent}%`
+    fill.style.height = '100%'
+  } else {
+    fill.style.right = '0'
+    fill.style.width = '100%'
+    fill.style.height = `${percent}%`
+  }
+  wrap.appendChild(fill)
+
+  // Label is a wired Text node (unambiguous by type in `mods` — 'text' only
+  // ever lands on Progress's own `label` socket), rendered with THAT node's
+  // own full styling via buildText itself rather than reading only its
+  // `.data.text` the way applyBackgroundFx's caption does — mirrors
+  // ProgressView.tsx. mods=[] (no Transform/Style of its own; it's centered
+  // by the wrapper below, not independently positioned) and no registry (not
+  // independently selectable/targetable — same reasoning Roulette
+  // Entrants' own Content wire isn't registered either).
+  const labelNode = mods.find((n) => n.type === 'text')
+  if (labelNode) {
+    const labelWrap = document.createElement('div')
+    labelWrap.style.position = 'absolute'
+    labelWrap.style.inset = '0'
+    labelWrap.style.display = 'flex'
+    labelWrap.style.alignItems = 'center'
+    labelWrap.style.justifyContent = 'center'
+    labelWrap.style.pointerEvents = 'none'
+    const contentValues = {
+      ...variablePlaceholderValues(Object.values(map)),
+      current: String(current),
+      target: String(target),
+      percent: String(Math.round(percent))
+    }
+    labelWrap.appendChild(buildText(labelNode, [], animate, undefined, undefined, 'horizontal', contentValues, null, clockFormatFor(labelNode.id, edges, map)))
+    wrap.appendChild(labelWrap)
+  }
+
+  applyModifierStyle(wrap, mods)
+  applyAnimation(wrap, mods, animate)
+  if (registry) registry[node.id] = wrap
+  return wrap
+}
+
+// Mirrors formatClockDate in components/nodes/utils/constants.ts — kept
+// deliberately tiny (no locale month/weekday names) since this only ever
+// needs to reproduce that file's own fixed CLOCK_FORMAT_IDS preset list.
+function formatClockDate(date, format) {
+  const pad = (n) => String(n).padStart(2, '0')
+  const hours24 = date.getHours()
+  const hours12raw = hours24 % 12
+  const hours12 = hours12raw === 0 ? 12 : hours12raw
+  const tokens = {
+    YYYY: String(date.getFullYear()),
+    MM: pad(date.getMonth() + 1),
+    DD: pad(date.getDate()),
+    HH: pad(hours24),
+    hh: pad(hours12),
+    mm: pad(date.getMinutes()),
+    ss: pad(date.getSeconds()),
+    A: hours24 < 12 ? 'AM' : 'PM'
+  }
+  return format.replace(/YYYY|MM|DD|HH|hh|mm|ss|A/g, (token) => tokens[token])
+}
+
+
 // `crossAxis` — see buildText's own doc comment — is the CROSS axis of
 // whichever Box/Scene THIS node is a direct child of (crossAxisFor,
 // computed once by the caller off ITS OWN Ordering); only buildText
@@ -183,12 +322,24 @@ function buildContent(node, edges, map, animate, vars, registry, depth = 0, cros
     // them is exactly what wiring both in means.
     const audioValues = audioContentValues(node.id, edges, map)
     const randomValues = randomContentValues(node.id, edges, map)
-    const contentValues = audioValues || randomValues ? { ...audioValues, ...randomValues } : null
+    // variableValues isn't gated by any wiring at all — every Variable node
+    // ANYWHERE in the scene registers its own `{name}` placeholder just by
+    // existing (see variablePlaceholderValues' own doc comment), same
+    // "available without wiring" convention EVENT_PLACEHOLDERS uses.
+    const variableValues = variablePlaceholderValues(Object.values(map))
+    const hasVariableValues = Object.keys(variableValues).length > 0
+    const contentValues = audioValues || randomValues || hasVariableValues ? { ...variableValues, ...audioValues, ...randomValues } : null
+    // Different from the three above: not a value resolved once here, just
+    // a Format string — see clockFormatFor's own doc comment for why
+    // buildText needs to own the actual {time} computation (and its own 1s
+    // tick, via textClockElements/tickTextClocks) itself.
+    const clockFormat = clockFormatFor(node.id, edges, map)
     const replaceText = rouletteEntrantsTextValue(node.id, edges, map)
-    return buildText(node, mods, animate, vars, registry, crossAxis, contentValues, replaceText)
+    return buildText(node, mods, animate, vars, registry, crossAxis, contentValues, replaceText, clockFormat)
   }
   if (node.type === 'image') return buildImage(node, mods, animate, vars, registry, hasAudioCover(node.id, edges, map))
   if (node.type === 'video') return buildVideo(node, mods, animate, registry)
+  if (node.type === 'progress') return buildProgress(node, edges, map, mods, animate, registry)
   if (node.type === 'rouletteWidget') return rouletteWidgetVisible(node.id, edges, map) ? buildRouletteWheel(node, mods, animate, registry) : null
   if (node.type === 'randomWidget') return randomWidgetVisible(node.id, edges, map) ? buildRandomWidget(node, mods, animate, registry) : null
   // Resolves to exactly ONE of its own wired options (see
@@ -223,6 +374,7 @@ function buildBox(node, edges, map, animate, vars, registry, depth = 0) {
             n.type === 'text' ||
             n.type === 'image' ||
             n.type === 'video' ||
+            n.type === 'progress' ||
             n.type === 'box' ||
             n.type === 'group' ||
             n.type === 'randomPick' ||

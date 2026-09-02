@@ -1,6 +1,7 @@
 import { useStore } from '@xyflow/react'
+import type { GlobalVariable } from '@shared/types'
 import { PROCESS_TYPES } from '../constants'
-import { EVENT_PLACEHOLDERS } from './constants'
+import { EVENT_PLACEHOLDERS, variablePlaceholderName } from './constants'
 
 /**
  * Returns the 1-based priority position of `nodeId` among all nodes wired
@@ -126,9 +127,18 @@ export function useConnectedVariants(nodeId: string) {
  * this specific node's own Scene for the Event/scene-wide Audio check (just
  * whether one exists ANYWHERE in the graph) — a false positive only offers a
  * token that happens not to resolve, same harmless-if-imprecise reasoning as
- * hasAudioContentDeps in overlays/custom.html.
+ * hasAudioContentDeps in overlays/custom.html. Clock's Content output works
+ * the same way as Random's — wiring it into THIS node's own Content socket
+ * arms 'time' (see clockFormatFor/CLOCK_OUTPUTS' own doc comment).
+ *
+ * `globalVariables` (from useGlobalVariables — passed in rather than read
+ * here directly, since this is a zustand useStore selector, not a React
+ * Context consumer) resolves what a scope=global Variable node's own token
+ * actually is; every Variable node ANYWHERE in the graph registers its own
+ * `{name}` regardless of wiring (see variablePlaceholderName's own doc
+ * comment) — the one token source here that isn't gated by an edge check.
  */
-export function useAvailablePlaceholders(nodeId: string): readonly string[] {
+export function useAvailablePlaceholders(nodeId: string, globalVariables: GlobalVariable[]): readonly string[] {
   return useStore(
     (s) => {
       const hasEvent = s.edges.some((e) => e.targetHandle === 'event' && s.nodes.find((n) => n.id === e.source)?.type === 'event')
@@ -147,10 +157,19 @@ export function useAvailablePlaceholders(nodeId: string): readonly string[] {
       const directRandomContent = s.edges.some(
         (e) => e.target === nodeId && e.targetHandle === 'content' && s.nodes.find((n) => n.id === e.source)?.type === 'randomSource'
       )
+      const directClockContent = s.edges.some(
+        (e) => e.target === nodeId && e.targetHandle === 'content' && s.nodes.find((n) => n.id === e.source)?.type === 'clock'
+      )
       const result: string[] = []
       if (hasEvent) result.push(...EVENT_PLACEHOLDERS)
       if (audioIntoScene || directAudioContent) result.push('artist', 'title')
       if (directRandomContent) result.push('number', 'numbers', 'hash', 'seed')
+      if (directClockContent) result.push('time')
+      for (const n of s.nodes) {
+        if (n.type !== 'variable') continue
+        const name = variablePlaceholderName(n, globalVariables)
+        if (name) result.push(name)
+      }
       return result
     },
     (a, b) => a.length === b.length && a.every((v, i) => v === b[i])

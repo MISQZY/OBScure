@@ -8,6 +8,7 @@ import type { ThemeStore } from "../themeStore";
 import type { OverlayServer } from "../overlayServer";
 import type {
   CustomOverlay,
+  GlobalVariable,
   OverlayAddress,
   OverlayFolder,
   OverlayUrls,
@@ -25,6 +26,7 @@ interface OverlayHandlersDeps {
   overlayServer: OverlayServer;
   mainWindow: () => BrowserWindow | null;
   getStoredCustomLocales: () => CustomLocalePack[];
+  getStoredGlobalVariables: () => GlobalVariable[];
 }
 
 export function registerOverlayHandlers(deps: OverlayHandlersDeps): void {
@@ -35,6 +37,7 @@ export function registerOverlayHandlers(deps: OverlayHandlersDeps): void {
     overlayServer,
     mainWindow,
     getStoredCustomLocales,
+    getStoredGlobalVariables,
   } = deps;
 
   ipcMain.handle("overlay:getUrls", (): OverlayUrls =>
@@ -184,6 +187,22 @@ export function registerOverlayHandlers(deps: OverlayHandlersDeps): void {
     "locale:deleteCustomLocale",
     "customLocales",
     getStoredCustomLocales,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Global variables — "Данные → Переменные" page. Persisted the same way
+  // Locales are (a plain list in config.json); `onSet` additionally pushes
+  // every change to OverlayServer so an already-open OBS Browser Source picks
+  // it up live (see OverlayServer.setGlobalVariables' own doc comment).
+  // ---------------------------------------------------------------------------
+
+  registerCustomPackHandlers(
+    "variables:getGlobal",
+    "variables:saveGlobal",
+    "variables:deleteGlobal",
+    "globalVariables",
+    getStoredGlobalVariables,
+    (next) => overlayServer.setGlobalVariables(next),
   );
 
   ipcMain.handle(

@@ -39,12 +39,12 @@ export function maxExitDurationMs(nodes: Node[], edges: Edge[]): number {
     const mods = incoming(n.id, edges, map)
     consider(mods)
     if (n.type === 'box' || n.type === 'group') {
-      for (const child of mods.filter((m) => m.type === 'text' || m.type === 'image' || m.type === 'video' || m.type === 'box' || m.type === 'group')) {
+      for (const child of mods.filter((m) => m.type === 'text' || m.type === 'image' || m.type === 'video' || m.type === 'progress' || m.type === 'box' || m.type === 'group')) {
         visit(child)
       }
     }
   }
-  const renderable = incoming(scene.id, edges, map).filter((n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video')
+  const renderable = incoming(scene.id, edges, map).filter((n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'progress')
   for (const n of renderable) visit(n)
   return max || 250
 }

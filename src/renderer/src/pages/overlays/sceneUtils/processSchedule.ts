@@ -50,7 +50,7 @@ export function buildProcessSchedule(nodes: Node[], edges: Edge[], vars: Record<
       atMs += (current.data.delay as number) || 1000
     } else if (current.type === 'task') {
       const incomingNodes = incoming(current.id, edges, map)
-      const target = incomingNodes.find((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group')
+      const target = incomingNodes.find((n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'progress' || n.type === 'box' || n.type === 'group')
       if (target) {
         schedule.push({
           atMs,

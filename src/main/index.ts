@@ -27,7 +27,7 @@ import { registerIntegrationsHandlers } from "./ipc/integrationsHandlers";
 import { initUpdater } from "./updater";
 import { initWhatsNew } from "./whatsNew";
 import { initLogger, logError, logInfo, logWarn } from "./logger";
-import type { NowPlayingPayload } from "../shared/types";
+import type { GlobalVariable, NowPlayingPayload } from "../shared/types";
 import type { CustomLocalePack } from "../shared/customConfig";
 import {
   DEFAULT_EVENTS_CONFIGS,
@@ -131,6 +131,10 @@ function getStoredCustomLocales(): CustomLocalePack[] {
   return config.getSetting<CustomLocalePack[]>("customLocales", []);
 }
 
+function getStoredGlobalVariables(): GlobalVariable[] {
+  return config.getSetting<GlobalVariable[]>("globalVariables", []);
+}
+
 const overlayServer = new OverlayServer({
   host: config.getSetting("overlay.host", DEFAULT_OVERLAY_HOST),
   port: config.getSetting("overlay.port", DEFAULT_OVERLAY_PORT),
@@ -139,6 +143,7 @@ const overlayServer = new OverlayServer({
   customSoundsDir,
   customImagesDir,
   initialCustomOverlays: overlayStore.listOverlays(),
+  initialGlobalVariables: getStoredGlobalVariables(),
 });
 
 
@@ -279,6 +284,7 @@ async function reinitializeForActiveProfile(): Promise<void> {
   }
 
   overlayServer.setCustomOverlays(overlayStore.listOverlays());
+  overlayServer.setGlobalVariables(getStoredGlobalVariables());
   mainWindow?.webContents.reload();
 }
 
@@ -342,6 +348,7 @@ registerOverlayHandlers({
   overlayServer,
   mainWindow: () => mainWindow,
   getStoredCustomLocales,
+  getStoredGlobalVariables,
 });
 
 registerMediaHandlers({

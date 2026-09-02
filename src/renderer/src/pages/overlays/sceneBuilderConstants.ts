@@ -29,6 +29,7 @@ export const NODE_PALETTE: { type: string; label: string; group: string }[] = [
   { type: 'text', label: 'Text', group: 'Content' },
   { type: 'image', label: 'Image', group: 'Content' },
   { type: 'video', label: 'Video', group: 'Content' },
+  { type: 'progress', label: 'Progress Bar', group: 'Content' },
   { type: 'box', label: 'Shape', group: 'Content' },
   { type: 'group', label: 'Group', group: 'Content' },
   { type: 'randomPick', label: 'Random Pick', group: 'Content' },
@@ -62,15 +63,25 @@ export const NODE_PALETTE: { type: string; label: string; group: string }[] = [
   { type: 'backgroundAnimation', label: 'Background FX', group: 'Effects' },
   // External live signal sources — Event matches an incoming alert,
   // Audio Player reads the current Spotify/Windows Media track. Neither
-  // has state living outside the node itself.
+  // has state living outside the node itself. Clock isn't "external" the
+  // same way, but shares the same shape (a data source with no visual
+  // presence of its own — wire its Content output into a Text node's own
+  // Content socket for a {time} placeholder, see CLOCK_OUTPUTS' own doc
+  // comment in components/nodes/constants.ts).
   { type: 'event', label: 'Event', group: 'Live Data' },
   { type: 'audioPlayer', label: 'Audio Player', group: 'Live Data' },
+  { type: 'clock', label: 'Clock', group: 'Live Data' },
   // Random/Roulette aren't self-contained nodes — placing one only
   // surfaces the live state of the matching app-level Tool (see
   // RandomToolPage/RouletteToolPage), min/max/count/command/entryMode/etc.
   // all live on that Tool's own settings, not on this node.
   { type: 'randomSource', label: 'Random', group: 'Tools' },
   { type: 'rouletteSource', label: 'Roulette', group: 'Tools' },
+  // A manual named number, no live source wired to it yet — mainly for
+  // Progress Bar's own Current/Target sockets (see PROGRESS_SOCKETS'
+  // doc comment in components/nodes/constants.ts) until a real live-stat
+  // feed exists to wire in instead.
+  { type: 'variable', label: 'Variable', group: 'Data' },
   { type: 'frame', label: 'Layout Frame', group: 'Utils' }
 ]
 export const PALETTE_GROUPS = [...new Set(NODE_PALETTE.map((entry) => entry.group))]
