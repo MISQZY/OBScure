@@ -1,6 +1,7 @@
 import React from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
 
+import { useI18n } from '@/providers/I18nProvider'
 import { PROGRESS_SOCKETS, PROGRESS_OUTPUTS } from './constants'
 import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect, numberInputClass, PROGRESS_ORIENTATIONS } from './utils'
 
@@ -15,6 +16,7 @@ import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect
  */
 export function ProgressNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
+  const { t } = useI18n()
   const saved = useSavedNodeData(id)
   const orientation = (data.orientation as string) || 'horizontal'
   return (
@@ -26,7 +28,7 @@ export function ProgressNode({ id, data }: NodeProps) {
       category="content"
       sockets={PROGRESS_SOCKETS}
       outputSockets={PROGRESS_OUTPUTS}
-      help="Wire a Variable node into Current/Target for the fill amount, and (optionally) a Text node into Label to caption it with that Text's own styling."
+      help={t.sceneBuilder.tooltip.nodes.progress}
     >
       <Field label="Orientation">
         <NodeSelect value={orientation} options={PROGRESS_ORIENTATIONS} onChange={(next) => updateNodeData(id, { orientation: next })} />

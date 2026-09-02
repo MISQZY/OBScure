@@ -147,9 +147,6 @@ export const PROGRESS_ORIENTATIONS = ['horizontal', 'vertical'] as const
 export const CLOCK_FORMAT_TOKENS = ['YYYY', 'MM', 'DD', 'HH', 'hh', 'mm', 'ss', 'A'] as const
 const CLOCK_FORMAT_TOKEN_PATTERN = new RegExp(CLOCK_FORMAT_TOKENS.join('|'), 'g')
 
-/** A few starting points ClockNode offers as quick-fill buttons next to its free-text Format field — not an exhaustive or enforced list, just common on-stream clock shapes built from CLOCK_FORMAT_TOKENS. */
-export const CLOCK_FORMAT_PRESETS = ['HH:mm:ss', 'HH:mm', 'hh:mm A', 'DD.MM.YYYY', 'DD.MM.YYYY HH:mm'] as const
-
 /**
  * Expands a Format string (ClockNode's own free-text field) against `date` —
  * mirrors formatClockDate in overlays/custom-builders.js. Any character NOT

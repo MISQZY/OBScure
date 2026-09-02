@@ -129,7 +129,13 @@ export function useConnectedVariants(nodeId: string) {
  * token that happens not to resolve, same harmless-if-imprecise reasoning as
  * hasAudioContentDeps in overlays/custom.html. Clock's Content output works
  * the same way as Random's — wiring it into THIS node's own Content socket
- * arms 'time' (see clockFormatFor/CLOCK_OUTPUTS' own doc comment).
+ * arms 'time' (see clockFormatFor/CLOCK_OUTPUTS' own doc comment). A Progress
+ * Bar's Label works the other direction from all of the above — THIS node is
+ * the one feeding a value out, not receiving one — wiring this Text's own
+ * Content output into a Progress Bar's `caption` socket (see PROGRESS_SOCKETS
+ * in constants.ts) arms 'current'/'target'/'percent', matching exactly what
+ * ProgressView.tsx/buildProgress already merge into that label's
+ * contentValues at render time.
  *
  * `globalVariables` (from useGlobalVariables — passed in rather than read
  * here directly, since this is a zustand useStore selector, not a React
@@ -160,11 +166,15 @@ export function useAvailablePlaceholders(nodeId: string, globalVariables: Global
       const directClockContent = s.edges.some(
         (e) => e.target === nodeId && e.targetHandle === 'content' && s.nodes.find((n) => n.id === e.source)?.type === 'clock'
       )
+      const feedsProgressLabel = s.edges.some(
+        (e) => e.source === nodeId && e.targetHandle === 'caption' && s.nodes.find((n) => n.id === e.target)?.type === 'progress'
+      )
       const result: string[] = []
       if (hasEvent) result.push(...EVENT_PLACEHOLDERS)
       if (audioIntoScene || directAudioContent) result.push('artist', 'title')
       if (directRandomContent) result.push('number', 'numbers', 'hash', 'seed')
       if (directClockContent) result.push('time')
+      if (feedsProgressLabel) result.push('current', 'target', 'percent')
       for (const n of s.nodes) {
         if (n.type !== 'variable') continue
         const name = variablePlaceholderName(n, globalVariables)

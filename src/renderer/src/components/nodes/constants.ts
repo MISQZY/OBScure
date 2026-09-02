@@ -136,13 +136,13 @@ export const VIDEO_SOCKETS: InputSocket[] = MODIFIER_SOCKETS
  * Socket id is 'caption', not 'label' — it has to match one of Text's own
  * NODE_OUTPUTS entries' `feeds` list (see isValidConnection in
  * hooks/useSceneGraph.ts, which checks BOTH the target socket's `accepts`
- * AND the specific dragged-from output socket's `feeds`), and Text already
- * has exactly this role as CAPTION_OUTPUT (`feeds: ['caption']`, the "As
- * Caption" output row) — reusing it here means dragging from that row Just
- * Works instead of needing a fourth Text output role for what's the same
- * "plug this Text in as a caption" concept BackgroundAnimation's own Caption
- * socket already uses. The user-visible `label` field below is independent
- * of `id` and still reads "Label" on the node itself.
+ * AND the specific dragged-from output socket's `feeds`), and Text's single
+ * Content output already covers this role (`feeds` includes 'caption'
+ * alongside 'children'/'content' — see CONTENT_OUTPUT below) — reusing it
+ * here means dragging from that same row Just Works, the same one row
+ * that's already used to place a Text as ordinary content. The user-visible
+ * `label` field below is independent of `id` and still reads "Label" on the
+ * node itself.
  * Current/Target (each a single wired Variable node's `.data.value` — see
  * VariableNode — 0 when nothing's wired into a socket, same as any other
  * unwired optional input), plus the same Transform/Style modifiers every
@@ -173,8 +173,8 @@ export const BOX_SOCKETS: InputSocket[] = [
 
 /**
  * A Random Pick node's own single input — same id ('children') as Box's own
- * above so it reuses STRUCTURAL_OUTPUT's existing `feeds` list unchanged
- * (see STRUCTURAL_OUTPUT below) rather than needing a whole separate output
+ * above so it reuses CONTENT_OUTPUT's existing `feeds` list unchanged
+ * (see CONTENT_OUTPUT below) rather than needing a whole separate output
  * role — every content node's plain "wire it in to place it" output already
  * lands here. Accepts the SAME set Box's own `children` does, `randomPick`
  * included: a Random Pick node can nest another one as one of its own
@@ -289,12 +289,27 @@ export type OutputSocket = {
   helpKey?: string
 }
 
-export const STRUCTURAL_OUTPUT: OutputSocket = {
-  id: 'structural',
-  label: 'Structural',
+/**
+ * The "place this node's rendered output somewhere" role — used to be two
+ * separate rows, Structural (feeds: ['children', 'content'] — a container's
+ * Children or a top-level Content socket) and Text-only As Caption (feeds:
+ * ['caption'] — an effect's Caption/a Progress Bar's Label socket). They
+ * were never SIMULTANEOUSLY-needed roles the way Structural+As Target are (a
+ * component needs BOTH a Structural wire to exist at all AND a Target wire
+ * for a Task to separately control it) — Caption was always an ALTERNATIVE
+ * destination for the exact same underlying concept, just captioning
+ * something instead of being placed as ordinary content, so one merged row
+ * (feeds is the union of both) loses no real distinction and just means
+ * fewer dots to pick between. See migrateLegacyContentOutputEdges in
+ * sceneUtils/legacyMigrations.ts for the old 'structural'/'caption'
+ * sourceHandle remap this required.
+ */
+export const CONTENT_OUTPUT: OutputSocket = {
+  id: 'content',
+  label: 'Content',
   kind: 'content',
-  feeds: ['children', 'content'],
-  helpKey: 'structural'
+  feeds: ['children', 'content', 'caption'],
+  helpKey: 'content'
 }
 export const TARGET_OUTPUT: OutputSocket = {
   id: 'target',
@@ -303,19 +318,12 @@ export const TARGET_OUTPUT: OutputSocket = {
   feeds: ['target'],
   helpKey: 'target'
 }
-export const CAPTION_OUTPUT: OutputSocket = {
-  id: 'caption',
-  label: 'As Caption',
-  kind: 'content',
-  feeds: ['caption'],
-  helpKey: 'caption'
-}
 
-export const TEXT_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT, CAPTION_OUTPUT]
-export const IMAGE_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
-export const VIDEO_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
-export const PROGRESS_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
-export const BOX_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
+export const TEXT_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUTPUT]
+export const IMAGE_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUTPUT]
+export const VIDEO_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUTPUT]
+export const PROGRESS_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUTPUT]
+export const BOX_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUTPUT]
 
 /**
  * Clock's single role: the `{time}` placeholder for whichever Text socket
@@ -324,7 +332,7 @@ export const BOX_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
  * LOOKS, same as Audio Player's own Content wire's own `{artist}`/`{title}`
  * split). `kind: 'content'` (not the node's own 'data' category) so this
  * wire reads green like the Content sockets it feeds, matching
- * AUDIO_PLAYER_OUTPUTS' own reasoning exactly. Not Structural/Target like
+ * AUDIO_PLAYER_OUTPUTS' own reasoning exactly. Not Content/Target like
  * Text/Image/Box's outputs — Clock has no visual presence of its own
  * anymore to place in Scene/a Box/a Task, only this one value to supply.
  */
@@ -419,19 +427,19 @@ export const ROULETTE_OUTPUTS: OutputSocket[] = [
 ]
 
 /**
- * A Roulette Widget's own single Structural/Target role — plain reuse of
- * STRUCTURAL_OUTPUT/TARGET_OUTPUT, same shape as TEXT_OUTPUTS/IMAGE_OUTPUTS/
+ * A Roulette Widget's own single Content/Target role — plain reuse of
+ * CONTENT_OUTPUT/TARGET_OUTPUT, same shape as TEXT_OUTPUTS/IMAGE_OUTPUTS/
  * VIDEO_OUTPUTS/BOX_OUTPUTS above. Nothing Roulette-specific about the
  * OUTPUT side — what's special is entirely on the INPUT side (its own
  * `source`/`visible` sockets, see NODE_SOCKETS.rouletteWidget above) and in
  * how the node itself comes to exist (auto-paired, never placed by hand from
  * the palette — see addNode's own doc comment in hooks/useSceneGraph.ts).
  */
-export const ROULETTE_WIDGET_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
+export const ROULETTE_WIDGET_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUTPUT]
 
 /**
  * A Roulette Entrants list's own single output — unlike the Widget's above,
- * this ISN'T Structural/Target (it's not independently placeable in Scene/a
+ * this ISN'T Content/Target (it's not independently placeable in Scene/a
  * Box/a Task) — it's a Content feed, same family as AUDIO_PLAYER_OUTPUTS'
  * own `content` role: wire it into a Text node's own Content socket to
  * REPLACE that Text's template outright with the formatted, joined entrants
@@ -489,8 +497,8 @@ export const RANDOM_OUTPUTS: OutputSocket[] = [
   }
 ]
 
-/** A Random Widget's own single Structural/Target role — same reuse of STRUCTURAL_OUTPUT/TARGET_OUTPUT as ROULETTE_WIDGET_OUTPUTS above; nothing Random-specific about the output side. */
-export const RANDOM_WIDGET_OUTPUTS: OutputSocket[] = [STRUCTURAL_OUTPUT, TARGET_OUTPUT]
+/** A Random Widget's own single Content/Target role — same reuse of CONTENT_OUTPUT/TARGET_OUTPUT as ROULETTE_WIDGET_OUTPUTS above; nothing Random-specific about the output side. */
+export const RANDOM_WIDGET_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUTPUT]
 
 /**
  * A Condition's two branch roles — unlike every OutputSocket above (all

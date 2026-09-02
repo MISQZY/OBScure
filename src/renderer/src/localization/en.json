@@ -423,12 +423,13 @@
         "video": "Defaults to 320×180 — wire in a Transform-section node to override the size.",
         "videoAutoplay": "Off relies on the browser allowing autoplay audio, which isn't guaranteed — pair with an Effects-section node for reliable sound instead.",
         "scene": "The output — only what's wired in here is rendered.",
-        "end": "Exit point — the process finishes and the scene clears here."
+        "end": "Exit point — the process finishes and the scene clears here.",
+        "clock": "Wire Content into a Text node's own Content socket and use {time} in its template — that Text's own color/font/size/align apply, not anything here.",
+        "progress": "Wire a Variable node into Current/Target for the fill amount, and (optionally) a Text node into Label to caption it with that Text's own styling."
       },
       "outputs": {
-        "structural": "Makes this part of what's actually rendered — wire it into a Content-section container's Children socket to nest it, or straight into the top-level Content socket to place it directly.",
-        "target": "Wire into a Process-section step's Target socket to mark this as what that step shows, hides, or updates. This doesn't replace the Structural wire — a component still needs that too, or it won't render at all.",
-        "caption": "Wire into an Effects-section effect's own Caption socket to caption its drop with this text.",
+        "content": "Makes this node visible — wire it into a container's own Children socket or a top-level Content socket (both in the Content section) to place it as ordinary content, or into an Effects-section effect's own Caption socket, or a Progress Bar's Label, to caption it with this text instead of placing it normally.",
+        "target": "Wire into a Process-section step's Target socket to mark this as what that step shows, hides, or updates. This doesn't replace the Content wire — a component still needs that too, or it won't render at all.",
         "audioContent": "Bundles Artist, Title, and Cover in one wire. Wire it into a Content-section node's own Content socket — which fields apply depends on where it lands.",
         "audioEvent": "The track-change/now-playing signal. Wire into a Process-section entry point to arm it on track change, and/or into the scene-level Event socket to show or hide the whole scene by playback state — both at once is fine.",
         "rouletteContent": "Feeds this node's own paired display widget and entrant list through their shared Source socket — that's all it's for. The widget's link is permanent, the entrant list's isn't.",

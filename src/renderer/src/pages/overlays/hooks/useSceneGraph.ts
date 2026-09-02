@@ -12,7 +12,7 @@ import {
 } from '@xyflow/react'
 import { NODE_SOCKETS, NODE_OUTPUTS, NODE_DEFAULTS } from '@/components/nodes'
 import type { CustomOverlay } from '@shared/types'
-import { PROCESS_TYPES, CONTAINER_TYPES, sortNodesForParenting, withFrameZIndex, FRAME_Z_INDEX, layoutGraph, migrateLegacyModifierEdges, migrateLegacyAudioPlayerEdges } from '../sceneUtils'
+import { PROCESS_TYPES, CONTAINER_TYPES, sortNodesForParenting, withFrameZIndex, FRAME_Z_INDEX, layoutGraph, migrateLegacyModifierEdges, migrateLegacyAudioPlayerEdges, migrateLegacyContentOutputEdges } from '../sceneUtils'
 import { defaultNodes, defaultEdges } from '../sceneBuilderConstants'
 
 /**
@@ -138,7 +138,7 @@ export function useSceneGraph(overlay: CustomOverlay | undefined, locked: boolea
     if (overlay) {
       const isBlank = !overlay.nodes || overlay.nodes.length === 0
       setNodes(isBlank ? defaultNodes : withFrameZIndex(sortNodesForParenting(overlay.nodes)))
-      setEdges(isBlank ? defaultEdges : migrateLegacyAudioPlayerEdges(migrateLegacyModifierEdges(overlay.edges || [])))
+      setEdges(isBlank ? defaultEdges : migrateLegacyContentOutputEdges(migrateLegacyAudioPlayerEdges(migrateLegacyModifierEdges(overlay.edges || []))))
     } else {
       setNodes(defaultNodes)
       setEdges(defaultEdges)
@@ -211,7 +211,7 @@ export function useSceneGraph(overlay: CustomOverlay | undefined, locked: boolea
     (importedNodes: Node[], importedEdges: Edge[]): void => {
       if (!beginMutation()) return
       setNodes(withFrameZIndex(sortNodesForParenting(importedNodes)))
-      setEdges(migrateLegacyAudioPlayerEdges(migrateLegacyModifierEdges(importedEdges)))
+      setEdges(migrateLegacyContentOutputEdges(migrateLegacyAudioPlayerEdges(migrateLegacyModifierEdges(importedEdges))))
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           reactFlowInstanceRef.current?.fitView({ duration: 300, padding: 0.15 })
@@ -396,7 +396,7 @@ export function useSceneGraph(overlay: CustomOverlay | undefined, locked: boolea
    * output socket used also has to list the target socket in its `feeds` —
    * e.g. dragging from Box's "As Target" dot can only land on a Task's
    * Target socket, not Scene's Content, even though a plain Box is
-   * otherwise allowed there via the "Structural" output.
+   * otherwise allowed there via the "Content" output.
    */
   const isValidConnection = useCallback(
     (connection: Connection | Edge) => {

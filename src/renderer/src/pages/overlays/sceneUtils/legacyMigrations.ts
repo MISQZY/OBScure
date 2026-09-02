@@ -89,3 +89,39 @@ export function migrateLegacyAudioPlayerEdges(edges: Edge[]): Edge[] {
     return true
   })
 }
+
+
+/**
+ * One-time upgrade for edges saved before Text/Image/Video/Progress/Box's
+ * separate Structural ("place directly/nested") output and Text's own
+ * separate As Caption ("caption a Background FX/Progress Bar Label") output
+ * were merged into one Content output (see CONTENT_OUTPUT in
+ * components/nodes/constants.ts) — they were never simultaneously-needed
+ * roles on the SAME wire the way Structural+As Target are (a component
+ * needs BOTH a Structural wire to exist at all AND a separate Target wire
+ * for a Task to control it); Caption was always an ALTERNATIVE destination
+ * for the exact same "place this Text's rendered output somewhere" concept,
+ * just captioning something instead of being placed as ordinary content, so
+ * folding them into one output loses no real distinction. 'structural'/
+ * 'caption' were unique to these two roles (no other NODE_OUTPUTS entry ever
+ * used either id), so remapping by sourceHandle alone, with no source-type
+ * check, is safe — same reasoning as LEGACY_AUDIO_PLAYER_SOURCE_HANDLE_REMAP
+ * above. Unlike that remap, no dedup pass is needed here: 'structural' and
+ * 'caption' always fed disjoint targets (children/content sockets vs.
+ * caption sockets), so a Text wired via both at once produces two edges
+ * with different targets — never a genuine duplicate post-remap. The
+ * runtime resolvers never read sourceHandle at all (they resolve wiring by
+ * the connected node's own `type` + targetHandle) — an un-migrated overlay
+ * still renders correctly live; this only matters for editing it further.
+ */
+export const LEGACY_CONTENT_OUTPUT_SOURCE_HANDLE_REMAP: Record<string, string> = {
+  structural: 'content',
+  caption: 'content'
+}
+
+export function migrateLegacyContentOutputEdges(edges: Edge[]): Edge[] {
+  return edges.map((e) => {
+    const remapped = e.sourceHandle ? LEGACY_CONTENT_OUTPUT_SOURCE_HANDLE_REMAP[e.sourceHandle] : undefined
+    return remapped ? { ...e, sourceHandle: remapped } : e
+  })
+}

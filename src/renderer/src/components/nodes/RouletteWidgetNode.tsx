@@ -14,7 +14,7 @@ import { BaseNode } from './utils'
  * disconnected (useSceneGraph's onNodesChange/onEdgesChange refuse to let
  * either half of the pair, or the edge between them, be removed alone —
  * deleting one takes the other with it). A plain content node otherwise —
- * same Transform/Style sockets and Structural/Target outputs as Text/Image/
+ * same Transform/Style sockets and Content/Target outputs as Text/Image/
  * Video/Box, so it can be positioned, sized, animated, or handed to a Task
  * exactly like any of those.
  *
