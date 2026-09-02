@@ -311,21 +311,20 @@ export function DashboardPage() {
       {visibleIds.length === 0 && <p className="text-sm text-muted-foreground">{t.dashboard.noCards}</p>}
 
       {/*
-        minHeight lives on this plain wrapper, not on the ScrollArea below —
-        putting it on the ScrollArea itself would stretch that box (and drag
-        its horizontal scrollbar, anchored to its own bottom edge) down to
-        the bottom of the whole reserved canvas, far past the actual cards.
-        Left alone here, the ScrollArea hugs the grid's real height and any
-        leftover minHeight just becomes plain unscrollable blank canvas below it.
-
         min-w-0 is load-bearing: as a flex item, this box's default auto
         min-width is its content's min-content size — which, because the grid
         below forces MIN_GRID_WIDTH, is huge — and that would otherwise widen
         the whole flex column (pushing the header row's + button off-screen)
         instead of staying inside this box's own horizontal scrollbar.
+
+        The ScrollArea below is flex-1 rather than sized to its own content,
+        so it stretches down to fill this box's full minHeight — pinning the
+        horizontal scrollbar (anchored to the ScrollArea's own bottom edge)
+        to the bottom of the reserved canvas instead of right under whatever
+        the current shortest arrangement of cards happens to be.
       */}
-      <div ref={gridAreaRef} className="min-w-0" style={{ minHeight }}>
-        <ScrollAreaPrimitive.Root type="auto" className="overflow-hidden">
+      <div ref={gridAreaRef} className="flex min-w-0 flex-col" style={{ minHeight }}>
+        <ScrollAreaPrimitive.Root type="auto" className="min-h-0 flex-1 overflow-hidden">
           {/* pb-4 keeps the horizontal scrollbar (an overlay pinned to the
               bottom edge of Root, not part of normal flow) from sitting flush
               against — and visually fighting with — the last row of cards. */}
