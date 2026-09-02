@@ -104,15 +104,24 @@
   "integrations": {
     "spotify": {
       "description": "Tracks your current Spotify play state.",
+      "setupSteps": [
+        { "text": "Open the Spotify Developer Dashboard and create an app.", "link": "https://developer.spotify.com/dashboard" },
+        { "text": "In the app's settings, add this exact Redirect URI:", "link": "http://127.0.0.1:47891/callback/spotify" },
+        { "text": "Copy the app's Client ID into the field below." }
+      ],
       "clientIdLabel": "Client ID",
-      "clientIdPlaceholder": "From the Spotify Developer Dashboard",
-      "clientIdDescription": "developer.spotify.com/dashboard → create an app → Redirect URI: http://127.0.0.1:47891/callback/spotify"
+      "clientIdPlaceholder": "From the Spotify Developer Dashboard"
     },
     "twitch": {
       "description": "Detects subscriptions, raids, and follows on your channel.",
+      "setupNote": "A built-in Client ID is already used by default — only follow these steps if you want to use your own instead.",
+      "setupSteps": [
+        { "text": "Open the Twitch Developer Console and register an application.", "link": "https://dev.twitch.tv/console/apps" },
+        { "text": "Set the app's OAuth Redirect URL to this exact address:", "link": "http://localhost:47891/callback/twitch" },
+        { "text": "Copy the Client ID into the field below." }
+      ],
       "clientIdLabel": "Client ID",
-      "clientIdPlaceholder": "From the Twitch Developer Console",
-      "clientIdDescription": "Optional: your own Client ID overrides the built-in one. dev.twitch.tv/console/apps → register an application → Redirect URI: http://localhost:47891/callback/twitch"
+      "clientIdPlaceholder": "From the Twitch Developer Console"
     },
     "windowsMedia": {
       "title": "Windows Media",
@@ -122,12 +131,14 @@
     },
     "youtube": {
       "description": "Detects memberships and Super Chats on your stream.",
+      "setupSteps": [
+        { "text": "Open Google Cloud Console and create an OAuth client (type: Desktop app).", "link": "https://console.cloud.google.com" },
+        { "text": "Copy the generated Client ID and Client Secret into the fields below." }
+      ],
       "clientIdLabel": "Client ID",
       "clientIdPlaceholder": "From Google Cloud Console",
-      "clientIdDescription": "console.cloud.google.com → OAuth client (Desktop app type)",
       "clientSecretLabel": "Client Secret",
-      "clientSecretPlaceholder": "From Google Cloud Console",
-      "clientSecretDescription": "Google issues a secret for Desktop apps too — it's needed to exchange the code for a token"
+      "clientSecretPlaceholder": "From Google Cloud Console"
     }
   },
   "sound": {
