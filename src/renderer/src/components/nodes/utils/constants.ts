@@ -9,7 +9,12 @@ import { ALERT_TYPES_BY_PLATFORM, type AlertPlatform, type GlobalVariable, type 
  * otherwise blocks drag-selecting text even inside a nodrag input. Both are
  * on every interactive control in every node below.
  */
-export const numberInputClass = 'nodrag select-text w-16 bg-muted px-1 py-0.5 rounded outline-none'
+// w-20 (not w-16, like every other control here) — NumberInput spends part
+// of this width on its own stepper button column (see its own doc comment),
+// so the text itself needs a little more room than a plain text field of
+// the same visual weight to keep a 3-4 digit value (a Size/Timer field)
+// from feeling cramped.
+export const numberInputClass = 'nodrag select-text w-20 bg-muted px-1 py-0.5 rounded outline-none'
 export const selectClass = 'nodrag select-text flex-1 min-w-0 bg-muted px-1 py-0.5 rounded outline-none'
 
 export const textInputClass = 'nodrag select-text w-full h-6 bg-muted px-1 rounded outline-none'

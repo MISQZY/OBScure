@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { ChevronUp, ChevronDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 /**
  * Text-backed replacement for `<input type="number">`. A controlled native
@@ -16,6 +18,14 @@ import { useEffect, useRef, useState } from 'react'
  * in-editor `value`, so undoing an in-progress edit by clearing it doesn't
  * quietly keep an unsaved number around either. `fallback` only kicks in
  * when nothing's ever been saved for this field.
+ *
+ * `type="text"` means no native browser spinner either, though — restored
+ * here as a small stepper column instead, styled off the same shadcn
+ * tokens (muted/accent/border) every other node control already uses rather
+ * than the browser's own default arrows. `className` (every call site
+ * passes the shared `numberInputClass`) lands on the WRAPPER now, not the
+ * input directly — its bg/rounding/border read as one control spanning
+ * input+buttons, same visual unit a native spinner input would be.
  */
 // A node's `data` should already hold this field's default the moment it's
 // placed (see NODE_DEFAULTS in addNode, SceneBuilderPage.tsx), but this
@@ -34,6 +44,7 @@ export function NumberInput({
   onChange,
   min,
   max,
+  step = 1,
   placeholder,
   className,
   allowEmpty = false,
@@ -44,6 +55,8 @@ export function NumberInput({
   onChange: (v: number | null) => void
   min?: number
   max?: number
+  /** Amount the stepper buttons (and the input's own ArrowUp/ArrowDown keys, matching a native `<input type="number">`) adjust by per click/press. */
+  step?: number
   placeholder?: string
   className?: string
   /** Empty commits `null` instead of snapping back to `fallback` — for optional fields like Size's width/height ("auto"). */
@@ -68,51 +81,105 @@ export function NumberInput({
     return out
   }
 
+  // Shared by the stepper buttons and ArrowUp/ArrowDown below — reads the
+  // CURRENT text buffer (not just the last-committed `value`) so stepping
+  // mid-edit ("1." then +1) resolves off what's actually in the field, same
+  // as a native number input would. An unparsable buffer (empty, "-", a
+  // value cleared mid-edit) falls back to `value`/`fallback`, same
+  // resolution order onBlur already uses.
+  const adjust = (delta: number) => {
+    const current = Number(text)
+    const base = Number.isNaN(current) ? ((value ?? fallback) as number) : current
+    const resolved = clamp(base + delta)
+    onChange(resolved)
+    setText(String(resolved))
+  }
+
   return (
-    <input
-      type="text"
-      inputMode="decimal"
-      placeholder={placeholder}
-      className={className}
-      value={text}
-      onFocus={() => {
-        isFocused.current = true
-      }}
-      onChange={(e) => {
-        const raw = e.target.value
-        // Reject anything that isn't a (possibly partial) signed decimal —
-        // keeps stray letters out while still allowing "-", ".", "-." mid-type.
-        if (raw !== '' && !/^-?\d*\.?\d*$/.test(raw)) return
-        setText(raw)
-        if (raw === '' || raw === '-' || raw === '.' || raw === '-.') return
-        const parsed = Number(raw)
-        if (!Number.isNaN(parsed)) onChange(clamp(parsed))
-      }}
-      onBlur={() => {
-        isFocused.current = false
-        // Restore to what was actually Saved for this field, not the
-        // generic per-field `fallback` — so clearing a field you'd already
-        // saved puts back what you had, not the type's blank-slate default.
-        // Only when nothing's ever been saved (a brand-new node/field) does
-        // this fall through to `fallback`.
-        const restoreTo = savedValue !== null && savedValue !== undefined ? savedValue : fallback
-        if (text.trim() === '') {
-          if (allowEmpty) {
-            onChange(null)
-          } else {
-            onChange(restoreTo)
-            setText(String(restoreTo))
+    <div className={cn('flex items-stretch', className)}>
+      <input
+        type="text"
+        inputMode="decimal"
+        placeholder={placeholder}
+        className="nodrag select-text min-w-0 flex-1 bg-transparent outline-none"
+        value={text}
+        onFocus={() => {
+          isFocused.current = true
+        }}
+        onChange={(e) => {
+          const raw = e.target.value
+          // Reject anything that isn't a (possibly partial) signed decimal —
+          // keeps stray letters out while still allowing "-", ".", "-." mid-type.
+          if (raw !== '' && !/^-?\d*\.?\d*$/.test(raw)) return
+          setText(raw)
+          if (raw === '' || raw === '-' || raw === '.' || raw === '-.') return
+          const parsed = Number(raw)
+          if (!Number.isNaN(parsed)) onChange(clamp(parsed))
+        }}
+        onBlur={() => {
+          isFocused.current = false
+          // Restore to what was actually Saved for this field, not the
+          // generic per-field `fallback` — so clearing a field you'd already
+          // saved puts back what you had, not the type's blank-slate default.
+          // Only when nothing's ever been saved (a brand-new node/field) does
+          // this fall through to `fallback`.
+          const restoreTo = savedValue !== null && savedValue !== undefined ? savedValue : fallback
+          if (text.trim() === '') {
+            if (allowEmpty) {
+              onChange(null)
+            } else {
+              onChange(restoreTo)
+              setText(String(restoreTo))
+            }
+            return
           }
-          return
-        }
-        const parsed = Number(text)
-        const resolved = Number.isNaN(parsed) ? restoreTo : clamp(parsed)
-        onChange(resolved)
-        setText(String(resolved))
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur()
-      }}
-    />
+          const parsed = Number(text)
+          const resolved = Number.isNaN(parsed) ? restoreTo : clamp(parsed)
+          onChange(resolved)
+          setText(String(resolved))
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            ;(e.currentTarget as HTMLInputElement).blur()
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            adjust(step)
+          } else if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            adjust(-step)
+          }
+        }}
+      />
+      <div className="flex w-4 shrink-0 flex-col border-l border-border/60">
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label="Increment"
+          // preventDefault on mousedown (not just relying on onClick) keeps
+          // the text input focused — a plain click would otherwise blur it
+          // first, and adjust() needs the input's OWN current text buffer,
+          // not whatever a blur may have already resolved it to.
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => adjust(step)}
+          className="nodrag flex flex-1 items-center justify-center rounded-sm px-0.5 leading-none text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        >
+          <ChevronUp className="size-2.5" />
+        </button>
+        {/* A standalone divider, not a border owned by either button — a
+            border-t on the Decrement button alone made IT look like its own
+            bordered box while Increment stayed borderless/flat above it. */}
+        <div className="h-px shrink-0 bg-border/60" />
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label="Decrement"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => adjust(-step)}
+          className="nodrag flex flex-1 items-center justify-center rounded-sm px-0.5 leading-none text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        >
+          <ChevronDown className="size-2.5" />
+        </button>
+      </div>
+    </div>
   )
 }
