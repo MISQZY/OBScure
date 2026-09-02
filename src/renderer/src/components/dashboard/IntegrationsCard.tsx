@@ -40,7 +40,6 @@ export function IntegrationsCard({ status, onRemove }: IntegrationsCardProps) {
           )
         })}
       </div>
-      <p className="text-xs text-muted-foreground">{t.dashboard.footerNote}</p>
     </DashboardCardSection>
   )
 }

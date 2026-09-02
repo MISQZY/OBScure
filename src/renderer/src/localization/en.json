@@ -58,7 +58,6 @@
   },
   "dashboard": {
     "title": "Dashboard",
-    "footerNote": "Connection setup lives under \"Integrations\", overlay addresses and their customization under \"Overlays\".",
     "dragHandle": "Drag to move",
     "removeCard": "Remove card",
     "addCard": "Add card",
