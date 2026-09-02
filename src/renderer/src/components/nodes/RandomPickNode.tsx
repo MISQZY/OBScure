@@ -3,6 +3,7 @@ import { NodeProps, useReactFlow } from '@xyflow/react'
 import { Checkbox } from '@/components/ui/checkbox'
 
 import { useI18n } from '@/providers/I18nProvider'
+import { RANDOM_PICK_SOCKETS } from './constants'
 import { useConnectedVariants, BaseNode, Field, NumberInput, numberInputClass } from './utils'
 
 /** Short, human-readable label for one connected variant row — same idea as a Task's own Target row, just cosmetic (nothing here is stored or read back). */
@@ -60,7 +61,7 @@ export function RandomPickNode({ id, data }: NodeProps) {
   }
 
   return (
-    <BaseNode id={id} data={data} title="Random Pick" category="content" help={t.sceneBuilder.tooltip.nodes.randomPick}>
+    <BaseNode id={id} data={data} title="Random Pick" category="content" sockets={RANDOM_PICK_SOCKETS} help={t.sceneBuilder.tooltip.nodes.randomPick}>
       <Field label="Custom chance">
         <Checkbox checked={customChance} onCheckedChange={(checked) => updateNodeData(id, { customChance: !!checked })} className="nodrag" />
       </Field>
