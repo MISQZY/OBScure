@@ -148,6 +148,11 @@ export function useSceneGraph(overlay: CustomOverlay | undefined, locked: boolea
     // the PREVIOUS scene's last edit was.
     setPast([])
     setFuture([])
+    // Deliberately keyed on the scene's id, not the overlay object itself —
+    // this should reset the graph (and its undo history) only when switching
+    // scenes, not on every edit that flows the updated overlay back down as
+    // a new prop reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlay?.id])
 
   // Ctrl+Z / Ctrl+Shift+Z (and Ctrl+Y, the common Windows redo chord) for the

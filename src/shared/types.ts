@@ -1,3 +1,5 @@
+import type { Node, Edge } from '@xyflow/react'
+
 export interface NowPlayingPayload {
   source: 'spotify' | 'windows'
   title: string
@@ -26,8 +28,8 @@ export interface CustomOverlay {
   name: string
   /** Unique key used to build this scene's OBS overlay URL — editable independently of `id`/`name`. */
   urlKey: string
-  nodes: any[]
-  edges: any[]
+  nodes: Node[]
+  edges: Edge[]
   /** Sidebar grouping only — id of the OverlayFolder this scene is filed under. Omitted (or absent from folders.json) means "ungrouped". */
   folderId?: string
 }

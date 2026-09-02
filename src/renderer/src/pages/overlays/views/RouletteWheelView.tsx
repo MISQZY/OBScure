@@ -18,7 +18,7 @@ import { SAMPLE_ROULETTE_STATE, Anim } from "../sceneUtils";
  * overlays/custom.html, which instead reads the REAL live round, honors the
  * `visible` socket, and does animate its spin.
  */
-export function RouletteWheelView({ node, style, anim, played, hiding }: { node: Node; style: React.CSSProperties; anim: Anim; played: boolean; hiding: boolean }) {
+export function RouletteWheelView({ node: _node, style, anim, played, hiding }: { node: Node; style: React.CSSProperties; anim: Anim; played: boolean; hiding: boolean }) {
   // No own Width/Height field, same reasoning as ImageView/VideoView above —
   // a wired Size node's width (falling back to height, then the default)
   // picks the wheel's rendered size; it's always square regardless of which

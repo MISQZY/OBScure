@@ -53,6 +53,10 @@ export function useOverlayMeta({
     // collision) at some point — treat that as already locked rather than
     // silently resyncing it the next time the name changes.
     setUrlKeyLocked(overlay.urlKey !== slugify(overlay.name))
+    // Deliberately keyed on the scene's id, not the overlay object itself —
+    // this should reset local state only when switching scenes, not on every
+    // edit that flows the updated overlay back down as a new prop reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlay?.id])
 
   const commitName = (): void => {

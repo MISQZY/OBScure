@@ -23,7 +23,7 @@ import { SAMPLE_RANDOM_STATE, randomWidgetOrdering, Anim } from "../sceneUtils";
  * here for its own Ordering wire (randomWidgetOrdering), which controls how
  * the numbers lay out relative to EACH OTHER once Count is above 1.
  */
-export function RandomWidgetView({ node, style, anim, played, hiding, mods }: { node: Node; style: React.CSSProperties; anim: Anim; played: boolean; hiding: boolean; mods: Node[] }) {
+export function RandomWidgetView({ node: _node, style, anim, played, hiding, mods }: { node: Node; style: React.CSSProperties; anim: Anim; played: boolean; hiding: boolean; mods: Node[] }) {
   const size = typeof style.width === 'number' ? style.width : typeof style.height === 'number' ? style.height : 320
   const { flexDirection, gap } = randomWidgetOrdering(mods)
   return (
