@@ -449,16 +449,23 @@ export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
 /**
  * What kind of thing a node is, purely for visual grouping (header tint +
  * left accent stripe — see CATEGORY_STYLES/BaseNode) so the graph reads at
- * a glance instead of every node looking the same:
+ * a glance instead of every node looking the same. Coarser than the palette's
+ * own groups (see NODE_PALETTE in pages/overlays/sceneBuilderConstants.ts,
+ * which further splits 'data' into Live Data vs. Tools) — this is only the
+ * canvas tint, several palette sections can and do share one category:
  *  - process: Start/Task/Wait/End — the sequence-flow chain.
  *  - content: Scene/Text/Image/Box — what exists and how it's nested.
  *  - style: Position/Size/Transform/Animation/Hide/Overflow/Display/Ordering —
  *    per-component modifiers, wired into a SPECIFIC Text/Image/Box/Task.
- *  - data: Event/Random/Roulette/Audio Player/Sound/Timer/Range/Roulette
- *    Settings/Background FX — scene/process-level accessories (event feeds,
- *    one-shot behavior, ambient config) that activate alongside a trigger
- *    rather than reshaping a piece of content — see BackgroundAnimationNode's
- *    own doc comment for why it lives here despite the "FX" name.
+ *  - data: Event/Audio Player/Sound/Timer/Background FX (self-contained
+ *    scene/process-level accessories — event feeds, one-shot behavior,
+ *    ambient config, activating alongside a trigger rather than reshaping a
+ *    piece of content — see BackgroundAnimationNode's own doc comment for why
+ *    it lives here despite the "FX" name) AND Random/Roulette (NOT
+ *    self-contained — placing one only surfaces the live state of the
+ *    matching app-level Tool, see RandomToolPage/RouletteToolPage; min/max/
+ *    count/command/entryMode/etc. live on that Tool's own settings, not on
+ *    the node).
  */
 export type NodeCategory = 'process' | 'content' | 'style' | 'data' | 'utils'
 

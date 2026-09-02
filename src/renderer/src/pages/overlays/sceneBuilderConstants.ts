@@ -16,12 +16,14 @@ export const defaultEdges: Edge[] = [{ id: 'e-1-scene', source: '1', target: 'sc
 /**
  * Every node type available in the editor, grouped by what it does in the
  * graph (see the node-direction doc comment in components/nodes/index.tsx):
- * Content/Layout feed forward toward Scene, Style/Behavior modify whatever
- * they're wired into, Data documents an event feed. Together they cover the
- * real overlay config shapes (shared/overlayConfig.ts / shared/eventsConfig.ts)
- * so any existing scene (now playing, an alert type, random, roulette) can be
- * rebuilt from these. `scene` itself isn't listed — one is created
- * automatically and can't be deleted, so there's never a second to add.
+ * Content/Layout feed forward toward Scene, Style/Effects modify whatever
+ * they're wired into, Live Data documents an external signal feed, Tools
+ * surfaces an app-level Tool's (Random/Roulette, see shared/eventsConfig.ts —
+ * "Инструменты") live state. Together they cover the real overlay config
+ * shapes (shared/overlayConfig.ts / shared/eventsConfig.ts) so any existing
+ * scene (now playing, an alert type, random, roulette) can be rebuilt from
+ * these. `scene` itself isn't listed — one is created automatically and
+ * can't be deleted, so there's never a second to add.
  */
 export const NODE_PALETTE: { type: string; label: string; group: string }[] = [
   { type: 'text', label: 'Text', group: 'Content' },
@@ -48,13 +50,25 @@ export const NODE_PALETTE: { type: string; label: string; group: string }[] = [
   { type: 'task', label: 'Task', group: 'Process' },
   { type: 'wait', label: 'Wait', group: 'Process' },
   { type: 'end', label: 'End', group: 'Process' },
-  { type: 'sound', label: 'Sound', group: 'Behavior' },
-  { type: 'timer', label: 'Timer', group: 'Behavior' },
-  { type: 'backgroundAnimation', label: 'Background FX', group: 'Behavior' },
-  { type: 'event', label: 'Event', group: 'Data' },
-  { type: 'randomSource', label: 'Random', group: 'Data' },
-  { type: 'rouletteSource', label: 'Roulette', group: 'Data' },
-  { type: 'audioPlayer', label: 'Audio Player', group: 'Data' },
+  // Self-contained one-shot/ambient accessories — each has its own config
+  // and a single output, wired into Start or Scene to activate alongside a
+  // trigger (see TimerNode's own doc comment for how Timer specifically
+  // differs from Wait: this is the Event+Timer→Scene single show/hide
+  // model, not a Process step).
+  { type: 'sound', label: 'Sound', group: 'Effects' },
+  { type: 'timer', label: 'Timer', group: 'Effects' },
+  { type: 'backgroundAnimation', label: 'Background FX', group: 'Effects' },
+  // External live signal sources — Event matches an incoming alert,
+  // Audio Player reads the current Spotify/Windows Media track. Neither
+  // has state living outside the node itself.
+  { type: 'event', label: 'Event', group: 'Live Data' },
+  { type: 'audioPlayer', label: 'Audio Player', group: 'Live Data' },
+  // Random/Roulette aren't self-contained nodes — placing one only
+  // surfaces the live state of the matching app-level Tool (see
+  // RandomToolPage/RouletteToolPage), min/max/count/command/entryMode/etc.
+  // all live on that Tool's own settings, not on this node.
+  { type: 'randomSource', label: 'Random', group: 'Tools' },
+  { type: 'rouletteSource', label: 'Roulette', group: 'Tools' },
   { type: 'frame', label: 'Layout Frame', group: 'Utils' }
 ]
 export const PALETTE_GROUPS = [...new Set(NODE_PALETTE.map((entry) => entry.group))]
