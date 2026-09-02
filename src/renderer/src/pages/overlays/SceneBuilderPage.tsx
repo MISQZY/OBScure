@@ -239,6 +239,7 @@ export function SceneBuilderPage({
             urlKeyError={urlKeyError}
             commitName={commitName}
             commitUrlKey={commitUrlKey}
+            onChangeIcon={(icon) => void saveOverlay({ ...overlay, icon })}
             onDelete={() => void handleDelete()}
             onPrettify={handlePrettify}
             onExport={() => void handleExport()}

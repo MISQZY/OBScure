@@ -14,7 +14,10 @@
     "deleteFolder": "Delete folder",
     "newFolder": "New folder",
     "emptyFolder": "Empty",
-    "noOverlays": "No overlays yet"
+    "noOverlays": "No overlays yet",
+    "chooseIcon": "Choose icon",
+    "searchIcons": "Search icons...",
+    "noIconsFound": "No icons found"
   },
   "updater": {
     "update": "Update",

@@ -2,6 +2,7 @@ import { Panel } from '@xyflow/react'
 import { Trash2, Check, X, Sparkles, FlaskConical, HelpCircle, Download, Upload } from 'lucide-react'
 import type { CustomOverlay, OverlayUrls } from '@shared/types'
 import { CopyableUrl } from '@/components/CopyableUrl'
+import { IconPicker } from '@/components/IconPicker'
 import { slugify } from '@/lib/custom-overlays'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/providers/I18nProvider'
@@ -37,6 +38,7 @@ export function SceneBuilderToolbar({
   urlKeyError,
   commitName,
   commitUrlKey,
+  onChangeIcon,
   onDelete,
   onPrettify,
   onExport,
@@ -63,6 +65,7 @@ export function SceneBuilderToolbar({
   urlKeyError: string | null
   commitName: () => void
   commitUrlKey: () => void
+  onChangeIcon: (icon: string) => void
   onDelete: () => void
   onPrettify: () => void
   onExport: () => void
@@ -97,26 +100,35 @@ export function SceneBuilderToolbar({
       two side panels' collapse thresholds account for this width).
     */
     <Panel position="top-center" className="mt-3 w-[27rem] max-w-[calc(100%-2rem)] bg-card border rounded-xl shadow-md px-4 py-3.5 flex flex-col gap-3">
-      <div className="flex items-start gap-3">
-        <input
-          value={nameInput}
-          onChange={(e) => {
-            const value = e.target.value
-            setNameInput(value)
-            if (!urlKeyLocked) setUrlKeyInput(slugify(value))
-          }}
-          onBlur={commitName}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-            if (e.key === 'Escape') {
-              setNameInput(overlay.name)
-              if (!urlKeyLocked) setUrlKeyInput(overlay.urlKey)
-              ;(e.target as HTMLInputElement).blur()
-            }
-          }}
-          aria-label={t.sceneBuilder.nav.sceneName}
-          className="min-w-0 flex-1 bg-transparent text-lg font-semibold tracking-tight text-foreground outline-none border-b border-transparent rounded-sm px-0.5 -mx-0.5 hover:border-border focus:border-primary transition-colors"
-        />
+      <div className="flex items-center gap-3">
+        {/* Icon + name grouped under one bordered pill (hover/focus-within) so they read as a single "titled" field rather than two unrelated controls; the negative margins cancel the pill's own padding so the row's overall footprint is unchanged. */}
+        <div className="flex min-w-0 flex-1 items-center gap-2 -mx-1.5 -my-1 rounded-lg border border-transparent px-1.5 py-1 transition-colors hover:border-border focus-within:border-primary">
+          <IconPicker
+            value={overlay.icon}
+            onSelect={onChangeIcon}
+            className="m-0 p-1 rounded-md hover:bg-accent hover:text-accent-foreground"
+            iconClassName="size-5"
+          />
+          <input
+            value={nameInput}
+            onChange={(e) => {
+              const value = e.target.value
+              setNameInput(value)
+              if (!urlKeyLocked) setUrlKeyInput(slugify(value))
+            }}
+            onBlur={commitName}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+              if (e.key === 'Escape') {
+                setNameInput(overlay.name)
+                if (!urlKeyLocked) setUrlKeyInput(overlay.urlKey)
+                ;(e.target as HTMLInputElement).blur()
+              }
+            }}
+            aria-label={t.sceneBuilder.nav.sceneName}
+            className="min-w-0 flex-1 bg-transparent text-lg font-semibold tracking-tight text-foreground outline-none"
+          />
+        </div>
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <button

@@ -32,6 +32,8 @@ export interface CustomOverlay {
   edges: Edge[]
   /** Sidebar grouping only — id of the OverlayFolder this scene is filed under. Omitted (or absent from folders.json) means "ungrouped". */
   folderId?: string
+  /** Lucide icon name shown in the sidebar for this scene (see overlay-icons.ts). Omitted falls back to the default Workflow icon. */
+  icon?: string
 }
 
 /** Purely a sidebar organization concept — folders group CustomOverlay entries in the Overlays nav section, nothing more (no effect on OBS URLs or the scene graph). */

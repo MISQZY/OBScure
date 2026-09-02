@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { ChevronRight, Database, Download, Folder, FolderPlus, LayoutDashboard, Layers, Plug, Settings, Trash2, Workflow, Wrench, Plus } from 'lucide-react'
+import { ChevronRight, Database, Download, Folder, FolderPlus, LayoutDashboard, Layers, Plug, Settings, Trash2, Wrench, Plus } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -24,6 +24,7 @@ import {
   AlertDialogTrigger
 } from '@/components/ui/alert-dialog'
 import { ProfileSwitcher } from '@/components/layout/ProfileSwitcher'
+import { IconPicker } from '@/components/IconPicker'
 import { cn } from '@/lib/utils'
 import type { NavKey } from '@/lib/nav'
 import { INTEGRATION_KEYS, INTEGRATIONS_META } from '@/lib/integrations-meta'
@@ -136,26 +137,40 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
 
   const renderOverlayItem = (overlay: CustomOverlay): React.ReactElement => (
     <SidebarMenuSubItem key={overlay.id}>
+      {/*
+        asChild + a plain div (rather than the default <a>) because the icon
+        trigger below is a real <button> — nesting it inside an <a> would be
+        invalid HTML and could swallow its clicks.
+      */}
       <SidebarMenuSubButton
+        asChild
         isActive={active === `overlays/custom/${overlay.id}`}
-        draggable
-        onDragStart={(e) => {
-          setDraggedOverlayId(overlay.id)
-          e.dataTransfer.effectAllowed = 'move'
-          e.dataTransfer.setData('text/plain', overlay.id)
-        }}
-        onDragEnd={() => {
-          setDraggedOverlayId(null)
-          setDragOverFolderId(null)
-        }}
-        onClick={(event) => {
-          event.preventDefault()
-          onNavigate(`overlays/custom/${overlay.id}` as NavKey)
-        }}
         className={cn(draggedOverlayId === overlay.id && 'opacity-50')}
       >
-        <Workflow />
-        <span>{overlay.name}</span>
+        <div
+          role="button"
+          tabIndex={0}
+          draggable
+          onDragStart={(e) => {
+            setDraggedOverlayId(overlay.id)
+            e.dataTransfer.effectAllowed = 'move'
+            e.dataTransfer.setData('text/plain', overlay.id)
+          }}
+          onDragEnd={() => {
+            setDraggedOverlayId(null)
+            setDragOverFolderId(null)
+          }}
+          onClick={() => onNavigate(`overlays/custom/${overlay.id}` as NavKey)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onNavigate(`overlays/custom/${overlay.id}` as NavKey)
+          }}
+        >
+          <IconPicker
+            value={overlay.icon}
+            onSelect={(icon) => void saveOverlay({ ...overlay, icon })}
+          />
+          <span>{overlay.name}</span>
+        </div>
       </SidebarMenuSubButton>
     </SidebarMenuSubItem>
   )

@@ -14,7 +14,10 @@
     "deleteFolder": "Удалить папку",
     "newFolder": "Новая папка",
     "emptyFolder": "Пусто",
-    "noOverlays": "Пока нет оверлеев"
+    "noOverlays": "Пока нет оверлеев",
+    "chooseIcon": "Выбрать иконку",
+    "searchIcons": "Поиск иконок...",
+    "noIconsFound": "Иконки не найдены"
   },
   "updater": {
     "update": "Обновить",
