@@ -1921,6 +1921,45 @@
       // scene should ever come close to it.
       const MAX_BOX_DEPTH = 12
 
+      // Same content types buildBox's own `children` filter (and Scene's own
+      // top-level `renderable` filter) accept — what a Random Pick node's
+      // variants can be drawn from. Kept as its own list (mirroring
+      // CONTENT_TYPES in pages/overlays/sceneUtils/graph.ts) rather than
+      // reusing one of the several near-identical inline filters already in
+      // this file, since none of THOSE are shared constants either.
+      const RANDOM_PICK_VARIANT_TYPES = new Set(['text', 'image', 'video', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'])
+
+      /**
+       * Picks ONE of a Random Pick node's connected `children`-socket
+       * options — uniform when `data.customChance` is off, weighted by
+       * `data.weights[variantId]` otherwise (a missing/negative/non-numeric
+       * entry defaults to 1, same convention as an unset Roulette entrant's
+       * own weight). All-zero weights fall back to a uniform pick across
+       * all of them rather than resolving to nothing. `null` only when
+       * nothing is wired into `children` at all. Called fresh once per
+       * "show" (never memoized) — mirrors pickRandomVariant in
+       * pages/overlays/sceneUtils/graph.ts.
+       */
+      function pickRandomVariant(node, edges, map) {
+        const variants = incoming(node.id, edges, map).filter((n) => RANDOM_PICK_VARIANT_TYPES.has(n.type))
+        if (variants.length === 0) return null
+        const customChance = !!(node.data && node.data.customChance)
+        const weights = customChance && node.data.weights ? node.data.weights : null
+        const weightOf = (v) => {
+          if (!weights) return 1
+          const raw = weights[v.id]
+          return typeof raw === 'number' && raw >= 0 ? raw : 1
+        }
+        const total = variants.reduce((sum, v) => sum + weightOf(v), 0)
+        if (total <= 0) return variants[Math.floor(Math.random() * variants.length)]
+        let roll = Math.random() * total
+        for (const v of variants) {
+          roll -= weightOf(v)
+          if (roll < 0) return v
+        }
+        return variants[variants.length - 1]
+      }
+
       // `crossAxis` — see buildText's own doc comment — is the CROSS axis of
       // whichever Box/Scene THIS node is a direct child of (crossAxisFor,
       // computed once by the caller off ITS OWN Ordering); only buildText
@@ -1944,6 +1983,16 @@
         if (node.type === 'video') return buildVideo(node, mods, animate, registry)
         if (node.type === 'rouletteWidget') return rouletteWidgetVisible(node.id, edges, map) ? buildRouletteWheel(node, mods, animate, registry) : null
         if (node.type === 'randomWidget') return randomWidgetVisible(node.id, edges, map) ? buildRandomWidget(node, mods, animate, registry) : null
+        // Resolves to exactly ONE of its own wired options (see
+        // pickRandomVariant above) and delegates straight back into
+        // buildContent for THAT node — same depth cap as Box/Group below
+        // since a Random Pick can nest another one as one of its own
+        // options.
+        if (node.type === 'randomPick') {
+          if (depth >= MAX_BOX_DEPTH) return null
+          const picked = pickRandomVariant(node, edges, map)
+          return picked ? buildContent(picked, edges, map, animate, vars, registry, depth + 1, crossAxis) : null
+        }
         // A nested Box or Group (see BOX_SOCKETS' own doc comment in
         // components/nodes/index.tsx) — buildBox is defined below but
         // function declarations are hoisted, so this forward reference
@@ -1962,7 +2011,15 @@
           depth >= MAX_BOX_DEPTH
             ? []
             : incomingNodes.filter(
-                (n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
+                (n) =>
+                  n.type === 'text' ||
+                  n.type === 'image' ||
+                  n.type === 'video' ||
+                  n.type === 'box' ||
+                  n.type === 'group' ||
+                  n.type === 'randomPick' ||
+                  n.type === 'rouletteWidget' ||
+                  n.type === 'randomWidget'
               )
         const childCrossAxis = crossAxisFor(incomingNodes)
         const d = node.data || {}
@@ -2067,7 +2124,7 @@
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
         const renderable = members.filter(
-          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
+          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'randomPick' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
         )
         const crossAxis = crossAxisFor(members)
 
@@ -2102,7 +2159,7 @@
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
         const renderable = members.filter(
-          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
+          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'randomPick' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
         )
         const crossAxis = crossAxisFor(members)
         for (const n of renderable) {
@@ -2151,7 +2208,7 @@
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
         const renderable = members.filter(
-          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
+          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'randomPick' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
         )
         const crossAxis = crossAxisFor(members)
         const registry = {}
@@ -2286,7 +2343,7 @@
         sceneEl.style.flexDirection = orderingFlexDirection(members)
         sceneEl.style.gap = `${orderingGap(members)}px`
         const renderable = members.filter(
-          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
+          (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'randomPick' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
         )
         const crossAxis = crossAxisFor(members)
         for (const n of renderable) {

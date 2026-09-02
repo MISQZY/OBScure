@@ -19,6 +19,7 @@ import { ImageView } from "./ImageView";
 import { VideoView } from "./VideoView";
 import { RouletteWheelView } from "./RouletteWheelView";
 import { RandomWidgetView } from "./RandomWidgetView";
+import { RandomPickView } from "./RandomPickView";
 
 /** A content node (Text/Image/Video/Roulette wheel/Random widget), or a nested Box (delegated to BoxView) — plus whatever's wired into ITS input (Position, Transform, Animation, ...). Roulette Entrants (see RouletteEntrantsNode.tsx) isn't among these — it has no rendering of its own, only a Content wire into a Text node's own socket (see rouletteEntrantsTextValue below); Random has no node of its own like it at all, its Content output wiring straight into a Text's Content socket instead (see randomContentValues below). */
 export function ContentView({
@@ -59,6 +60,17 @@ export function ContentView({
   if (node.type === 'box' || node.type === 'group') {
     return (
       <BoxView node={node} edges={edges} map={map} playToken={playToken} played={played} hiding={hiding} vars={vars} schedule={schedule} clockMs={clockMs} urls={urls} depth={depth} />
+    )
+  }
+  // Resolves to exactly ONE of its own wired options — see RandomPickView's
+  // own doc comment. Bypasses the schedule/mods logic below entirely, same
+  // as Box/Group above: a Random Pick node isn't itself Task-targetable
+  // (see TASK_SOCKETS' own `accepts` list in components/nodes/constants.ts
+  // — deliberately excludes it, keeping "which step controls this" to
+  // whichever CHILD ends up picked instead of the router node itself).
+  if (node.type === 'randomPick') {
+    return (
+      <RandomPickView node={node} edges={edges} map={map} playToken={playToken} played={played} hiding={hiding} vars={vars} schedule={schedule} clockMs={clockMs} urls={urls} depth={depth} crossAxis={crossAxis} />
     )
   }
   const mods = incoming(node.id, edges, map)

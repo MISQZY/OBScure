@@ -140,13 +140,29 @@ export const VIDEO_SOCKETS: InputSocket[] = MODIFIER_SOCKETS
  * nested, same as at the top level.
  */
 export const BOX_SOCKETS: InputSocket[] = [
-  { id: 'children', label: 'Children', accepts: ['text', 'image', 'video', 'box', 'group', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true },
+  { id: 'children', label: 'Children', accepts: ['text', 'image', 'video', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true },
   ...MODIFIER_SOCKETS,
   { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' }
 ]
 
+/**
+ * A Random Pick node's own single input — same id ('children') as Box's own
+ * above so it reuses STRUCTURAL_OUTPUT's existing `feeds` list unchanged
+ * (see STRUCTURAL_OUTPUT below) rather than needing a whole separate output
+ * role — every content node's plain "wire it in to place it" output already
+ * lands here. Accepts the SAME set Box's own `children` does, `randomPick`
+ * included: a Random Pick node can nest another one as one of its own
+ * options (see MAX_BOX_DEPTH-style depth capping in pickRandomVariant's own
+ * callers). Which ONE of these actually renders is resolved by
+ * pickRandomVariant (pages/overlays/sceneUtils/graph.ts) — see
+ * RandomPickNode/RandomPickView's own doc comments for the rest.
+ */
+export const RANDOM_PICK_SOCKETS: InputSocket[] = [
+  { id: 'children', label: 'Options', accepts: ['text', 'image', 'video', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true }
+]
+
 export const SCENE_SOCKETS: InputSocket[] = [
-  { id: 'content', label: 'Content', accepts: ['box', 'group', 'text', 'image', 'video', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true },
+  { id: 'content', label: 'Content', accepts: ['box', 'group', 'text', 'image', 'video', 'randomPick', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true },
   // kind 'data', not 'style' — Background FX is category 'data' (see its own
   // doc comment below), so this socket's dot/wire should match ITS color,
   // not the per-component style modifiers (Position/Animation/...) it has
@@ -215,7 +231,8 @@ export const NODE_SOCKETS: Record<string, InputSocket[]> = {
   task: TASK_SOCKETS,
   rouletteWidget: ROULETTE_WIDGET_SOCKETS,
   rouletteEntrants: ROULETTE_ENTRANTS_SOCKETS,
-  randomWidget: RANDOM_WIDGET_SOCKETS
+  randomWidget: RANDOM_WIDGET_SOCKETS,
+  randomPick: RANDOM_PICK_SOCKETS
 }
 
 /**
@@ -479,7 +496,11 @@ export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
  * which further splits 'data' into Live Data vs. Tools) — this is only the
  * canvas tint, several palette sections can and do share one category:
  *  - process: Start/Task/Wait/Condition/End — the sequence-flow chain.
- *  - content: Scene/Text/Image/Box — what exists and how it's nested.
+ *  - content: Scene/Text/Image/Box/Random Pick — what exists and how it's
+ *    nested (Random Pick included: it resolves to exactly one of its wired
+ *    options, same "what exists" question, just decided by weighted chance
+ *    instead of always all of them — see pickRandomVariant in pages/
+ *    overlays/sceneUtils/graph.ts).
  *  - style: Position/Size/Transform/Animation/Hide/Overflow/Display/Ordering —
  *    per-component modifiers, wired into a SPECIFIC Text/Image/Box/Task.
  *  - data: Event/Audio Player/Sound/Timer/Background FX (self-contained
@@ -520,6 +541,7 @@ export const NODE_CATEGORY: Record<string, NodeCategory> = {
   video: 'content',
   box: 'content',
   group: 'content',
+  randomPick: 'content',
   frame: 'utils',
   start: 'process',
   task: 'process',
@@ -587,6 +609,12 @@ export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
   // components/nodes/utils/constants.ts for which operators ConditionNode
   // offers per field.
   condition: { field: 'amount', operator: 'gt', value: '10' },
+  // customChance off: every connected Option has an equal shot — see
+  // pickRandomVariant. `weights` keyed by the connected node's OWN id
+  // (unset/invalid entries default to weight 1, same as an unset Roulette
+  // entrant's own weight) rather than by anything positional, so reordering
+  // or adding another wire never scrambles an already-tuned weight.
+  randomPick: { customChance: false, weights: {} },
   // rowTemplate tokens: {name}/{chance}/{weight} — see rouletteEntrantRows'
   // own doc comment in overlays/sceneUtils.tsx. layout 'list' = one entrant
   // per line, 'inline' joins them with `separator` instead. No color/

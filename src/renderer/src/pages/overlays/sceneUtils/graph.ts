@@ -130,10 +130,10 @@ export function nextProcessNode(nodeId: string, edges: Edge[], map: NodeMap, var
 }
 
 
-export const CONTENT_TYPES = new Set(['text', 'image', 'video', 'box', 'group', 'rouletteWidget', 'randomWidget'])
+export const CONTENT_TYPES = new Set(['text', 'image', 'video', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'])
 
-/** Box and Group — the two node types that can nest one another via their shared `children` socket (see BOX_SOCKETS' own doc comment in components/nodes/index.tsx), and so are the only ones isValidConnection's cycle guard needs to walk. */
-export const CONTAINER_TYPES = new Set(['box', 'group'])
+/** Box, Group, and Random Pick — the node types that can nest one another (directly or through a mix of the three) via a shared `children` socket (see BOX_SOCKETS'/RANDOM_PICK_SOCKETS' own doc comments in components/nodes/index.tsx), and so are the only ones isValidConnection's cycle guard needs to walk. */
+export const CONTAINER_TYPES = new Set(['box', 'group', 'randomPick'])
 
 /** Same as CONTENT_TYPES plus 'scene' — used for the MiniMap's node coloring below, where Scene (never an edge SOURCE, so absent from CONTENT_TYPES) still needs to read as "content" like Text/Image/Box. */
 export const CONTENT_TYPES_WITH_SCENE = new Set([...CONTENT_TYPES, 'scene'])
@@ -143,6 +143,42 @@ export const STYLE_TYPES = new Set(['position', 'size', 'transform', 'opacity', 
 
 /** Event/Sound/Timer/Background FX/Random/Roulette/Audio Player — see NodeCategory's 'data' bucket. */
 export const DATA_TYPES = new Set(['event', 'sound', 'timer', 'backgroundAnimation', 'randomSource', 'rouletteSource', 'audioPlayer'])
+
+/**
+ * Picks ONE of a Random Pick node's connected `children`-socket options
+ * (see RANDOM_PICK_SOCKETS in components/nodes/constants.ts) — uniform when
+ * `data.customChance` is off, weighted by `data.weights[variantId]`
+ * otherwise (a missing/negative/non-numeric entry — an unset weight, or one
+ * left over from a variant that's since been rewired elsewhere — defaults
+ * to 1, same convention as an unset Roulette entrant's own weight; see
+ * rouletteEntrantRows in sceneUtils/contentValues.ts). All-zero weights
+ * (every connected option explicitly zeroed) falls back to a uniform pick
+ * across all of them rather than resolving to nothing — a Random Pick node
+ * with real wiring should never just vanish because of a config mistake.
+ * `null` only when nothing is wired into `children` at all. Call this FRESH
+ * (never memoize the RESULT across renders) exactly once per "show" — see
+ * RandomPickView's own doc comment in pages/overlays/views for why, and
+ * MAX_BOX_DEPTH for the recursion cap a self-nesting Random Pick still
+ * needs. Mirrors pickRandomVariant in overlays/custom.html.
+ */
+export function pickRandomVariant(node: Node, edges: Edge[], map: NodeMap): Node | null {
+  const variants = incoming(node.id, edges, map).filter((n) => CONTENT_TYPES.has(n.type!))
+  if (variants.length === 0) return null
+  const customChance = Boolean(node.data.customChance)
+  const weights = customChance ? (node.data.weights as Record<string, number> | undefined) : undefined
+  const weightOf = (v: Node): number => {
+    const raw = weights?.[v.id]
+    return typeof raw === 'number' && raw >= 0 ? raw : 1
+  }
+  const total = variants.reduce((sum, v) => sum + weightOf(v), 0)
+  if (total <= 0) return variants[Math.floor(Math.random() * variants.length)]
+  let roll = Math.random() * total
+  for (const v of variants) {
+    roll -= weightOf(v)
+    if (roll < 0) return v
+  }
+  return variants[variants.length - 1]
+}
 
 
 /**

@@ -102,7 +102,15 @@ export function ScenePreview({
 
   const orderMods = incoming(scene.id, edges, map)
   const renderable = orderMods.filter(
-    (n) => n.type === 'box' || n.type === 'group' || n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
+    (n) =>
+      n.type === 'box' ||
+      n.type === 'group' ||
+      n.type === 'text' ||
+      n.type === 'image' ||
+      n.type === 'video' ||
+      n.type === 'randomPick' ||
+      n.type === 'rouletteWidget' ||
+      n.type === 'randomWidget'
   )
   if (renderable.length === 0) {
     return <span className="text-white/40 text-xs text-center px-4">Nothing connected to Scene yet — wire a Text, Image, Video, Shape or Group into it.</span>

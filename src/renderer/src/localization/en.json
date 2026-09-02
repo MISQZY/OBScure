@@ -347,6 +347,7 @@
       "backgroundFxLoop": "Off (default): drops it once — use Play/Test to replay it. On: keeps dropping one at a time for as long as the scene is showing.",
       "nodes": {
         "group": "An invisible wrapper with no background, padding, or border — wire in other Content nodes to move or arrange them as one unit.",
+        "randomPick": "Shows exactly ONE of its wired Options each time the scene shows — picked fresh on every replay. Equal odds by default; check Custom chance to weight them (0 excludes an option entirely). Carries no size/position of its own — the picked Option keeps its own wiring untouched.",
         "audioPlayer": "Live now-playing data from Spotify or Windows Media. Check each output's own help for exactly where to wire it.",
         "randomSource": "Live commit/reveal state from the Random tool, auto-paired with its own display widget. Check each output's own help for where to wire it.",
         "rouletteEntrants": "Formats its paired Roulette's entrants into rows — wire the output into another node's Content socket to display them, its own styling still applies. Unlike its paired display widget, this one can be deleted freely.",

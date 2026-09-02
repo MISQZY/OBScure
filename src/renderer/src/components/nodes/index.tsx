@@ -13,6 +13,7 @@ import { TimerNode } from './TimerNode'
 import { AnimationNode } from './AnimationNode'
 import { BoxNode } from './BoxNode'
 import { GroupNode } from './GroupNode'
+import { RandomPickNode } from './RandomPickNode'
 import { FrameNode } from './FrameNode'
 import { ImageNode } from './ImageNode'
 import { VideoNode } from './VideoNode'
@@ -46,6 +47,7 @@ export const nodeTypes = {
   animation: AnimationNode,
   box: BoxNode,
   group: GroupNode,
+  randomPick: RandomPickNode,
   frame: FrameNode,
   image: ImageNode,
   video: VideoNode,

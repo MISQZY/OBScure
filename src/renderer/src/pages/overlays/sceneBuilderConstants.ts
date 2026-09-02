@@ -31,6 +31,7 @@ export const NODE_PALETTE: { type: string; label: string; group: string }[] = [
   { type: 'video', label: 'Video', group: 'Content' },
   { type: 'box', label: 'Shape', group: 'Content' },
   { type: 'group', label: 'Group', group: 'Content' },
+  { type: 'randomPick', label: 'Random Pick', group: 'Content' },
   // Matches the Transform socket's own `accepts` list (see MODIFIER_SOCKETS
   // in components/nodes/index.tsx) — these three are exactly what a Text/
   // Image/Video/Box/Task's single Transform input now takes.

@@ -48,7 +48,15 @@ export function BoxView({
     depth >= MAX_BOX_DEPTH
       ? []
       : incomingNodes.filter(
-          (n) => n.type === 'text' || n.type === 'image' || n.type === 'video' || n.type === 'box' || n.type === 'group' || n.type === 'rouletteWidget' || n.type === 'randomWidget'
+          (n) =>
+            n.type === 'text' ||
+            n.type === 'image' ||
+            n.type === 'video' ||
+            n.type === 'box' ||
+            n.type === 'group' ||
+            n.type === 'randomPick' ||
+            n.type === 'rouletteWidget' ||
+            n.type === 'randomWidget'
         )
   const orderClass = orderingClass(incomingNodes)
   const childCrossAxis = crossAxisFor(incomingNodes)

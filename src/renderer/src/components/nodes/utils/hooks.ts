@@ -77,6 +77,31 @@ export function useHasIncomingEdgeFromType(nodeId: string, targetHandle: string,
 }
 
 /**
+ * Every distinct node currently wired into `nodeId`'s own `children` socket
+ * — what RandomPickNode's own weight-editing rows (shown once Custom chance
+ * is checked) are built from, so the list always matches whatever's
+ * actually connected on the canvas right now rather than some stale saved
+ * snapshot. Deduped by node id (same reasoning as usePriorityInfo's own
+ * siblingNodes above), in wiring order. No custom equality function (unlike
+ * usePriorityInfo) — a connected variant's OWN describable content (e.g. a
+ * Text's `text` field, what RandomPickNode's own describeVariant reads to
+ * label each row) can change independently of which nodes are wired in at
+ * all, and this small a UI list isn't worth the complexity of tracking that
+ * too; it simply re-renders on any store change like an unmemoized
+ * component would.
+ */
+export function useConnectedVariants(nodeId: string) {
+  return useStore((s) => {
+    const seen = new Set<string>()
+    return s.edges
+      .filter((e) => e.target === nodeId && e.targetHandle === 'children')
+      .map((e) => s.nodes.find((n) => n.id === e.source))
+      .filter((n): n is (typeof s.nodes)[number] => n != null)
+      .filter((n) => (seen.has(n.id) ? false : (seen.add(n.id), true)))
+  })
+}
+
+/**
  * Which of TEXT_PLACEHOLDERS this Text node can actually get a value for
  * right now, given the current graph — PlaceholderPicker's {} menu only
  * offers these, instead of every token whether or not anything would ever
