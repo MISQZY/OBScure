@@ -6,7 +6,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import type { CustomThemePack } from "../shared/customConfig";
 
 /**
@@ -29,8 +29,14 @@ export class ThemeStore {
   // Helpers
   // ---------------------------------------------------------------------------
 
+  /** Resolves the on-disk path for `id`, rejecting anything that would escape `dir` (e.g. an id containing `..` or a path separator) — same boundary check as OverlayServer.handleRequest. */
   private pathFor(id: string): string {
-    return join(this.dir, `${id}.json`);
+    const boundary = this.dir.endsWith(sep) ? this.dir : this.dir + sep;
+    const filePath = resolve(join(this.dir, `${id}.json`));
+    if (!filePath.startsWith(boundary)) {
+      throw new Error(`Invalid theme id: ${id}`);
+    }
+    return filePath;
   }
 
   // ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@ export function useAppUpdater(): [AppUpdaterStatus, () => void] {
   const [status, setStatus] = useState<AppUpdaterStatus>({ state: 'idle' })
 
   useEffect(() => {
-    window.obscure.getUpdaterStatus().then(setStatus)
+    window.obscure.getUpdaterStatus().then(setStatus).catch(() => setStatus({ state: 'idle' }))
     return window.obscure.onUpdaterStatus(setStatus)
   }, [])
 

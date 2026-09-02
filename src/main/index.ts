@@ -174,17 +174,25 @@ eventBus.on("chat-message", (payload) => {
   if (!command) return;
   const text = payload.text.trim().toLowerCase();
   if (text !== command && !text.startsWith(`${command} `)) return;
-  void isEligibleForRoulette(cfg.entryMode, payload.userId).then((eligible) => {
-    if (eligible) rouletteEngine.addEntrant(payload.user, "chat");
-  });
+  void isEligibleForRoulette(cfg.entryMode, payload.userId)
+    .then((eligible) => {
+      if (eligible) rouletteEngine.addEntrant(payload.user, "chat");
+    })
+    .catch((error) => {
+      logError("main", "roulette eligibility check failed for chat entry", error);
+    });
 });
 
 eventBus.on("points-redemption", (payload) => {
   const cfg = getStoredRouletteConfig();
   if (!cfg.pointsRewardId || payload.rewardId !== cfg.pointsRewardId) return;
-  void isEligibleForRoulette(cfg.entryMode, payload.userId).then((eligible) => {
-    if (eligible) rouletteEngine.addEntrant(payload.user, "points");
-  });
+  void isEligibleForRoulette(cfg.entryMode, payload.userId)
+    .then((eligible) => {
+      if (eligible) rouletteEngine.addEntrant(payload.user, "points");
+    })
+    .catch((error) => {
+      logError("main", "roulette eligibility check failed for points redemption", error);
+    });
 });
 
 eventBus.on("roulette-state", (state) => {

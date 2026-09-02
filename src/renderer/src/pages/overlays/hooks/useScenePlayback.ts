@@ -57,13 +57,52 @@ export function useScenePlayback({
   const processRafRef = useRef<number | null>(null)
   /** Pending setTimeouts for a simulated Process run's own per-Task Sound previews (see TASK_SOCKETS' own doc comment in components/nodes/index.tsx) — tracked and cleared on every new Play so pressing it again mid-run can't leave an old run's sounds to fire late on top of the new one. */
   const taskSoundTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'error'>('idle')
 
+  /**
+   * Resets the simulated-run state when switching scenes, mirroring
+   * useSceneGraph/useOverlayMeta's own `[overlay?.id]`-keyed reset effects —
+   * without this, this hook's state (unlike theirs) survived a scene switch
+   * unchanged, since SceneBuilderPage doesn't remount on it (see App.tsx,
+   * which renders it with no `key`). Worse than stale STATE alone: a Play/
+   * Test run started on the old scene left its rAF loop / setTimeouts
+   * running (they close over that scene's own nodes/edges/schedule), so
+   * without actually cancelling them here too, a callback that fires after
+   * the switch would go on mutating eventPhase/processClockMs/eventVars out
+   * from under whatever the NEW scene's preview is now showing — resetting
+   * the state alone wouldn't stop a still-pending callback from overwriting
+   * that reset moments later. The cleanup below runs before this effect's
+   * own next run (i.e. right when overlay?.id next changes) as well as on
+   * unmount, so it cancels whatever the PREVIOUS scene's run left pending
+   * before the state reset below ever runs.
+   */
   useEffect(() => {
+    setPlayToken(0)
+    setEventPhase('idle')
+    setEventVars(null)
+    setProcessClockMs(0)
+    setTestStatus('idle')
     return () => {
-      if (processRafRef.current != null) cancelAnimationFrame(processRafRef.current)
+      if (processRafRef.current != null) {
+        cancelAnimationFrame(processRafRef.current)
+        processRafRef.current = null
+      }
+      if (eventHideTimerRef.current) {
+        clearTimeout(eventHideTimerRef.current)
+        eventHideTimerRef.current = null
+      }
+      if (eventIdleTimerRef.current) {
+        clearTimeout(eventIdleTimerRef.current)
+        eventIdleTimerRef.current = null
+      }
       taskSoundTimersRef.current.forEach(clearTimeout)
+      taskSoundTimersRef.current = []
     }
-  }, [])
+    // Deliberately keyed on the scene's id, not the overlay object itself —
+    // same reasoning as useSceneGraph/useOverlayMeta's own reset effects:
+    // this should only fire when switching scenes, not on every edit that
+    // flows the updated overlay back down as a new prop reference.
+  }, [overlay?.id])
 
   /** Plays one Sound node's configured preset/custom file — shared by handlePlay's Start/Scene-level preview below and its per-Task one. */
   const playSoundNode = (soundNode: Node | undefined): void => {
@@ -190,8 +229,6 @@ export function useScenePlayback({
         : nodes.find((n) => n.type === 'sound')
     playSoundNode(soundNode)
   }
-
-  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'error'>('idle')
 
   /**
    * Live-previews the CURRENT graph (including anything not yet Saved) in

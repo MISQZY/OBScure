@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Pause, Play, Upload, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -53,6 +53,15 @@ export function AlertSoundPicker({
     audioRef.current = null
     setPlaying(false)
   }
+
+  // Stop any in-flight preview when this picker unmounts (e.g. navigating
+  // away mid-playback) — otherwise the Audio object keeps playing in the
+  // background since nothing else ever pauses it.
+  useEffect(() => {
+    return () => {
+      audioRef.current?.pause()
+    }
+  }, [])
 
   const togglePreview = (): void => {
     if (playing) {

@@ -138,13 +138,24 @@ export function CustomConfigProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    window.obscure.getCustomThemes().then((packs) => {
-      setCustomThemes(cacheThemePacks(packs).map(packToThemeDefinition))
-    })
-    window.obscure.getCustomLocales().then((packs) => {
-      writeCache(LOCALE_CACHE_KEY, packs)
-      setCustomLocales(packs.map(packToLocaleEntry))
-    })
+    let cancelled = false
+    window.obscure
+      .getCustomThemes()
+      .then((packs) => {
+        if (!cancelled) setCustomThemes(cacheThemePacks(packs).map(packToThemeDefinition))
+      })
+      .catch(() => {})
+    window.obscure
+      .getCustomLocales()
+      .then((packs) => {
+        if (cancelled) return
+        writeCache(LOCALE_CACHE_KEY, packs)
+        setCustomLocales(packs.map(packToLocaleEntry))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }, [cacheThemePacks])
 
   const deleteCustomTheme = useCallback(async (id: string): Promise<void> => {

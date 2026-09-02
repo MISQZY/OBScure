@@ -66,16 +66,24 @@ export function ManageProfilesDialog({ open, onOpenChange }: ManageProfilesDialo
   const handleSwitch = async (profile: Profile): Promise<void> => {
     if (profile.id === activeId) return
     setBusyId(profile.id)
-    await window.obscure.switchProfile(profile.id)
+    try {
+      await window.obscure.switchProfile(profile.id)
+    } catch {
+      setBusyId(null)
+    }
   }
 
   const handleDelete = async (profile: Profile): Promise<void> => {
     if (profiles.length <= 1) return
     setBusyId(profile.id)
-    await window.obscure.deleteProfile(profile.id)
-    if (profile.id !== activeId) {
+    try {
+      await window.obscure.deleteProfile(profile.id)
+      if (profile.id !== activeId) {
+        setBusyId(null)
+        void refresh()
+      }
+    } catch {
       setBusyId(null)
-      void refresh()
     }
   }
 

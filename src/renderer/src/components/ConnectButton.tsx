@@ -17,17 +17,25 @@ export function ConnectButton({ integrationKey, status, onChanged }: ConnectButt
   const connect = async (): Promise<void> => {
     setPending(true)
     setError(null)
-    const result = await window.obscure.connectIntegration(integrationKey)
-    setPending(false)
-    if (!result.ok) setError(result.error ?? t.connect.genericError)
-    onChanged()
+    try {
+      const result = await window.obscure.connectIntegration(integrationKey)
+      if (!result.ok) setError(result.error ?? t.connect.genericError)
+    } catch {
+      setError(t.connect.genericError)
+    } finally {
+      setPending(false)
+      onChanged()
+    }
   }
 
   const disconnect = async (): Promise<void> => {
     setPending(true)
-    await window.obscure.disconnectIntegration(integrationKey)
-    setPending(false)
-    onChanged()
+    try {
+      await window.obscure.disconnectIntegration(integrationKey)
+    } finally {
+      setPending(false)
+      onChanged()
+    }
   }
 
   return (

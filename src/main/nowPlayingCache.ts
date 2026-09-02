@@ -1,5 +1,5 @@
 import { net } from "electron";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { NowPlayingPayload } from "../shared/types";
 
@@ -17,6 +17,8 @@ export class NowPlayingCache {
 
   private attemptedCoverUrl: string | null = null;
   private cachedCoverDataUri: string | undefined;
+  /** Extension of the last `cover.<ext>` file actually written to disk — tracked so writeCoverFile can remove it if a later cover shows up with a different content-type/extension, instead of leaving it behind. */
+  private lastCoverExtension: string | null = null;
 
   constructor(
     baseDir: string,
@@ -31,6 +33,7 @@ export class NowPlayingCache {
     this.lastPayload = null;
     this.attemptedCoverUrl = null;
     this.cachedCoverDataUri = undefined;
+    this.lastCoverExtension = null;
   }
 
   resolve(payload: NowPlayingPayload): NowPlayingPayload {
@@ -92,10 +95,23 @@ export class NowPlayingCache {
     if (!match) return;
     const [, contentType, base64] = match;
     const extension = contentType.split("/")[1]?.split(";")[0] || "jpg";
+
+    if (this.lastCoverExtension && this.lastCoverExtension !== extension) {
+      const stalePath = join(this.dir, `${COVER_FILE}.${this.lastCoverExtension}`);
+      if (existsSync(stalePath)) {
+        try {
+          unlinkSync(stalePath);
+        } catch {
+          /* best-effort cleanup */
+        }
+      }
+    }
+
     writeFileSync(
       join(this.dir, `${COVER_FILE}.${extension}`),
       Buffer.from(base64, "base64"),
     );
+    this.lastCoverExtension = extension;
     this.cachedCoverDataUri = dataUri;
   }
 

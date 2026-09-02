@@ -30,8 +30,22 @@ export function CustomOverlaysProvider({ children }: { children: ReactNode }) {
   const [folders, setFolders] = useState<OverlayFolder[]>([])
 
   useEffect(() => {
-    window.obscure.getCustomOverlays().then(setOverlays)
-    window.obscure.getCustomOverlayFolders().then(setFolders)
+    let cancelled = false
+    window.obscure
+      .getCustomOverlays()
+      .then((result) => {
+        if (!cancelled) setOverlays(result)
+      })
+      .catch(() => {})
+    window.obscure
+      .getCustomOverlayFolders()
+      .then((result) => {
+        if (!cancelled) setFolders(result)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const saveOverlay = useCallback(async (overlay: CustomOverlay): Promise<void> => {

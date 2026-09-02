@@ -6,7 +6,10 @@ export function useIntegrationStatus(key: IntegrationKey): [string, () => void] 
   const [status, setStatus] = useState('disconnected')
 
   const fetchStatus = useCallback(() => {
-    window.obscure.getIntegrationsStatus().then((all) => setStatus(all[key]))
+    window.obscure
+      .getIntegrationsStatus()
+      .then((all) => setStatus(all[key]))
+      .catch(() => setStatus('disconnected'))
   }, [key])
 
   useEffect(() => {
@@ -22,7 +25,7 @@ export function useIntegrationsStatus(): IntegrationsStatusMap | null {
   const [status, setStatus] = useState<IntegrationsStatusMap | null>(null)
 
   useEffect(() => {
-    window.obscure.getIntegrationsStatus().then(setStatus)
+    window.obscure.getIntegrationsStatus().then(setStatus).catch(() => setStatus(null))
     return window.obscure.onIntegrationsStatusUpdate(setStatus)
   }, [])
 

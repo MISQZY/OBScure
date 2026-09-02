@@ -26,6 +26,18 @@ interface IntegrationsHandlersDeps {
   nowPlayingFileCache: NowPlayingCache;
 }
 
+/** Every key IntegrationKey (shared/types.ts) actually allows — mirrored here so connect/disconnect can reject an unknown key before indexing into `integrations()`, since the IntegrationKey type itself is erased at runtime. */
+const VALID_INTEGRATION_KEYS: ReadonlySet<string> = new Set([
+  "spotify",
+  "windowsMedia",
+  "twitch",
+  "youtube",
+] satisfies IntegrationKey[]);
+
+function isIntegrationKey(key: unknown): key is IntegrationKey {
+  return typeof key === "string" && VALID_INTEGRATION_KEYS.has(key);
+}
+
 export function registerIntegrationsHandlers(
   deps: IntegrationsHandlersDeps,
 ): void {
@@ -68,6 +80,9 @@ export function registerIntegrationsHandlers(
   ipcMain.handle(
     "integrations:connect",
     async (_event, key: IntegrationKey): Promise<ConnectResult> => {
+      if (!isIntegrationKey(key)) {
+        return { ok: false, error: `Unknown integration: ${String(key)}` };
+      }
       try {
         await integrations()[key].connect();
         return { ok: true };
@@ -83,6 +98,9 @@ export function registerIntegrationsHandlers(
   ipcMain.handle(
     "integrations:disconnect",
     async (_event, key: IntegrationKey) => {
+      if (!isIntegrationKey(key)) {
+        throw new Error(`Unknown integration: ${String(key)}`);
+      }
       await integrations()[key].disconnect();
     },
   );

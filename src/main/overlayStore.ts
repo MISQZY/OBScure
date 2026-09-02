@@ -6,7 +6,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import type { CustomOverlay, OverlayFolder } from "../shared/types";
 
 const FOLDERS_FILE = "folders.json";
@@ -31,8 +31,14 @@ export class OverlayStore {
   // Helpers
   // ---------------------------------------------------------------------------
 
+  /** Resolves the on-disk path for `id`, rejecting anything that would escape `dir` (e.g. an id containing `..` or a path separator) — same boundary check as OverlayServer.handleRequest. */
   private pathFor(id: string): string {
-    return join(this.dir, `${id}.json`);
+    const boundary = this.dir.endsWith(sep) ? this.dir : this.dir + sep;
+    const filePath = resolve(join(this.dir, `${id}.json`));
+    if (!filePath.startsWith(boundary)) {
+      throw new Error(`Invalid overlay id: ${id}`);
+    }
+    return filePath;
   }
 
   // ---------------------------------------------------------------------------

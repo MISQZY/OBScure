@@ -27,6 +27,20 @@ const CREDENTIAL_SETTING_KEYS: ReadonlySet<SettingKey> = new Set([
   "youtube.clientSecret",
 ]);
 
+/** Every key SettingKey (shared/types.ts) actually allows — mirrored here so settings:set can reject unknown keys from the renderer at runtime, since the SettingKey type itself is erased by then. */
+const VALID_SETTING_KEYS: ReadonlySet<string> = new Set([
+  "spotify.clientId",
+  "windowsMedia.enabled",
+  "twitch.clientId",
+  "youtube.clientId",
+  "youtube.clientSecret",
+  "overlay.host",
+  "overlay.port",
+  "customOverlays",
+  "customOverlayFolders",
+  "customLocales",
+] satisfies SettingKey[]);
+
 export function registerSettingsHandlers(deps: SettingsHandlersDeps): void {
   const {
     config,
@@ -70,6 +84,7 @@ export function registerSettingsHandlers(deps: SettingsHandlersDeps): void {
   );
 
   ipcMain.handle("settings:set", (_event, key: SettingKey, value: unknown) => {
+    if (!VALID_SETTING_KEYS.has(key)) return;
     if (CREDENTIAL_SETTING_KEYS.has(key)) {
       credentials().setClientId(key, value as string);
     } else {

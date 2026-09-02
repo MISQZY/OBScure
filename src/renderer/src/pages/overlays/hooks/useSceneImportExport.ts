@@ -3,14 +3,38 @@ import type { Node, Edge } from '@xyflow/react'
 import type { CustomOverlay } from '@shared/types'
 import { compareVersions } from '@shared/version'
 import { slugify } from '@/lib/custom-overlays'
+import { nodeTypes } from '@/components/nodes'
 
 /** The JSON shape Export writes and Import reads back — see downloadExampleTheme/Locale in CustomConfigProvider for the same open/save-dialog pattern applied to themes and locale packs. */
 export interface SceneExportPayload {
   name: string
   nodes: Node[]
   edges: Edge[]
-  /** App version this was exported from — lets Import warn when it's older than the app running now, since the graph format can change between releases. */
+  /** App version this was exported from — lets Import warn when it's older OR newer than the app running now, since the graph format can change between releases. */
   appVersion: string
+}
+
+/** Every type a node in a saved/imported graph can legitimately be — the same registry <ReactFlow nodeTypes={...}> itself renders off of (see SceneBuilderPage.tsx), so this can't drift out of step with what the editor actually knows how to render. Includes 'scene'/'frame' (absent from NODE_PALETTE, which only lists what's directly placeable) since a real export always has at least a Scene node. */
+const VALID_NODE_TYPES = new Set(Object.keys(nodeTypes))
+
+function hasValidPosition(value: unknown): value is { x: number; y: number } {
+  if (!value || typeof value !== 'object') return false
+  const pos = value as Record<string, unknown>
+  return typeof pos.x === 'number' && typeof pos.y === 'number'
+}
+
+/** A node from an imported file is trusted enough to hand to React Flow/the graph walkers in sceneUtils only once it has a real id, a type this build actually knows how to render, and a numeric position — anything less (hand-edited JSON, a newer export with node types this build predates, plain corruption) risks a crash deep in NODE_SOCKETS/dagre/sortNodesForParenting lookups that all assume a well-formed node. */
+function isValidImportedNode(value: unknown): value is Node {
+  if (!value || typeof value !== 'object') return false
+  const node = value as Partial<Node>
+  return typeof node.id === 'string' && typeof node.type === 'string' && VALID_NODE_TYPES.has(node.type) && hasValidPosition(node.position)
+}
+
+/** An edge from an imported file is only trusted once both ends reference a node that's actually present in the SAME file's own node set — an edge dangling off a missing node is exactly the kind of thing a hand-edited export could produce, and every graph walker here (incoming/buildNodeMap-based lookups) assumes edges only ever point at real nodes. */
+function isValidImportedEdge(value: unknown, nodeIds: Set<string>): value is Edge {
+  if (!value || typeof value !== 'object') return false
+  const edge = value as Partial<Edge>
+  return typeof edge.id === 'string' && typeof edge.source === 'string' && typeof edge.target === 'string' && nodeIds.has(edge.source) && nodeIds.has(edge.target)
 }
 
 /**
@@ -33,9 +57,9 @@ export function useSceneImportExport({
   importGraph: (nodes: Node[], edges: Edge[]) => void
 }) {
   const [importInvalid, setImportInvalid] = useState(false)
-  // Set only when the imported file's own appVersion is older than the
-  // app's current version — holds the parsed graph until the user confirms
-  // through the warning dialog (or cancels, discarding it).
+  // Set only when the imported file's own appVersion doesn't match the
+  // app's current version (older or newer) — holds the parsed graph until
+  // the user confirms through the warning dialog (or cancels, discarding it).
   const [pendingImport, setPendingImport] = useState<{
     nodes: Node[]
     edges: Edge[]
@@ -70,9 +94,22 @@ export function useSceneImportExport({
       setImportInvalid(true)
       return
     }
+    if (!payload.nodes.every(isValidImportedNode)) {
+      setImportInvalid(true)
+      return
+    }
+    const nodeIds = new Set(payload.nodes.map((n) => n.id))
+    if (!payload.edges.every((e) => isValidImportedEdge(e, nodeIds))) {
+      setImportInvalid(true)
+      return
+    }
 
     const currentVersion = await window.obscure.getAppVersion()
-    if (typeof payload.appVersion === 'string' && compareVersions(currentVersion, payload.appVersion) > 0) {
+    // Any mismatch — the export is either OLDER or NEWER than this build —
+    // can mean a graph format the current app doesn't fully agree with, so
+    // both directions get the same warning (see SceneExportPayload's own
+    // doc comment); only an exact version match skips it.
+    if (typeof payload.appVersion === 'string' && compareVersions(currentVersion, payload.appVersion) !== 0) {
       setPendingImport({
         nodes: payload.nodes as Node[],
         edges: payload.edges as Edge[],
