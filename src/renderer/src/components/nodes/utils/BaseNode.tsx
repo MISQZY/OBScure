@@ -452,7 +452,7 @@ export function BaseNode({
           // adding/removing it changes the node's box size and forces
           // React Flow to remeasure, keeping the wire glued to the dot.
           <div className="flex flex-col border-t py-0.5">
-            <OutputRow id="output" label={t.sceneBuilder.tooltip.output} dotClass={CATEGORY_DOT[category]} title={t.sceneBuilder.tooltip.output} />
+            <OutputRow id="output" label="Output" dotClass={CATEGORY_DOT[category]} title="Output" />
           </div>
         ))}
     </div>

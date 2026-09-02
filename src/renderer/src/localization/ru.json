@@ -338,7 +338,6 @@
       "socketInMulti": "{label} — вход (несколько)",
       "socketOut": "{label} — выход",
       "sequenceIn": "Sequence — предыдущий шаг",
-      "output": "Выход",
       "incomingCollapsed": "Входящие соединения (свёрнуто)",
       "outgoingCollapsed": "Исходящие соединения (свёрнуто)",
       "bold": "Жирный",

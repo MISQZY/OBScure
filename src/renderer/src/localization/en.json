@@ -338,7 +338,6 @@
       "socketInMulti": "{label} — input (multiple)",
       "socketOut": "{label} — output",
       "sequenceIn": "Sequence — previous step",
-      "output": "Output",
       "incomingCollapsed": "Incoming connections (collapsed)",
       "outgoingCollapsed": "Outgoing connections (collapsed)",
       "bold": "Bold",
