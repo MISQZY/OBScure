@@ -1,7 +1,6 @@
-import type { ReactNode } from 'react'
 import { Eye, Heart, Users } from 'lucide-react'
-import { CollapsibleSection } from '@/components/CollapsibleSection'
 import { CardControls } from '@/components/dashboard/CardControls'
+import { DashboardCardSection } from '@/components/dashboard/DashboardCardSection'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/providers/I18nProvider'
 import type { TwitchChannelStats } from '@shared/types'
@@ -26,22 +25,14 @@ function formatElapsed(totalSeconds: number): string {
 interface TwitchStatsCardProps {
   twitchStats: TwitchChannelStats | null
   now: number
-  dragHandle: ReactNode
   onRemove: () => void
 }
 
-export function TwitchStatsCard({ twitchStats, now, dragHandle, onRemove }: TwitchStatsCardProps) {
+export function TwitchStatsCard({ twitchStats, now, onRemove }: TwitchStatsCardProps) {
   const { t } = useI18n()
 
   return (
-    <CollapsibleSection
-      title={t.dashboard.twitchStats.title}
-      level="h2"
-      titleClassName="text-sm font-medium"
-      className="gap-2"
-      headerExtra={<CardControls dragHandle={dragHandle} onRemove={onRemove} />}
-      indentContent={false}
-    >
+    <DashboardCardSection title={t.dashboard.twitchStats.title} headerExtra={<CardControls onRemove={onRemove} />}>
       <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/40 p-3">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
@@ -89,7 +80,7 @@ export function TwitchStatsCard({ twitchStats, now, dragHandle, onRemove }: Twit
           />
         </div>
       </div>
-    </CollapsibleSection>
+    </DashboardCardSection>
   )
 }
 

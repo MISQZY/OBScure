@@ -1,30 +1,21 @@
-import type { ReactNode } from 'react'
 import { Music2 } from 'lucide-react'
-import { CollapsibleSection } from '@/components/CollapsibleSection'
 import { CardControls } from '@/components/dashboard/CardControls'
+import { DashboardCardSection } from '@/components/dashboard/DashboardCardSection'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/providers/I18nProvider'
 import type { NowPlayingPayload } from '@shared/types'
 
 interface NowPlayingCardProps {
   nowPlaying: NowPlayingPayload | null
-  dragHandle: ReactNode
   onRemove: () => void
 }
 
-export function NowPlayingCard({ nowPlaying, dragHandle, onRemove }: NowPlayingCardProps) {
+export function NowPlayingCard({ nowPlaying, onRemove }: NowPlayingCardProps) {
   const { t } = useI18n()
   const hasTrack = Boolean(nowPlaying && (nowPlaying.title || nowPlaying.artist))
 
   return (
-    <CollapsibleSection
-      title={t.dashboard.nowPlaying.title}
-      level="h2"
-      titleClassName="text-sm font-medium"
-      className="gap-2"
-      headerExtra={<CardControls dragHandle={dragHandle} onRemove={onRemove} />}
-      indentContent={false}
-    >
+    <DashboardCardSection title={t.dashboard.nowPlaying.title} headerExtra={<CardControls onRemove={onRemove} />}>
       <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 p-3">
         <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-background">
           {nowPlaying?.albumArt ? (
@@ -64,6 +55,6 @@ export function NowPlayingCard({ nowPlaying, dragHandle, onRemove }: NowPlayingC
           </span>
         )}
       </div>
-    </CollapsibleSection>
+    </DashboardCardSection>
   )
 }

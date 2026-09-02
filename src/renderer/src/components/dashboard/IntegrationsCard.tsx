@@ -1,6 +1,5 @@
-import type { ReactNode } from 'react'
-import { CollapsibleSection } from '@/components/CollapsibleSection'
 import { CardControls } from '@/components/dashboard/CardControls'
+import { DashboardCardSection } from '@/components/dashboard/DashboardCardSection'
 import { INTEGRATION_KEYS, INTEGRATIONS_META } from '@/lib/integrations-meta'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/providers/I18nProvider'
@@ -8,22 +7,17 @@ import type { IntegrationsStatusMap } from '@shared/types'
 
 interface IntegrationsCardProps {
   status: IntegrationsStatusMap | null
-  dragHandle: ReactNode
   onRemove: () => void
 }
 
-export function IntegrationsCard({ status, dragHandle, onRemove }: IntegrationsCardProps) {
+export function IntegrationsCard({ status, onRemove }: IntegrationsCardProps) {
   const { t } = useI18n()
 
   return (
-    <CollapsibleSection
+    <DashboardCardSection
       title={t.sidebar.integrations}
-      level="h2"
-      titleClassName="text-sm font-medium"
-      className="gap-2"
       tourId="dashboard-integrations"
-      headerExtra={<CardControls dragHandle={dragHandle} onRemove={onRemove} />}
-      indentContent={false}
+      headerExtra={<CardControls onRemove={onRemove} />}
     >
       <div className="flex flex-wrap gap-3">
         {INTEGRATION_KEYS.map((key) => {
@@ -47,6 +41,6 @@ export function IntegrationsCard({ status, dragHandle, onRemove }: IntegrationsC
         })}
       </div>
       <p className="text-xs text-muted-foreground">{t.dashboard.footerNote}</p>
-    </CollapsibleSection>
+    </DashboardCardSection>
   )
 }
