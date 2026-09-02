@@ -16,14 +16,21 @@ export const defaultEdges: Edge[] = [{ id: 'e-1-scene', source: '1', target: 'sc
 /**
  * Every node type available in the editor, grouped by what it does in the
  * graph (see the node-direction doc comment in components/nodes/index.tsx):
- * Content/Layout feed forward toward Scene, Style/Effects modify whatever
- * they're wired into, Live Data documents an external signal feed, Tools
- * surfaces an app-level Tool's (Random/Roulette, see shared/eventsConfig.ts —
- * "Инструменты") live state. Together they cover the real overlay config
- * shapes (shared/overlayConfig.ts / shared/eventsConfig.ts) so any existing
- * scene (now playing, an alert type, random, roulette) can be rebuilt from
- * these. `scene` itself isn't listed — one is created automatically and
- * can't be deleted, so there's never a second to add.
+ * Content feeds forward toward Scene; Transform/Style/Layout each modify
+ * whatever they're wired into, split by CONCERN rather than by which
+ * underlying socket they happen to share (see MODIFIER_SOCKETS in
+ * components/nodes/constants.ts) — Transform is geometry (where/how big/
+ * rotated), Style is look-or-visibility (opacity/shadow/animation/hide),
+ * Layout is box model (spacing/clipping/child arrangement); Effects are
+ * self-contained one-shot/ambient accessories wired into Start/Scene
+ * instead of into a component's own modifier socket; Live Data documents an
+ * external signal feed; Tools surfaces an app-level Tool's (Random/
+ * Roulette, see shared/eventsConfig.ts — "Инструменты") live state.
+ * Together they cover the real overlay config shapes (shared/
+ * overlayConfig.ts / shared/eventsConfig.ts) so any existing scene (now
+ * playing, an alert type, random, roulette) can be rebuilt from these.
+ * `scene` itself isn't listed — one is created automatically and can't be
+ * deleted, so there's never a second to add.
  */
 export const NODE_PALETTE: { type: string; label: string; group: string }[] = [
   { type: 'text', label: 'Text', group: 'Content' },
@@ -39,16 +46,24 @@ export const NODE_PALETTE: { type: string; label: string; group: string }[] = [
   { type: 'position', label: 'Position', group: 'Transform' },
   { type: 'size', label: 'Size', group: 'Transform' },
   { type: 'transform', label: 'Transform', group: 'Transform' },
-  // Matches the Style socket's own `accepts` list.
+  // All four wire into the same Style socket (see MODIFIER_SOCKETS in
+  // components/nodes/constants.ts) alongside Overflow/Spacing below, but
+  // this palette grouping is a separate, purely-organizational split by
+  // what each one actually DOES rather than which socket it happens to
+  // share — Style here means "how the target LOOKS, or whether it shows at
+  // all," never its own size or position within its parent.
   { type: 'opacity', label: 'Opacity', group: 'Style' },
   { type: 'shadow', label: 'Shadow', group: 'Style' },
   { type: 'animation', label: 'Animation', group: 'Style' },
   { type: 'hide', label: 'Hide', group: 'Style' },
-  { type: 'overflow', label: 'Overflow', group: 'Style' },
-  { type: 'spacing', label: 'Spacing', group: 'Style' },
-  // Matches Box/Scene's own Layout socket (formerly labeled "Ordering") —
-  // the only node type it accepts.
+  // Layout: how much ROOM the target takes/leaves and how it arranges or
+  // clips what's inside it — Ordering controls a container's OWN children
+  // (Box/Scene's dedicated Layout socket), Spacing/Overflow instead wire
+  // into any target's own Style socket like the four above, but govern
+  // its box model (padding/margin, clipping) rather than its look.
   { type: 'ordering', label: 'Ordering', group: 'Layout' },
+  { type: 'spacing', label: 'Spacing', group: 'Layout' },
+  { type: 'overflow', label: 'Overflow', group: 'Layout' },
   { type: 'start', label: 'Start', group: 'Process' },
   { type: 'task', label: 'Task', group: 'Process' },
   { type: 'wait', label: 'Wait', group: 'Process' },
