@@ -10,7 +10,7 @@ interface IntegrationPageLayoutProps {
 
 export function IntegrationPageLayout({ title, description, status, children }: IntegrationPageLayoutProps) {
   return (
-    <div className="flex max-w-xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-xl flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">{title}</h1>
         <IntegrationStatusBadge status={status} />

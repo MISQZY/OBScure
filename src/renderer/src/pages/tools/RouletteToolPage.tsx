@@ -138,117 +138,135 @@ export function RouletteToolPage() {
   }
 
   return (
-    <div className="flex max-w-2xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 min-[1440px]:max-w-none">
       <div>
         <h1 className="text-xl font-semibold">{t.events.roulette.title}</h1>
         <p className="text-sm text-muted-foreground">{t.events.roulette.description}</p>
       </div>
 
-      <div className="flex flex-wrap gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="roulette-command">{t.events.roulette.commandLabel}</Label>
-          <Input
-            id="roulette-command"
-            className="w-40"
-            placeholder={t.events.roulette.commandPlaceholder}
-            value={config.command}
-            onChange={(event) => setConfig((c) => ({ ...c, command: event.target.value }))}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="roulette-duration">{t.events.roulette.durationLabel}</Label>
-          <DurationInput
-            id="roulette-duration"
-            seconds={config.durationSeconds}
-            onChange={(durationSeconds) => setConfig((c) => ({ ...c, durationSeconds }))}
-            min={MIN_ROULETTE_DURATION_SECONDS}
-            max={MAX_ROULETTE_DURATION_SECONDS}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="roulette-reward">{t.events.roulette.pointsRewardLabel}</Label>
-          <Select
-            value={config.pointsRewardId ?? NONE_VALUE}
-            onValueChange={(value) => setConfig((c) => ({ ...c, pointsRewardId: value === NONE_VALUE ? null : value }))}
-          >
-            <SelectTrigger id="roulette-reward" className="w-56">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE_VALUE}>{t.events.roulette.pointsRewardNone}</SelectItem>
-              {rewards.map((reward) => (
-                <SelectItem key={reward.id} value={reward.id}>
-                  {reward.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="roulette-entry-mode">{t.events.roulette.entryModeLabel}</Label>
-          <Select
-            value={config.entryMode}
-            onValueChange={(value) => setConfig((c) => ({ ...c, entryMode: value as RouletteEntryMode }))}
-          >
-            <SelectTrigger id="roulette-entry-mode" className="w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t.events.roulette.entryModeAll}</SelectItem>
-              <SelectItem value="followers">{t.events.roulette.entryModeFollowers}</SelectItem>
-              <SelectItem value="subscribers">{t.events.roulette.entryModeSubscribers}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <Button onClick={save} variant="outline" className="self-end">
-          {saved ? t.common.saved : t.common.save}
-        </Button>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {t.events.roulette.commandHint} {t.events.roulette.pointsRewardHint} {t.events.roulette.pointsStackHint}{' '}
-        {config.entryMode === 'followers' && t.events.roulette.entryModeHintFollowers}
-        {config.entryMode === 'subscribers' && t.events.roulette.entryModeHintSubscribers}
-      </p>
-
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          {state.phase === 'idle' || state.phase === 'result' ? (
-            <Button onClick={start} size="sm">
-              {t.events.roulette.start}
-            </Button>
-          ) : (
-            <>
-              {state.phase === 'collecting' && (
-                <Button onClick={finishEarly} size="sm">
-                  {t.events.roulette.finishEarly}
-                </Button>
-              )}
-              <Button onClick={cancel} variant="outline" size="sm">
-                {t.events.roulette.cancel}
-              </Button>
-            </>
-          )}
-          <span className="text-sm text-muted-foreground">{phaseLabel}</span>
-        </div>
-
-        {state.phase === 'collecting' && (
-          <div className="flex items-center gap-2">
-            <Input
-              placeholder={t.events.roulette.namePlaceholder}
-              className="w-48"
-              value={manualName}
-              onChange={(event) => setManualName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') void addManual()
-              }}
-            />
-            <Button variant="outline" size="sm" onClick={addManual}>
-              {t.events.roulette.addManual}
+      {/* Setup/config on the left, the live wheel + entrants spectacle on the right from 1440px up. */}
+      <div className="flex flex-col gap-6 min-[1440px]:flex-row min-[1440px]:items-start">
+        <div className="flex flex-col gap-4 min-[1440px]:w-96 min-[1440px]:shrink-0">
+          <div className="flex flex-wrap gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="roulette-command">{t.events.roulette.commandLabel}</Label>
+              <Input
+                id="roulette-command"
+                className="w-40"
+                placeholder={t.events.roulette.commandPlaceholder}
+                value={config.command}
+                onChange={(event) => setConfig((c) => ({ ...c, command: event.target.value }))}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="roulette-duration">{t.events.roulette.durationLabel}</Label>
+              <DurationInput
+                id="roulette-duration"
+                seconds={config.durationSeconds}
+                onChange={(durationSeconds) => setConfig((c) => ({ ...c, durationSeconds }))}
+                min={MIN_ROULETTE_DURATION_SECONDS}
+                max={MAX_ROULETTE_DURATION_SECONDS}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="roulette-reward">{t.events.roulette.pointsRewardLabel}</Label>
+              <Select
+                value={config.pointsRewardId ?? NONE_VALUE}
+                onValueChange={(value) => setConfig((c) => ({ ...c, pointsRewardId: value === NONE_VALUE ? null : value }))}
+              >
+                <SelectTrigger id="roulette-reward" className="w-56">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_VALUE}>{t.events.roulette.pointsRewardNone}</SelectItem>
+                  {rewards.map((reward) => (
+                    <SelectItem key={reward.id} value={reward.id}>
+                      {reward.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="roulette-entry-mode">{t.events.roulette.entryModeLabel}</Label>
+              <Select
+                value={config.entryMode}
+                onValueChange={(value) => setConfig((c) => ({ ...c, entryMode: value as RouletteEntryMode }))}
+              >
+                <SelectTrigger id="roulette-entry-mode" className="w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t.events.roulette.entryModeAll}</SelectItem>
+                  <SelectItem value="followers">{t.events.roulette.entryModeFollowers}</SelectItem>
+                  <SelectItem value="subscribers">{t.events.roulette.entryModeSubscribers}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={save} variant="outline" className="self-end">
+              {saved ? t.common.saved : t.common.save}
             </Button>
           </div>
-        )}
+          <p className="text-xs text-muted-foreground">
+            {t.events.roulette.commandHint} {t.events.roulette.pointsRewardHint} {t.events.roulette.pointsStackHint}{' '}
+            {config.entryMode === 'followers' && t.events.roulette.entryModeHintFollowers}
+            {config.entryMode === 'subscribers' && t.events.roulette.entryModeHintSubscribers}
+          </p>
 
-        <div className="relative flex flex-col items-center gap-4 rounded-lg border border-border bg-card/50 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            {state.phase === 'idle' || state.phase === 'result' ? (
+              <Button onClick={start} size="sm">
+                {t.events.roulette.start}
+              </Button>
+            ) : (
+              <>
+                {state.phase === 'collecting' && (
+                  <Button onClick={finishEarly} size="sm">
+                    {t.events.roulette.finishEarly}
+                  </Button>
+                )}
+                <Button onClick={cancel} variant="outline" size="sm">
+                  {t.events.roulette.cancel}
+                </Button>
+              </>
+            )}
+            <span className="text-sm text-muted-foreground">{phaseLabel}</span>
+          </div>
+
+          {state.phase === 'collecting' && (
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder={t.events.roulette.namePlaceholder}
+                className="w-48"
+                value={manualName}
+                onChange={(event) => setManualName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void addManual()
+                }}
+              />
+              <Button variant="outline" size="sm" onClick={addManual}>
+                {t.events.roulette.addManual}
+              </Button>
+            </div>
+          )}
+
+          {state.hash && (
+            <div className="flex flex-col gap-1.5 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">{t.events.roulette.hashLabel}:</span>
+                <CopyableValue value={state.hash} />
+              </div>
+              {state.seed && (
+                <div className="flex items-center gap-2">
+                   <span className="text-muted-foreground">{t.events.roulette.seedLabel}:</span>
+                   <CopyableValue value={state.seed} />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="relative flex flex-1 flex-col items-center gap-4 rounded-lg border border-border bg-card/50 p-4">
           <Popover>
             <PopoverTrigger asChild>
               <button
@@ -268,7 +286,25 @@ export function RouletteToolPage() {
           </Popover>
 
           <div className="flex w-full flex-col items-center gap-4 sm:flex-row sm:items-start">
-            <div className="flex w-56 shrink-0 flex-col gap-1.5">
+            <div className="flex shrink-0 flex-col items-center gap-2">
+              {state.phase !== 'idle' && (
+                <div className="max-w-full truncate rounded-full bg-foreground px-3 py-1 text-sm font-semibold text-background shadow-sm">
+                  {state.phase === 'collecting' && formatCountdown(secondsLeft)}
+                  {state.phase === 'spinning' && (spinningName ?? t.events.roulette.choosingWinner)}
+                  {state.phase === 'result' && state.winner?.name}
+                </div>
+              )}
+              <RouletteWheel
+                entrants={state.entrants}
+                rotation={wheelRotation}
+                winnerId={state.phase === 'result' ? (state.winner?.id ?? null) : null}
+                animate={animateWheel}
+                tracking={state.phase === 'spinning'}
+                onTick={setSpinningName}
+              />
+            </div>
+
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5 self-stretch">
               <Label>
                 {t.events.roulette.entrants} ({state.entrants.length})
               </Label>
@@ -276,17 +312,17 @@ export function RouletteToolPage() {
                 <p className="text-sm text-muted-foreground">{t.events.roulette.noEntrants}</p>
               ) : (
                 <ScrollArea className="h-80">
-                  <ul className="flex flex-col gap-1.5 pr-3">
+                  <ul className="flex flex-wrap content-start gap-1.5 pr-3">
                     {state.entrants.map((entrant, index) => {
                       const chance = totalWeight > 0 ? Math.round((entrant.weight / totalWeight) * 100) : 0
                       return (
                         <li
                           key={entrant.id}
-                          className="flex min-w-0 items-center gap-1.5 rounded-full py-1 pr-1 pl-2.5 text-xs text-white"
+                          className="flex max-w-full items-center gap-1.5 rounded-full py-1 pr-1 pl-2.5 text-xs text-white"
                           style={{ backgroundColor: wheelSectorColor(index) }}
                           title={`${sourceLabel[entrant.source]} · ${chance}%`}
                         >
-                          <span className="min-w-0 flex-1 truncate">{entrant.name}</span>
+                          <span className="min-w-0 truncate">{entrant.name}</span>
                           {entrant.weight > 1 && <span className="shrink-0 font-semibold">×{entrant.weight}</span>}
                           <span className="shrink-0 opacity-80">{chance}%</span>
                           {state.phase === 'collecting' && (
@@ -307,41 +343,8 @@ export function RouletteToolPage() {
                 </ScrollArea>
               )}
             </div>
-
-            <div className="flex flex-col items-center gap-2">
-              {state.phase !== 'idle' && (
-                <div className="max-w-full truncate rounded-full bg-foreground px-3 py-1 text-sm font-semibold text-background shadow-sm">
-                  {state.phase === 'collecting' && formatCountdown(secondsLeft)}
-                  {state.phase === 'spinning' && (spinningName ?? t.events.roulette.choosingWinner)}
-                  {state.phase === 'result' && state.winner?.name}
-                </div>
-              )}
-              <RouletteWheel
-                entrants={state.entrants}
-                rotation={wheelRotation}
-                winnerId={state.phase === 'result' ? (state.winner?.id ?? null) : null}
-                animate={animateWheel}
-                tracking={state.phase === 'spinning'}
-                onTick={setSpinningName}
-              />
-            </div>
           </div>
         </div>
-
-        {state.hash && (
-          <div className="flex flex-col gap-1.5 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">{t.events.roulette.hashLabel}:</span>
-              <CopyableValue value={state.hash} />
-            </div>
-            {state.seed && (
-              <div className="flex items-center gap-2">
-                 <span className="text-muted-foreground">{t.events.roulette.seedLabel}:</span>
-                 <CopyableValue value={state.seed} />
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   )
