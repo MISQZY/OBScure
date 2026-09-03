@@ -28,7 +28,7 @@ import { RandomToolPage } from '@/pages/tools/RandomToolPage'
 import { RouletteToolPage } from '@/pages/tools/RouletteToolPage'
 import { VariablesPage } from '@/pages/data/VariablesPage'
 import { SettingsPage } from '@/pages/SettingsPage'
-import { getNavBreadcrumbs, type NavKey } from '@/lib/nav'
+import { getDefaultBreadcrumbs, getNavBreadcrumbs, type NavKey } from '@/lib/nav'
 import { I18nProvider, useI18n } from '@/providers/I18nProvider'
 import { ThemeProvider } from '@/providers/ThemeProvider'
 import { CustomConfigProvider } from '@/providers/CustomConfigProvider'
@@ -50,7 +50,7 @@ function AppShell() {
   const { step: tourStep } = useTour()
   const [active, setActive] = useState<NavKey>('dashboard')
   const Page = PAGES[active]
-  const crumbs = getNavBreadcrumbs(t)[active] || [t.sidebar.overlays]
+  const crumbs = getNavBreadcrumbs(t)[active] || getDefaultBreadcrumbs(t)
 
   // Walks the user through the app page by page as the onboarding tour advances.
   useEffect(() => {
@@ -75,12 +75,18 @@ function AppShell() {
             <Breadcrumb>
               <BreadcrumbList>
                 {crumbs.map((crumb, index) => (
-                  <Fragment key={crumb}>
+                  <Fragment key={`${crumb.label}-${index}`}>
                     <BreadcrumbItem>
                       {index === crumbs.length - 1 ? (
-                        <BreadcrumbPage>{crumb}</BreadcrumbPage>
+                        <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                      ) : crumb.navKey ? (
+                        <BreadcrumbLink asChild>
+                          <button type="button" className="cursor-pointer" onClick={() => setActive(crumb.navKey!)}>
+                            {crumb.label}
+                          </button>
+                        </BreadcrumbLink>
                       ) : (
-                        <BreadcrumbLink>{crumb}</BreadcrumbLink>
+                        crumb.label
                       )}
                     </BreadcrumbItem>
                     {index < crumbs.length - 1 && <BreadcrumbSeparator />}
