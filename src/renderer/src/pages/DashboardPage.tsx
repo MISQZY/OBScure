@@ -19,11 +19,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ScrollBar } from '@/components/ui/scroll-area'
 import type { Dictionary } from '@/lib/i18n/types'
+import { usePageVisible } from '@/hooks/use-page-visible'
 import { useI18n } from '@/providers/I18nProvider'
-import type { IntegrationsStatusMap, NowPlayingPayload, TwitchChannelStats } from '@shared/types'
-
-/** Twitch's live status can flip and its stats drift while the dashboard sits open, so keep them fresh without a manual refresh. */
-const TWITCH_STATS_POLL_MS = 60_000
+import { useTwitchStats } from '@/providers/TwitchStatsProvider'
+import type { IntegrationsStatusMap, NowPlayingPayload } from '@shared/types'
 
 const CARD_IDS = ['integrations', 'nowPlaying', 'twitchStats'] as const
 type CardId = (typeof CARD_IDS)[number]
@@ -190,7 +189,7 @@ function useAvailableHeight(ref: RefObject<HTMLElement | null>, deps: Dependency
 export function DashboardPage() {
   const { t } = useI18n()
   const [status, setStatus] = useState<IntegrationsStatusMap | null>(null)
-  const [twitchStats, setTwitchStats] = useState<TwitchChannelStats | null>(null)
+  const twitchStats = useTwitchStats()
   const [nowPlaying, setNowPlaying] = useState<NowPlayingPayload | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const [layout, setLayout] = useState<DashboardLayout>(() => readStoredLayout())
@@ -208,33 +207,17 @@ export function DashboardPage() {
     return window.obscure.onNowPlaying(setNowPlaying)
   }, [])
 
+  // Twitch stats themselves arrive as a push from the main process (once a
+  // minute, see TwitchIntegration's own pollStats) via useTwitchStats() above
+  // — this just ticks the elapsed-time counter every second on its own,
+  // purely client-side, off the already-known startedAt. Paused while the
+  // window is hidden (tray-minimized) — nobody can see the counter anyway.
+  const pageVisible = usePageVisible()
   useEffect(() => {
-    if (!twitchConnected) {
-      setTwitchStats(null)
-      return
-    }
-    let cancelled = false
-    const load = (): void => {
-      window.obscure.getTwitchStats().then((stats) => {
-        if (!cancelled) setTwitchStats(stats)
-      })
-    }
-    load()
-    const interval = setInterval(load, TWITCH_STATS_POLL_MS)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
-  }, [twitchConnected])
-
-  // Separate from the stats poll above (which only needs to hit Twitch once a
-  // minute): the elapsed-time counter should tick every second on its own,
-  // purely client-side, off the already-known startedAt.
-  useEffect(() => {
-    if (!twitchStats?.isLive || !twitchStats.startedAt) return
+    if (!twitchStats?.isLive || !twitchStats.startedAt || !pageVisible) return
     const tick = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(tick)
-  }, [twitchStats?.isLive, twitchStats?.startedAt])
+  }, [twitchStats?.isLive, twitchStats?.startedAt, pageVisible])
 
   useEffect(() => {
     try {

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { CopyableValue } from '@/components/CopyableValue'
+import { usePageVisible } from '@/hooks/use-page-visible'
 import { useI18n } from '@/providers/I18nProvider'
 import { DurationInput } from '@/components/DurationInput'
 import { RouletteWheel, wheelSectorColor, WHEEL_EXTRA_SPINS } from './RouletteWheel'
@@ -56,11 +57,12 @@ export function RouletteToolPage() {
     return window.obscure.onRouletteState(setState)
   }, [])
 
+  const pageVisible = usePageVisible()
   useEffect(() => {
-    if (state.phase !== 'collecting') return
+    if (state.phase !== 'collecting' || !pageVisible) return
     const id = setInterval(() => setNow(Date.now()), 250)
     return () => clearInterval(id)
-  }, [state.phase])
+  }, [state.phase, pageVisible])
 
   useEffect(() => {
     const prevPhase = prevPhaseRef.current
