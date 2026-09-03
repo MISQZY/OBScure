@@ -17,6 +17,8 @@ interface SettingsHandlersDeps {
   windowsMedia: () => WindowsMediaIntegration;
   getStoredCanvasConfig: () => CanvasConfig;
   canvasConfigSettingKey: string;
+  /** Called right after "app.minimizeToTray" is written — lets the tray icon be torn down immediately when the setting is turned off, instead of lingering until quit. */
+  onMinimizeToTrayChanged: (enabled: boolean) => void;
 }
 
 /** Client ID / client secret keys — persisted via CredentialsStore, not ConfigStore. */
@@ -39,6 +41,7 @@ const VALID_SETTING_KEYS: ReadonlySet<string> = new Set([
   "customOverlays",
   "customOverlayFolders",
   "customLocales",
+  "app.minimizeToTray",
 ] satisfies SettingKey[]);
 
 export function registerSettingsHandlers(deps: SettingsHandlersDeps): void {
@@ -49,6 +52,7 @@ export function registerSettingsHandlers(deps: SettingsHandlersDeps): void {
     windowsMedia,
     getStoredCanvasConfig,
     canvasConfigSettingKey,
+    onMinimizeToTrayChanged,
   } = deps;
 
   let systemFontsCache: Promise<string[]> | null = null;
@@ -93,6 +97,9 @@ export function registerSettingsHandlers(deps: SettingsHandlersDeps): void {
     if (key === "windowsMedia.enabled") {
       windowsMedia().stop();
       void windowsMedia().start();
+    }
+    if (key === "app.minimizeToTray") {
+      onMinimizeToTrayChanged(Boolean(value));
     }
   });
 

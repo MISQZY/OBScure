@@ -1,4 +1,5 @@
-import { app, BrowserWindow, session } from "electron";
+import { app, BrowserWindow, Menu, Tray, session } from "electron";
+import type { Rectangle } from "electron";
 import { existsSync, mkdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import icon from "../../resources/icon.png?asset";
@@ -58,10 +59,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.on("second-instance", () => {
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
-  }
+  showMainWindow();
 });
 
 const oldUserDataDir = join(app.getPath("appData"), "MAddoner");
@@ -295,6 +293,56 @@ async function reinitializeForActiveProfile(): Promise<void> {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+
+// Remembers size/position/maximized state across a minimize-to-tray
+// destroy+recreate cycle (see the "minimize" handler in createMainWindow) —
+// a destroyed BrowserWindow has no persistent identity of its own, so
+// without this every reopen would snap back to the hardcoded default size
+// instead of wherever the user last had it. `savedWindowBounds` only ever
+// reflects the *normal* (non-maximized) rect — updated while not maximized —
+// since capturing bounds while maximized would poison it with the
+// full-screen size, and unmaximizing later would then restore to that
+// instead of the user's real pre-maximize size.
+let savedWindowBounds: Rectangle | null = null;
+let savedWindowMaximized = false;
+
+function minimizeToTrayEnabled(): boolean {
+  return config.getSetting("app.minimizeToTray", false);
+}
+
+const TRAY_MENU_TEXT = app.getLocale().startsWith("ru")
+  ? { open: "Открыть OBScure", quit: "Выход" }
+  : { open: "Open OBScure", quit: "Quit" };
+
+/**
+ * Created lazily the first time the window is minimized/closed to tray, then
+ * kept alive for the rest of the process — recreating a Tray icon on every
+ * hide/show cycle causes it to flicker in the Windows notification area.
+ */
+function createTray(): void {
+  if (tray) return;
+  tray = new Tray(icon);
+  tray.setToolTip("OBScure");
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: TRAY_MENU_TEXT.open, click: () => showMainWindow() },
+      { type: "separator" },
+      { label: TRAY_MENU_TEXT.quit, click: () => app.quit() },
+    ]),
+  );
+  tray.on("click", () => showMainWindow());
+}
+
+function showMainWindow(): void {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  } else {
+    createMainWindow();
+  }
+}
 
 const DWMWA_TRANSITIONS_FORCEDISABLED = 3;
 
@@ -321,8 +369,7 @@ function disableWindowTransitionAnimations(win: BrowserWindow): void {
 
 function createMainWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 960,
-    height: 640,
+    ...(savedWindowBounds ?? { width: 960, height: 640 }),
     show: false,
     icon,
     titleBarStyle: "hidden",
@@ -334,7 +381,44 @@ function createMainWindow(): void {
   });
 
   disableWindowTransitionAnimations(mainWindow);
-  mainWindow.on("ready-to-show", () => mainWindow?.show());
+  mainWindow.on("ready-to-show", () => {
+    // Maximize before show so the window doesn't flash at its normal size first.
+    if (savedWindowMaximized) mainWindow?.maximize();
+    mainWindow?.show();
+  });
+
+  mainWindow.on("resize", () => {
+    if (!mainWindow || mainWindow.isMaximized()) return;
+    savedWindowBounds = mainWindow.getBounds();
+  });
+  mainWindow.on("move", () => {
+    if (!mainWindow || mainWindow.isMaximized()) return;
+    savedWindowBounds = mainWindow.getBounds();
+  });
+  mainWindow.on("maximize", () => {
+    savedWindowMaximized = true;
+  });
+  mainWindow.on("unmaximize", () => {
+    savedWindowMaximized = false;
+  });
+
+  // Electron's "minimize" event fires after the OS has already minimized the
+  // window and isn't cancelable (no event.preventDefault() — unlike "close"),
+  // so this reacts to it rather than intercepting it: immediately closing the
+  // window right behind the OS's own minimize fully tears down the renderer
+  // instead of just hiding it. With the window gone, only the overlay
+  // HTTP/WS server and the integrations that feed it keep doing work in the
+  // background, instead of a hidden-but-alive renderer still holding its JS
+  // heap/GPU surface and (throttled) timers.
+  mainWindow.on("minimize", () => {
+    if (!minimizeToTrayEnabled()) return;
+    createTray();
+    mainWindow?.close();
+  });
+
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
 
   const rendererUrl = process.env.ELECTRON_RENDERER_URL;
   if (rendererUrl) {
@@ -372,6 +456,12 @@ registerSettingsHandlers({
   windowsMedia: () => integrations.windowsMedia,
   getStoredCanvasConfig,
   canvasConfigSettingKey: CANVAS_CONFIG_SETTING_KEY,
+  onMinimizeToTrayChanged: (enabled) => {
+    if (!enabled) {
+      tray?.destroy();
+      tray = null;
+    }
+  },
 });
 
 registerEventsHandlers({
@@ -423,15 +513,27 @@ app.whenReady().then(async () => {
   initWhatsNew(config, app.getVersion());
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+    if (BrowserWindow.getAllWindows().length === 0) showMainWindow();
   });
 });
 
 app.on("window-all-closed", () => {
+  // Minimize-to-tray destroys the window (see the "minimize" handler in
+  // createMainWindow) to actually free the renderer's memory/CPU rather than
+  // just hiding it, which also means it goes through this same event as a
+  // real close. When that setting is on, treat "no windows" as "living in
+  // the tray" instead of quitting — the overlay server and integrations
+  // that feed it keep running in the main process regardless.
+  if (minimizeToTrayEnabled()) {
+    createTray();
+    return;
+  }
   if (process.platform !== "darwin") app.quit();
 });
 
 app.on("before-quit", () => {
+  tray?.destroy();
+  tray = null;
   overlayServer.stop();
   Object.values(integrations).forEach((integration) => integration.stop());
 });

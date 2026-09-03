@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { CanvasSettingsForm } from '@/components/CanvasSettingsForm'
 import { CollapsibleSection } from '@/components/CollapsibleSection'
 import { OverlayAddressForm } from '@/components/OverlayAddressForm'
+import { SettingToggleField } from '@/components/SettingToggleField'
 import { AppearanceSettings } from '@/components/settings/AppearanceSettings'
 import { useI18n } from '@/providers/I18nProvider'
 import { useTour } from '@/providers/TourProvider'
@@ -50,6 +51,20 @@ export function SettingsPage() {
         ) : (
           <p className="text-sm text-muted-foreground">{t.common.loading}</p>
         )}
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title={t.settings.window.title}
+        level="h2"
+        titleClassName="text-sm font-medium"
+        className="gap-2"
+      >
+        <p className="text-xs text-muted-foreground">{t.settings.window.description}</p>
+        <SettingToggleField
+          settingKey="app.minimizeToTray"
+          label={t.settings.window.minimizeToTrayLabel}
+          description={t.settings.window.minimizeToTrayDescription}
+        />
       </CollapsibleSection>
 
       <CollapsibleSection

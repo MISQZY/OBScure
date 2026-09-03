@@ -165,6 +165,7 @@ export type SettingKey =
   | 'customOverlayFolders'
   | 'customLocales'
   | 'globalVariables'
+  | 'app.minimizeToTray'
 
 export interface ConnectResult {
   ok: boolean

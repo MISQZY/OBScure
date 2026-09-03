@@ -252,6 +252,12 @@
     "description": "General application settings.",
     "overlayAddressTitle": "Overlay server address",
     "overlayAddressDescription": "Host and port of the local server that serves overlay pages for the OBS Browser Source. Applies to every overlay at once.",
+    "window": {
+      "title": "Window",
+      "description": "How the app window behaves when minimized or closed.",
+      "minimizeToTrayLabel": "Minimize to tray",
+      "minimizeToTrayDescription": "The Minimize and Close buttons hide the window to the system tray instead of the taskbar. The app window is fully closed, freeing its memory and CPU — only the overlay server for OBS and connected integrations keep running in the background. Reopen it from the tray icon."
+    },
     "appearance": {
       "title": "Appearance & language",
       "description": "Color theme and interface language. Download an example config file to see the format, edit it, then upload it back to add your own custom theme or language.",
