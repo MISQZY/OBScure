@@ -50,8 +50,10 @@ const CARD_GLOW_RADIUS = 16
 // react-grid-layout's minW/minH are in grid columns, not pixels — a column
 // shrinks along with the whole grid as the window narrows, so that alone
 // doesn't stop a card from being squeezed into an unusably thin sliver. This
-// floors the grid's own rendered width so columns never get thinner than
-// this, and lets it overflow (scroll) instead once the window can't fit it.
+// is the floor below which a 12-column row stops being usable at all — below
+// it we abandon the grid entirely and stack cards full-width in a single
+// column (see `isNarrow` below) rather than let columns keep shrinking or
+// force a horizontal scrollbar onto what should be a vertical dashboard.
 const MIN_COL_WIDTH = GRID_ROW_HEIGHT
 const MIN_GRID_WIDTH = GRID_COLS * MIN_COL_WIDTH + (GRID_COLS + 1) * GRID_MARGIN[0] + 2 * CARD_GLOW_RADIUS
 
@@ -186,6 +188,26 @@ function useAvailableHeight(ref: RefObject<HTMLElement | null>, deps: Dependency
   return minHeight
 }
 
+/**
+ * Tracks `ref`'s own rendered width via ResizeObserver — as opposed to
+ * `window.innerWidth`, this also catches width changes that don't come from
+ * an OS window resize, like the sidebar collapsing/expanding, matching what
+ * react-grid-layout's own WidthProvider reacts to.
+ */
+function useContainerWidth(ref: RefObject<HTMLElement | null>): number | undefined {
+  const [width, setWidth] = useState<number>()
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => setWidth(entries[0].contentRect.width))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [ref])
+
+  return width
+}
+
 export function DashboardPage() {
   const { t } = useI18n()
   const [status, setStatus] = useState<IntegrationsStatusMap | null>(null)
@@ -248,8 +270,27 @@ export function DashboardPage() {
   // The empty-state message shifts the grid's top down when it appears/disappears.
   const minHeight = useAvailableHeight(gridAreaRef, [visibleIds.length])
 
+  // Below the grid's own floor width, reflow to a single stacked column
+  // instead of rendering react-grid-layout at all — see MIN_GRID_WIDTH.
+  // Undefined (not yet measured) defaults to the normal grid to avoid a
+  // flash of the stacked layout before the first ResizeObserver callback.
+  const containerWidth = useContainerWidth(gridAreaRef)
+  const isNarrow = containerWidth !== undefined && containerWidth < MIN_GRID_WIDTH
+
   const rglLayout: Layout[] = useMemo(
     () => visibleIds.map((id) => ({ i: id, ...layout.cards[id], ...MIN_SIZE[id] })),
+    [visibleIds, layout.cards]
+  )
+
+  // Stacked order follows each card's position in the saved grid layout
+  // (top-to-bottom, then left-to-right) so reflowing doesn't reshuffle it.
+  const stackedIds = useMemo(
+    () =>
+      [...visibleIds].sort((a, b) => {
+        const ra = layout.cards[a]
+        const rb = layout.cards[b]
+        return ra.y - rb.y || ra.x - rb.x
+      }),
     [visibleIds, layout.cards]
   )
 
@@ -333,44 +374,64 @@ export function DashboardPage() {
       {visibleIds.length === 0 && <p className="text-sm text-muted-foreground">{t.dashboard.noCards}</p>}
 
       {/*
-        min-w-0 is load-bearing: as a flex item, this box's default auto
-        min-width is its content's min-content size — which, because the grid
-        below forces MIN_GRID_WIDTH, is huge — and that would otherwise widen
-        the whole flex column (pushing the header row's + button off-screen)
-        instead of staying inside this box's own horizontal scrollbar.
+        gridAreaRef stays on this one wrapper across both branches below (its
+        width feeds isNarrow, via useContainerWidth's ResizeObserver) — if the
+        ref instead moved between two different elements as isNarrow flipped,
+        the observer would keep watching the now-detached old node instead of
+        picking up the new one, since its effect only resubscribes when the
+        ref *object* changes, not when `.current` does.
 
-        The ScrollArea below is flex-1 rather than sized to its own content,
-        so it stretches down to fill this box's full minHeight — pinning the
-        horizontal scrollbar (anchored to the ScrollArea's own bottom edge)
-        to the bottom of the reserved canvas instead of right under whatever
-        the current shortest arrangement of cards happens to be.
+        min-w-0 is load-bearing on the non-narrow branch: as a flex item,
+        this box's default auto min-width is its content's min-content size —
+        which, because the grid below forces MIN_GRID_WIDTH, is huge — and
+        that would otherwise widen the whole flex column (pushing the header
+        row's + button off-screen) instead of staying inside this box's own
+        horizontal scrollbar.
       */}
-      <div ref={gridAreaRef} className="flex min-w-0 flex-col" style={{ minHeight }}>
-        <ScrollAreaPrimitive.Root type="auto" className="min-h-0 flex-1 overflow-hidden">
-          {/* pb-4 keeps the horizontal scrollbar (an overlay pinned to the
-              bottom edge of Root, not part of normal flow) from sitting flush
-              against — and visually fighting with — the last row of cards. */}
-          <ScrollAreaPrimitive.Viewport className="w-full rounded-[inherit] pb-4 [&>div]:!block">
-            <Grid
-              cols={GRID_COLS}
-              rowHeight={GRID_ROW_HEIGHT}
-              margin={GRID_MARGIN}
-              containerPadding={[CARD_GLOW_RADIUS, CARD_GLOW_RADIUS]}
-              layout={rglLayout}
-              onLayoutChange={handleLayoutChange}
-              draggableHandle=".dashboard-drag-handle"
-              compactType={null}
-              preventCollision
-              useCSSTransforms
-              style={{ minWidth: MIN_GRID_WIDTH }}
-            >
-              {visibleIds.map((id) => (
-                <GridCard key={id}>{renderGlowCard(id)}</GridCard>
-              ))}
-            </Grid>
-          </ScrollAreaPrimitive.Viewport>
-          <ScrollBar orientation="horizontal" />
-        </ScrollAreaPrimitive.Root>
+      <div
+        ref={gridAreaRef}
+        className={isNarrow ? 'flex flex-col gap-4' : 'flex min-w-0 flex-col'}
+        style={isNarrow ? undefined : { minHeight }}
+      >
+        {isNarrow ? (
+          // Below MIN_GRID_WIDTH a 12-column grid has nowhere left to shrink,
+          // so cards stack full-width in reading order instead — no dragging
+          // or resizing here, there's only one column to place them in.
+          stackedIds.map((id) => <GridCard key={id}>{renderGlowCard(id)}</GridCard>)
+        ) : (
+          <ScrollAreaPrimitive.Root type="auto" className="min-h-0 flex-1 overflow-hidden">
+            {/* pb-4 keeps the horizontal scrollbar (an overlay pinned to the
+                bottom edge of Root, not part of normal flow) from sitting flush
+                against — and visually fighting with — the last row of cards.
+
+                The Root above is flex-1 rather than sized to its own content,
+                so it stretches down to fill this box's full minHeight —
+                pinning the horizontal scrollbar (anchored to the Root's own
+                bottom edge) to the bottom of the reserved canvas instead of
+                right under whatever the current shortest card arrangement
+                happens to be. */}
+            <ScrollAreaPrimitive.Viewport className="w-full rounded-[inherit] pb-4 [&>div]:!block">
+              <Grid
+                cols={GRID_COLS}
+                rowHeight={GRID_ROW_HEIGHT}
+                margin={GRID_MARGIN}
+                containerPadding={[CARD_GLOW_RADIUS, CARD_GLOW_RADIUS]}
+                layout={rglLayout}
+                onLayoutChange={handleLayoutChange}
+                draggableHandle=".dashboard-drag-handle"
+                compactType={null}
+                preventCollision
+                useCSSTransforms
+                style={{ minWidth: MIN_GRID_WIDTH }}
+              >
+                {visibleIds.map((id) => (
+                  <GridCard key={id}>{renderGlowCard(id)}</GridCard>
+                ))}
+              </Grid>
+            </ScrollAreaPrimitive.Viewport>
+            <ScrollBar orientation="horizontal" />
+          </ScrollAreaPrimitive.Root>
+        )}
       </div>
     </div>
   )
