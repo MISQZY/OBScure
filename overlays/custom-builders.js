@@ -129,7 +129,7 @@ function buildImage(node, mods, animate, vars, registry, forceAudioCover) {
   // applyModifierStyle below overrides it when a Size node is wired.
   wrap.style.width = '96px'
   wrap.style.height = '96px'
-  wrap.style.borderRadius = `${d.borderRadius ?? 8}px`
+  wrap.style.borderRadius = radiusCss(d, 8)
   applyBorder(wrap, d, 'rgba(255, 255, 255, 0.08)')
   // An explicit Content wire (forceAudioCover, from Audio Player's own
   // Content output into this node's Content socket — see hasAudioCover/
@@ -182,7 +182,7 @@ function buildVideo(node, mods, animate, registry) {
   // No own Width/Height field, same reasoning as buildImage above.
   wrap.style.width = '320px'
   wrap.style.height = '180px'
-  wrap.style.borderRadius = `${d.borderRadius ?? 8}px`
+  wrap.style.borderRadius = radiusCss(d, 8)
   applyBorder(wrap, d, 'rgba(255, 255, 255, 0.08)')
   if (d.src) {
     const video = document.createElement('video')
@@ -223,14 +223,13 @@ function buildProgress(node, edges, map, mods, animate, registry) {
   const target = progressSourceValue(node.id, 'target', edges, map)
   const percent = progressPercent(current, target)
   const thickness = d.thickness ?? 28
-  const radius = d.borderRadius ?? 14
 
   const wrap = document.createElement('div')
   wrap.className = 'progress-node'
   wrap.style.position = 'relative'
   wrap.style.width = orientation === 'horizontal' ? '240px' : `${thickness}px`
   wrap.style.height = orientation === 'horizontal' ? `${thickness}px` : '240px'
-  wrap.style.borderRadius = `${radius}px`
+  wrap.style.borderRadius = radiusCss(d, 14)
   wrap.style.overflow = 'hidden'
   wrap.style.background = d.trackColor || '#3f3f46'
   wrap.style.flexShrink = '0'

@@ -2,7 +2,7 @@ import { Node, Edge } from "@xyflow/react";
 import { cn } from "@/lib/utils";
 import { useGlobalVariables } from "@/providers/GlobalVariablesProvider";
 import { useTwitchStats } from "@/providers/TwitchStatsProvider";
-import { progressSourceValue, variablePlaceholderValues, clockFormatFor, NodeMap, Anim } from "../sceneUtils";
+import { progressSourceValue, variablePlaceholderValues, clockFormatFor, radiusCss, NodeMap, Anim } from "../sceneUtils";
 import { TextView } from "./TextView";
 
 /** current/target clamped to a 0-100 fill percent — mirrors progressPercent in overlays/custom-builders.js. 0 when target isn't positive (no divide-by-zero/negative-width fill). */
@@ -40,7 +40,6 @@ export function ProgressView({
   const target = progressSourceValue(node.id, 'target', edges, map, globalVariables, twitchStats)
   const percent = progressPercent(current, target)
   const thickness = (d.thickness as number) ?? 28
-  const radius = (d.borderRadius as number) ?? 14
   const labelNode = mods.find((m) => m.type === 'text')
   return (
     <div
@@ -52,7 +51,7 @@ export function ProgressView({
           width: orientation === 'horizontal' ? 240 : thickness,
           height: orientation === 'horizontal' ? thickness : 240,
           ...style,
-          borderRadius: `${radius}px`,
+          borderRadius: radiusCss(d, 14),
           overflow: 'hidden',
           background: (d.trackColor as string) || '#3f3f46',
           flexShrink: 0,

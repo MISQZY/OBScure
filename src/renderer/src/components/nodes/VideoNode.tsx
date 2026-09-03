@@ -4,7 +4,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { useI18n } from '@/providers/I18nProvider'
 
 import { VIDEO_SOCKETS, VIDEO_OUTPUTS } from './constants'
-import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, numberInputClass, textInputClass } from './utils'
+import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, RadiusField, numberInputClass, textInputClass } from './utils'
 
 /**
  * A short video clip (URL only — no upload, unlike Image/Sound; point it at
@@ -43,9 +43,7 @@ export function VideoNode({ id, data }: NodeProps) {
           className={textInputClass}
         />
       </div>
-      <Field label="Radius">
-        <NumberInput value={data.borderRadius as number} onChange={(v) => updateNodeData(id, { borderRadius: v })} min={0} fallback={8} savedValue={saved.borderRadius as number} className={numberInputClass} />
-      </Field>
+      <RadiusField id={id} data={data} fallback={8} />
       <Field label="Loop">
         <Checkbox checked={loop} onCheckedChange={(checked) => updateNodeData(id, { loop: !!checked })} className="nodrag" />
       </Field>

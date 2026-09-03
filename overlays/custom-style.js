@@ -67,16 +67,27 @@ function applyModifierStyle(el, mods) {
   // offset on top instead of clobbering Spacing's margin outright.
   const spacing = lastOfType(mods, 'spacing')
   if (spacing) {
+    // Per-side fields win when present; older scenes only ever have
+    // paddingX/paddingY/marginX/marginY (see sceneUtils/style.ts's mirror
+    // of this block for the fallback reasoning).
     const d = spacing.data || {}
     const paddingX = d.paddingX ?? 0
     const paddingY = d.paddingY ?? 0
     const marginX = d.marginX ?? 0
     const marginY = d.marginY ?? 0
-    el.style.padding = `${paddingY}px ${paddingX}px`
-    el.style.marginTop = `${marginY}px`
-    el.style.marginBottom = `${marginY}px`
-    el.style.marginLeft = `${marginX}px`
-    el.style.marginRight = `${marginX}px`
+    const paddingTop = d.paddingTop ?? paddingY
+    const paddingRight = d.paddingRight ?? paddingX
+    const paddingBottom = d.paddingBottom ?? paddingY
+    const paddingLeft = d.paddingLeft ?? paddingX
+    const marginTop = d.marginTop ?? marginY
+    const marginRight = d.marginRight ?? marginX
+    const marginBottom = d.marginBottom ?? marginY
+    const marginLeft = d.marginLeft ?? marginX
+    el.style.padding = `${paddingTop}px ${paddingRight}px ${paddingBottom}px ${paddingLeft}px`
+    el.style.marginTop = `${marginTop}px`
+    el.style.marginBottom = `${marginBottom}px`
+    el.style.marginLeft = `${marginLeft}px`
+    el.style.marginRight = `${marginRight}px`
   }
 
   let transformStr = ''
@@ -197,6 +208,18 @@ function applyBorder(el, d, fill) {
   }
 }
 
+// A `borderRadius` field's 4 corners as a CSS shorthand string — mirrors
+// radiusCss/radiusCorners in sceneUtils/style.ts (see its own doc comment
+// for the per-corner-overrides-fall-back-to-the-single-value reasoning).
+function radiusCss(d, fallback) {
+  const base = d.borderRadius ?? fallback
+  const topLeft = d.borderRadiusTopLeft ?? base
+  const topRight = d.borderRadiusTopRight ?? base
+  const bottomRight = d.borderRadiusBottomRight ?? base
+  const bottomLeft = d.borderRadiusBottomLeft ?? base
+  return `${topLeft}px ${topRight}px ${bottomRight}px ${bottomLeft}px`
+}
+
 // A Box's corner treatment (see BOX_SHAPE_IDS' own doc comment in
 // components/nodes/index.tsx) — mirrors boxShapeStyle in
 // SceneBuilderPage.tsx.
@@ -213,7 +236,7 @@ function applyBoxShape(el, d) {
     el.style.borderRadius = '0px'
     el.style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)'
   } else {
-    el.style.borderRadius = `${d.borderRadius ?? 10}px`
+    el.style.borderRadius = radiusCss(d, 10)
   }
 }
 

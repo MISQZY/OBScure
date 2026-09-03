@@ -3,7 +3,7 @@ import { NodeProps, useReactFlow } from '@xyflow/react'
 import { Checkbox } from '@/components/ui/checkbox'
 
 import { BOX_SOCKETS, BOX_OUTPUTS } from './constants'
-import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect, numberInputClass, BOX_SHAPE_IDS } from './utils'
+import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect, RadiusField, numberInputClass, BOX_SHAPE_IDS } from './utils'
 
 /**
  * No Padding fields of its own anymore — wire a Spacing node into its own
@@ -26,11 +26,7 @@ export function BoxNode({ id, data }: NodeProps) {
       <Field label="Shape">
         <NodeSelect value={shape} options={BOX_SHAPE_IDS} onChange={(next) => updateNodeData(id, { shape: next })} />
       </Field>
-      {shape === 'rectangle' && (
-        <Field label="Radius">
-          <NumberInput value={data.borderRadius as number} onChange={(v) => updateNodeData(id, { borderRadius: v })} min={0} fallback={10} savedValue={saved.borderRadius as number} className={numberInputClass} />
-        </Field>
-      )}
+      {shape === 'rectangle' && <RadiusField id={id} data={data} fallback={10} />}
       {(shape === 'hexagon' || shape === 'diamond') && (
         <p className="text-[11px] text-muted-foreground leading-snug w-40">Border follows the original rectangle, not the clipped outline.</p>
       )}

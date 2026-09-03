@@ -43,18 +43,31 @@ export function modifierStyle(mods: Node[], baseMods?: Node[]): React.CSSPropert
   // center-anchor trick (marginLeft/marginTop repurposed to offset a 50%-
   // anchored element — see its own block below) can ADD its own offset on
   // top instead of clobbering Spacing's margin outright. No such collision
-  // for paddingX/Y or marginRight/Bottom — nothing else here touches those.
+  // for paddingTop/Right/Bottom/Left or marginRight/Bottom — nothing else
+  // here touches those.
   const spacing = lastOfType(mods, 'spacing')
   if (spacing) {
+    // Per-side fields (SpacingNode's expand-to-4-sides toggle) win when
+    // present; a scene saved before per-side support existed only ever has
+    // paddingX/paddingY/marginX/marginY, so those still resolve every side
+    // (X -> left/right, Y -> top/bottom) and render identically to before.
     const paddingX = (spacing.data.paddingX as number) ?? 0
     const paddingY = (spacing.data.paddingY as number) ?? 0
     const marginX = (spacing.data.marginX as number) ?? 0
     const marginY = (spacing.data.marginY as number) ?? 0
-    style.padding = `${paddingY}px ${paddingX}px`
-    style.marginTop = marginY
-    style.marginBottom = marginY
-    style.marginLeft = marginX
-    style.marginRight = marginX
+    const paddingTop = (spacing.data.paddingTop as number) ?? paddingY
+    const paddingRight = (spacing.data.paddingRight as number) ?? paddingX
+    const paddingBottom = (spacing.data.paddingBottom as number) ?? paddingY
+    const paddingLeft = (spacing.data.paddingLeft as number) ?? paddingX
+    const marginTop = (spacing.data.marginTop as number) ?? marginY
+    const marginRight = (spacing.data.marginRight as number) ?? marginX
+    const marginBottom = (spacing.data.marginBottom as number) ?? marginY
+    const marginLeft = (spacing.data.marginLeft as number) ?? marginX
+    style.padding = `${paddingTop}px ${paddingRight}px ${paddingBottom}px ${paddingLeft}px`
+    style.marginTop = marginTop
+    style.marginBottom = marginBottom
+    style.marginLeft = marginLeft
+    style.marginRight = marginRight
   }
 
   const size = lastOfType(mods, 'size')
@@ -289,6 +302,35 @@ export function randomWidgetOrdering(mods: Node[]): { flexDirection: 'row' | 'ro
 }
 
 
+/**
+ * A `borderRadius` field's 4 corners — same expand-to-independent-values
+ * shape as Spacing's `spacingSides` (see SpacingNode.tsx's own doc comment):
+ * a per-corner override (`borderRadiusTopLeft`/etc., set via each Radius
+ * field's own expand toggle — RadiusField in components/nodes/utils) wins
+ * when present, and every corner without one falls back to the single
+ * `borderRadius` value a scene saved before per-corner support existed
+ * already has, so it keeps rendering identically until edited. `fallback`
+ * is the node type's own default (Box 10, Image/Video 8, Progress 14).
+ */
+export function radiusCorners(
+  data: Record<string, unknown>,
+  fallback: number
+): { topLeft: number; topRight: number; bottomRight: number; bottomLeft: number } {
+  const base = (data.borderRadius as number) ?? fallback
+  return {
+    topLeft: (data.borderRadiusTopLeft as number) ?? base,
+    topRight: (data.borderRadiusTopRight as number) ?? base,
+    bottomRight: (data.borderRadiusBottomRight as number) ?? base,
+    bottomLeft: (data.borderRadiusBottomLeft as number) ?? base
+  }
+}
+
+/** `radiusCorners` as a CSS `border-radius` shorthand value (top-left top-right bottom-right bottom-left). */
+export function radiusCss(data: Record<string, unknown>, fallback: number): string {
+  const c = radiusCorners(data, fallback)
+  return `${c.topLeft}px ${c.topRight}px ${c.bottomRight}px ${c.bottomLeft}px`
+}
+
 /** A Box's corner treatment (see BOX_SHAPE_IDS' own doc comment in components/nodes/index.tsx) as borderRadius/clipPath — mirrors boxShapeStyle in overlays/custom.html. */
 export function boxShapeStyle(node: Node): { borderRadius: string; clipPath?: string } {
   const shape = (node.data.shape as string) || 'rectangle'
@@ -296,5 +338,5 @@ export function boxShapeStyle(node: Node): { borderRadius: string; clipPath?: st
   if (shape === 'pill') return { borderRadius: '9999px' }
   if (shape === 'hexagon') return { borderRadius: '0px', clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)' }
   if (shape === 'diamond') return { borderRadius: '0px', clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }
-  return { borderRadius: `${(node.data.borderRadius as number) ?? 10}px` }
+  return { borderRadius: radiusCss(node.data, 10) }
 }

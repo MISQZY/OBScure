@@ -1,5 +1,6 @@
 import React from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
+import { Maximize } from 'lucide-react'
 
 import { BaseNode, Field, NumberInput, numberInputClass } from './utils'
 
@@ -12,31 +13,106 @@ import { BaseNode, Field, NumberInput, numberInputClass } from './utils'
  * a Box's own inside — this works on Text/Image/Video/Box/widgets alike, and
  * covers outside spacing too, which nothing offered before.
  *
- * X/Y (not 4 independent sides), same symmetric convention Shape's own old
- * Padding fields used — simpler than a full per-side box model, and nothing
- * here needed the extra precision yet.
+ * Each group (Padding/Margin) is one main field plus an expand/collapse
+ * toggle (static icon — only the 4 fields below appear/disappear, same as
+ * Text's own {} placeholder button styling), Figma-style: collapsed
+ * (default) drives all 4 sides from the single field; expanded reveals
+ * Top/Right/Bottom/Left below for independent values. The
+ * per-side fields (`paddingTop`/etc., see spacingSides below) are what
+ * actually renders (modifierStyle in sceneUtils/style.ts) — a scene saved
+ * before this existed only ever has the old symmetric `paddingX`/`paddingY`/
+ * `marginX`/`marginY` pair, which spacingSides falls back to per axis (X ->
+ * left/right, Y -> top/bottom) so it keeps rendering unchanged until edited.
  *
  * Build-time only, like Overflow — not in TASK_SOCKETS' own narrower Style
  * list, so a Task can't override either mid-process (see modifierStyle's own
  * doc comment in sceneUtils/style.ts for the one place Margin's `marginTop`/
  * `marginLeft` interact with a wired Position's own center-anchor trick).
  */
-export function SpacingNode({ id, data }: NodeProps) {
+export function spacingSides(
+  data: Record<string, unknown>,
+  prefix: 'padding' | 'margin'
+): { top: number; right: number; bottom: number; left: number } {
+  const x = (data[`${prefix}X`] as number) ?? 0
+  const y = (data[`${prefix}Y`] as number) ?? 0
+  return {
+    top: (data[`${prefix}Top`] as number) ?? y,
+    right: (data[`${prefix}Right`] as number) ?? x,
+    bottom: (data[`${prefix}Bottom`] as number) ?? y,
+    left: (data[`${prefix}Left`] as number) ?? x
+  }
+}
+
+function SpacingGroup({
+  id,
+  data,
+  prefix,
+  label,
+  min
+}: {
+  id: string
+  data: Record<string, unknown>
+  prefix: 'padding' | 'margin'
+  label: string
+  min?: number
+}) {
   const { updateNodeData } = useReactFlow()
+  const expanded = Boolean(data[`${prefix}Expanded`])
+  const sides = spacingSides(data, prefix)
+
+  // The main field is a "set all" shortcut, not its own stored value — it
+  // always writes all 4 sides at once, so diverging them via the per-side
+  // fields below and coming back to this one resets them back in sync.
+  const setAll = (v: number | null) => {
+    const value = v ?? 0
+    updateNodeData(id, {
+      [`${prefix}Top`]: value,
+      [`${prefix}Right`]: value,
+      [`${prefix}Bottom`]: value,
+      [`${prefix}Left`]: value
+    })
+  }
+
+  return (
+    <>
+      <Field label={label}>
+        <div className="flex items-center gap-1">
+          <NumberInput value={sides.top} onChange={setAll} min={min} fallback={0} className={numberInputClass} />
+          <button
+            type="button"
+            onClick={() => updateNodeData(id, { [`${prefix}Expanded`]: !expanded })}
+            title={expanded ? `Use one value for all ${label.toLowerCase()} sides` : `Set each ${label.toLowerCase()} side independently`}
+            className="nodrag h-6 px-1.5 rounded bg-muted hover:bg-accent border border-transparent hover:border-border text-muted-foreground hover:text-accent-foreground shrink-0 flex items-center justify-center"
+          >
+            <Maximize className="size-3" />
+          </button>
+        </div>
+      </Field>
+      {expanded && (
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1 pl-2">
+          <Field label="Top">
+            <NumberInput value={sides.top} onChange={(v) => updateNodeData(id, { [`${prefix}Top`]: v ?? 0 })} min={min} fallback={0} className={numberInputClass} />
+          </Field>
+          <Field label="Right">
+            <NumberInput value={sides.right} onChange={(v) => updateNodeData(id, { [`${prefix}Right`]: v ?? 0 })} min={min} fallback={0} className={numberInputClass} />
+          </Field>
+          <Field label="Bottom">
+            <NumberInput value={sides.bottom} onChange={(v) => updateNodeData(id, { [`${prefix}Bottom`]: v ?? 0 })} min={min} fallback={0} className={numberInputClass} />
+          </Field>
+          <Field label="Left">
+            <NumberInput value={sides.left} onChange={(v) => updateNodeData(id, { [`${prefix}Left`]: v ?? 0 })} min={min} fallback={0} className={numberInputClass} />
+          </Field>
+        </div>
+      )}
+    </>
+  )
+}
+
+export function SpacingNode({ id, data }: NodeProps) {
   return (
     <BaseNode id={id} data={data} title="Spacing" category="style">
-      <Field label="Padding X">
-        <NumberInput value={data.paddingX as number} onChange={(v) => updateNodeData(id, { paddingX: v })} min={0} fallback={0} className={numberInputClass} />
-      </Field>
-      <Field label="Padding Y">
-        <NumberInput value={data.paddingY as number} onChange={(v) => updateNodeData(id, { paddingY: v })} min={0} fallback={0} className={numberInputClass} />
-      </Field>
-      <Field label="Margin X">
-        <NumberInput value={data.marginX as number} onChange={(v) => updateNodeData(id, { marginX: v })} fallback={0} className={numberInputClass} />
-      </Field>
-      <Field label="Margin Y">
-        <NumberInput value={data.marginY as number} onChange={(v) => updateNodeData(id, { marginY: v })} fallback={0} className={numberInputClass} />
-      </Field>
+      <SpacingGroup id={id} data={data} prefix="padding" label="Padding" min={0} />
+      <SpacingGroup id={id} data={data} prefix="margin" label="Margin" />
     </BaseNode>
   )
 }

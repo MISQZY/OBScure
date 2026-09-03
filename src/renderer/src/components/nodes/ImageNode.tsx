@@ -12,6 +12,7 @@ import {
   NumberInput,
   ColorPicker,
   NodeSelect,
+  RadiusField,
   numberInputClass,
   textInputClass,
   UploadRow,
@@ -88,9 +89,7 @@ export function ImageNode({ id, data }: NodeProps) {
           renderOption={(opt) => IMAGE_FIT_LABELS[opt]}
         />
       </Field>
-      <Field label="Radius">
-        <NumberInput value={data.borderRadius as number} onChange={(v) => updateNodeData(id, { borderRadius: v })} min={0} fallback={8} savedValue={saved.borderRadius as number} className={numberInputClass} />
-      </Field>
+      <RadiusField id={id} data={data} fallback={8} />
       <Field label="Border">
         <Checkbox checked={borderEnabled} onCheckedChange={(checked) => updateNodeData(id, { borderEnabled: !!checked })} className="nodrag" />
       </Field>

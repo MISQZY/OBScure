@@ -3,7 +3,7 @@ import { NodeProps, useReactFlow } from '@xyflow/react'
 
 import { useI18n } from '@/providers/I18nProvider'
 import { PROGRESS_SOCKETS, PROGRESS_OUTPUTS } from './constants'
-import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect, numberInputClass, PROGRESS_ORIENTATIONS } from './utils'
+import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect, RadiusField, numberInputClass, PROGRESS_ORIENTATIONS } from './utils'
 
 /**
  * A goal/progress bar. Current/Target each come from a wired Variable node
@@ -42,9 +42,7 @@ export function ProgressNode({ id, data }: NodeProps) {
       <Field label="Thickness">
         <NumberInput value={data.thickness as number} onChange={(v) => updateNodeData(id, { thickness: v })} min={2} fallback={28} savedValue={saved.thickness as number} className={numberInputClass} />
       </Field>
-      <Field label="Radius">
-        <NumberInput value={data.borderRadius as number} onChange={(v) => updateNodeData(id, { borderRadius: v })} min={0} fallback={14} savedValue={saved.borderRadius as number} className={numberInputClass} />
-      </Field>
+      <RadiusField id={id} data={data} fallback={14} />
     </BaseNode>
   )
 }

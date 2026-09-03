@@ -3,7 +3,7 @@ import { Music, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { customImageUrl } from "@/lib/custom-image-url";
 import type { OverlayUrls } from "@shared/types";
-import { borderBoxStyle, Anim } from "../sceneUtils";
+import { borderBoxStyle, radiusCss, Anim } from "../sceneUtils";
 
 export function ImageView({
   node,
@@ -44,7 +44,7 @@ export function ImageView({
           width: 96,
           height: 96,
           ...style,
-          borderRadius: `${(node.data.borderRadius as number) ?? 8}px`,
+          borderRadius: radiusCss(node.data, 8),
           ...borderBoxStyle(node, 'rgba(255, 255, 255, 0.08)'),
           ...(anim?.duration ? { '--anim-duration': `${anim.duration}ms` } : {})
         } as React.CSSProperties
