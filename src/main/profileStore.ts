@@ -133,6 +133,13 @@ export class ProfileManager {
     this.save();
   }
 
+  setAvatarImage(id: string, fileName: string | null): void {
+    const profile = this.data.profiles.find((p) => p.id === id);
+    if (!profile) return;
+    profile.avatarImage = fileName;
+    this.save();
+  }
+
   delete(id: string): boolean {
     if (this.data.profiles.length <= 1) return false;
     const index = this.data.profiles.findIndex((p) => p.id === id);

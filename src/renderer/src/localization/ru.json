@@ -46,7 +46,10 @@
     "namePlaceholder": "Имя профиля",
     "dialogTitle": "Управление профилями",
     "dialogDescription": "До {max} профилей — у каждого свои настройки, интеграции и оверлеи.",
-    "changeAvatarColor": "Сменить цвет аватара"
+    "changeAvatarColor": "Сменить цвет аватара",
+    "avatarMenuLabel": "Аватар профиля",
+    "uploadAvatar": "Загрузить фото",
+    "removeAvatar": "Удалить фото"
   },
   "theme": {
     "light": "Светлая",

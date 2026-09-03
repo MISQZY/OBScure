@@ -56,6 +56,8 @@ const api = {
   renameProfile: (id: string, name: string): Promise<void> => ipcRenderer.invoke('profiles:rename', id, name),
   setProfileAvatarColor: (id: string, color: AvatarColor): Promise<void> =>
     ipcRenderer.invoke('profiles:setAvatarColor', id, color),
+  setProfileAvatarImage: (id: string, fileName: string | null): Promise<void> =>
+    ipcRenderer.invoke('profiles:setAvatarImage', id, fileName),
   deleteProfile: (id: string): Promise<void> => ipcRenderer.invoke('profiles:delete', id),
   switchProfile: (id: string): Promise<void> => ipcRenderer.invoke('profiles:switch', id),
   getEventsConfig: <T extends EventTarget>(target: T): Promise<EventsConfigs[T]> =>

@@ -9,13 +9,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useSidebar } from '@/components/ui/sidebar'
 import { useI18n } from '@/providers/I18nProvider'
 import { AVATAR_COLOR_CLASSES, profileInitials } from '@/lib/profile-avatar'
+import { customImageUrl } from '@/lib/custom-image-url'
 import { cn } from '@/lib/utils'
 import { ManageProfilesDialog } from '@/components/layout/ManageProfilesDialog'
 import type { Profile } from '@shared/profiles'
+import type { OverlayUrls } from '@shared/types'
 
 export function ProfileSwitcher() {
   const { t } = useI18n()
@@ -23,6 +25,7 @@ export function ProfileSwitcher() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [manageOpen, setManageOpen] = useState(false)
+  const [urls, setUrls] = useState<OverlayUrls | null>(null)
 
   const refresh = async (): Promise<void> => {
     const [list, active] = await Promise.all([
@@ -35,6 +38,7 @@ export function ProfileSwitcher() {
 
   useEffect(() => {
     void refresh()
+    window.obscure.getOverlayUrls().then(setUrls)
   }, [])
 
   // The manage dialog can rename/recolor/add/delete profiles without
@@ -60,6 +64,7 @@ export function ProfileSwitcher() {
             className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
           >
             <Avatar className="size-6 shrink-0">
+              {activeProfile && <AvatarImage src={customImageUrl(urls, activeProfile.avatarImage) ?? undefined} />}
               <AvatarFallback
                 className={cn('text-[10px]', activeProfile && AVATAR_COLOR_CLASSES[activeProfile.avatarColor])}
               >
@@ -77,6 +82,7 @@ export function ProfileSwitcher() {
           {profiles.map((profile) => (
             <DropdownMenuItem key={profile.id} onSelect={() => handleSwitch(profile.id)}>
               <Avatar className="size-5">
+                <AvatarImage src={customImageUrl(urls, profile.avatarImage) ?? undefined} />
                 <AvatarFallback className={cn('text-[9px]', AVATAR_COLOR_CLASSES[profile.avatarColor])}>
                   {profileInitials(profile.name)}
                 </AvatarFallback>

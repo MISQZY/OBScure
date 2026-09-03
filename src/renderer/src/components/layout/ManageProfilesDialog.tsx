@@ -17,14 +17,22 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger
 } from '@/components/ui/alert-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useI18n } from '@/providers/I18nProvider'
 import { interpolate } from '@/lib/i18n/interpolate'
 import { AVATAR_COLOR_CLASSES, profileInitials } from '@/lib/profile-avatar'
+import { customImageUrl } from '@/lib/custom-image-url'
 import { cn } from '@/lib/utils'
 import { AVATAR_COLORS, MAX_PROFILES, type Profile } from '@shared/profiles'
+import type { OverlayUrls } from '@shared/types'
 
 interface ManageProfilesDialogProps {
   open: boolean
@@ -36,6 +44,7 @@ export function ManageProfilesDialog({ open, onOpenChange }: ManageProfilesDialo
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [urls, setUrls] = useState<OverlayUrls | null>(null)
 
   const refresh = async (): Promise<void> => {
     const [list, active] = await Promise.all([
@@ -50,6 +59,10 @@ export function ManageProfilesDialog({ open, onOpenChange }: ManageProfilesDialo
     if (open) void refresh()
   }, [open])
 
+  useEffect(() => {
+    window.obscure.getOverlayUrls().then(setUrls)
+  }, [])
+
   const handleRename = async (profile: Profile, name: string): Promise<void> => {
     if (!name.trim() || name === profile.name) return
     await window.obscure.renameProfile(profile.id, name)
@@ -60,6 +73,22 @@ export function ManageProfilesDialog({ open, onOpenChange }: ManageProfilesDialo
     const index = AVATAR_COLORS.indexOf(profile.avatarColor)
     const next = AVATAR_COLORS[(index + 1) % AVATAR_COLORS.length]
     await window.obscure.setProfileAvatarColor(profile.id, next)
+    void refresh()
+  }
+
+  // uploadCustomImage deletes the previous file itself once the new one is copied in, so
+  // replacing an existing avatar doesn't leave the old file behind.
+  const handleUploadAvatar = async (profile: Profile): Promise<void> => {
+    const result = await window.obscure.uploadCustomImage(profile.avatarImage ?? null)
+    if (!result) return
+    await window.obscure.setProfileAvatarImage(profile.id, result.fileName)
+    void refresh()
+  }
+
+  const handleRemoveAvatar = async (profile: Profile): Promise<void> => {
+    if (!profile.avatarImage) return
+    await window.obscure.removeCustomImage(profile.avatarImage)
+    await window.obscure.setProfileAvatarImage(profile.id, null)
     void refresh()
   }
 
@@ -113,18 +142,35 @@ export function ManageProfilesDialog({ open, onOpenChange }: ManageProfilesDialo
                 key={profile.id}
                 className="flex items-center gap-2 rounded-lg border border-border p-2"
               >
-                <button
-                  type="button"
-                  onClick={() => void handleCycleColor(profile)}
-                  title={t.profiles.changeAvatarColor}
-                  className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Avatar className="size-9">
-                    <AvatarFallback className={AVATAR_COLOR_CLASSES[profile.avatarColor]}>
-                      {profileInitials(profile.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      title={t.profiles.avatarMenuLabel}
+                      className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <Avatar className="size-9">
+                        <AvatarImage src={customImageUrl(urls, profile.avatarImage) ?? undefined} />
+                        <AvatarFallback className={AVATAR_COLOR_CLASSES[profile.avatarColor]}>
+                          {profileInitials(profile.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem onSelect={() => void handleUploadAvatar(profile)}>
+                      {t.profiles.uploadAvatar}
+                    </DropdownMenuItem>
+                    {profile.avatarImage && (
+                      <DropdownMenuItem onSelect={() => void handleRemoveAvatar(profile)}>
+                        {t.profiles.removeAvatar}
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onSelect={() => void handleCycleColor(profile)}>
+                      {t.profiles.changeAvatarColor}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
                 <Input
                   key={profile.id + profile.name}

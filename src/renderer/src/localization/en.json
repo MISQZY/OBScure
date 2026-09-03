@@ -46,7 +46,10 @@
     "namePlaceholder": "Profile name",
     "dialogTitle": "Manage profiles",
     "dialogDescription": "Up to {max} profiles — each with its own settings, integrations, and overlays.",
-    "changeAvatarColor": "Change avatar color"
+    "changeAvatarColor": "Change avatar color",
+    "avatarMenuLabel": "Profile avatar",
+    "uploadAvatar": "Upload photo",
+    "removeAvatar": "Remove photo"
   },
   "theme": {
     "light": "Light",

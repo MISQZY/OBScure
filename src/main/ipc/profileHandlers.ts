@@ -31,6 +31,13 @@ export function registerProfileHandlers(deps: ProfileHandlersDeps): void {
     },
   );
 
+  ipcMain.handle(
+    "profiles:setAvatarImage",
+    (_event, id: string, fileName: string | null) => {
+      profileManager.setAvatarImage(id, fileName);
+    },
+  );
+
   ipcMain.handle("profiles:delete", async (_event, id: string) => {
     const wasActive = profileManager.delete(id);
     if (wasActive) await reinitializeForActiveProfile();

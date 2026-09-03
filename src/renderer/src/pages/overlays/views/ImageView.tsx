@@ -1,6 +1,7 @@
 import { Node } from "@xyflow/react";
 import { Music, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { customImageUrl } from "@/lib/custom-image-url";
 import type { OverlayUrls } from "@shared/types";
 import { borderBoxStyle, Anim } from "../sceneUtils";
 
@@ -25,11 +26,7 @@ export function ImageView({
 }) {
   const customImageName = node.data.customImageName as string | undefined
   const fit = (node.data.fit as string) || 'cover'
-  const src = audioCover
-    ? undefined
-    : customImageName && urls
-      ? `http://${urls.host}:${urls.port}/overlays/custom-images/${encodeURIComponent(customImageName)}`
-      : (node.data.src as string | undefined)
+  const src = audioCover ? undefined : (customImageUrl(urls, customImageName) ?? (node.data.src as string | undefined))
   return (
     <div
       className={cn(

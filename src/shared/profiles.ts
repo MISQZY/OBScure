@@ -23,5 +23,7 @@ export interface Profile {
   id: string
   name: string
   avatarColor: AvatarColor
+  /** File name inside the app's custom-images directory (see images:uploadCustom), or null/absent for the plain color+initials avatar. */
+  avatarImage?: string | null
   createdAt: number
 }

@@ -44,6 +44,7 @@ export interface ObscureApi {
   createProfile: (name: string) => Promise<Profile>
   renameProfile: (id: string, name: string) => Promise<void>
   setProfileAvatarColor: (id: string, color: AvatarColor) => Promise<void>
+  setProfileAvatarImage: (id: string, fileName: string | null) => Promise<void>
   deleteProfile: (id: string) => Promise<void>
   switchProfile: (id: string) => Promise<void>
   getEventsConfig: <T extends EventTarget>(target: T) => Promise<EventsConfigs[T]>
