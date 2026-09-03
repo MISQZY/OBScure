@@ -54,7 +54,14 @@ export function OutputRow({ id, label, dotClass, title, helpKey }: { id: string;
         type="source"
         position={Position.Right}
         id={id}
-        style={{ position: 'absolute', right: -6, top: '50%', transform: 'translateY(-50%)' }}
+        // Mirrors SocketRow's own `left: -6` — but that value assumes the
+        // node's border-l-4 (4px), while this side only ever has the plain
+        // 1px `border` (see BaseNode's outer div classes). Using the SAME
+        // -6 here overshot the actual 1px border by 5px, leaving the dot
+        // floating in empty canvas space past the node's true edge instead
+        // of sitting on the frame. -(borderWidth + 2) keeps both handles
+        // poking the same 2px past their respective border's outer edge.
+        style={{ position: 'absolute', right: -3, top: '50%', transform: 'translateY(-50%)' }}
         className={cn('w-2.5 h-2.5', dotClass)}
         title={title}
       />
