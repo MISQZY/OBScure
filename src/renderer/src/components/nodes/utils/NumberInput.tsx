@@ -49,7 +49,8 @@ export function NumberInput({
   className,
   allowEmpty = false,
   fallback = 0,
-  savedValue
+  savedValue,
+  disabled = false
 }: {
   value: number | null | undefined
   onChange: (v: number | null) => void
@@ -65,6 +66,8 @@ export function NumberInput({
   fallback?: number
   /** This field's value as of the last Save (from useSavedNodeData) — what clearing the field restores, since `value` alone is just the live, possibly-never-saved edit. `undefined` before anything's ever been saved. */
   savedValue?: number | null
+  /** e.g. a height field derived from width while an aspect ratio lock is on — mirrors a plain <input disabled>, greying out the text input AND blocking the stepper buttons. */
+  disabled?: boolean
 }) {
   const [text, setText] = useState(displayValue(value, allowEmpty, fallback))
   const isFocused = useRef(false)
@@ -96,12 +99,13 @@ export function NumberInput({
   }
 
   return (
-    <div className={cn('flex items-stretch', className)}>
+    <div className={cn('flex items-stretch', disabled && 'pointer-events-none opacity-50', className)}>
       <input
         type="text"
         inputMode="decimal"
         placeholder={placeholder}
-        className="nodrag select-text min-w-0 flex-1 bg-transparent outline-none"
+        disabled={disabled}
+        className="nodrag select-text min-w-0 flex-1 bg-transparent outline-none disabled:cursor-not-allowed"
         value={text}
         onFocus={() => {
           isFocused.current = true

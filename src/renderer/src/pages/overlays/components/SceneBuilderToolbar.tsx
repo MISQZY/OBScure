@@ -1,6 +1,7 @@
 import { Panel } from '@xyflow/react'
 import { Trash2, Check, X, Sparkles, FlaskConical, HelpCircle, Download, Upload } from 'lucide-react'
 import type { CustomOverlay, OverlayUrls } from '@shared/types'
+import type { CanvasConfig } from '@shared/canvasConfig'
 import { CopyableUrl } from '@/components/CopyableUrl'
 import { IconPicker } from '@/components/IconPicker'
 import { slugify } from '@/lib/custom-overlays'
@@ -17,6 +18,7 @@ import {
   AlertDialogTrigger
 } from '@/components/ui'
 import type { SaveStatus } from '../sceneUtils'
+import { SceneCanvasSizeButton } from './SceneCanvasSizeButton'
 
 /**
  * The floating top-center panel — name, URL key, and the save/prettify/
@@ -52,7 +54,9 @@ export function SceneBuilderToolbar({
   onSave,
   testStatus,
   onTest,
-  onStartTour
+  onStartTour,
+  defaultCanvasConfig,
+  onChangeCanvasConfig
 }: {
   overlay: CustomOverlay
   urls: OverlayUrls | null
@@ -80,6 +84,8 @@ export function SceneBuilderToolbar({
   testStatus: 'idle' | 'testing' | 'error'
   onTest: () => void
   onStartTour: () => void
+  defaultCanvasConfig: CanvasConfig
+  onChangeCanvasConfig: (config: CanvasConfig | undefined) => void
 }) {
   const { t } = useI18n()
   return (
@@ -181,6 +187,7 @@ export function SceneBuilderToolbar({
 
       <div className="flex items-center justify-between pt-2.5 border-t" data-tour="scene-builder-save">
         <div className="flex items-center gap-1.5">
+          <SceneCanvasSizeButton overlayConfig={overlay.canvasConfig} defaultConfig={defaultCanvasConfig} onChange={onChangeCanvasConfig} />
           <button
             onClick={onPrettify}
             title={t.sceneBuilder.nav.prettify}

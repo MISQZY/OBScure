@@ -384,6 +384,13 @@
       "tutorial": "Tutorial — a detailed walkthrough of Scene Builder.",
       "sceneName": "Scene name"
     },
+    "canvasSize": {
+      "button": "This scene's canvas size",
+      "title": "Canvas size",
+      "description": "The reference canvas this scene's nodes are positioned against in the editor and preview. The Browser Source's own size/position in OBS is configured separately.",
+      "useCustom": "Custom size for this scene",
+      "usingDefault": "Using the default size: {size} — set it in Settings → Canvas."
+    },
     "noScene": {
       "title": "No Scene Selected",
       "description": "Please select an overlay from the sidebar or create a new one using the \"+\" button under \"Overlays\"."

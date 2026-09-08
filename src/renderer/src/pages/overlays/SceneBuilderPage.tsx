@@ -104,10 +104,13 @@ export function SceneBuilderPage({
     window.obscure.getOverlayUrls().then(setUrls)
   }, [])
 
-  const [canvasConfig, setCanvasConfig] = useState<CanvasConfig>(DEFAULT_CANVAS_CONFIG)
+  // App-wide fallback from Settings → Canvas — used as-is whenever this
+  // scene has no canvasConfig of its own (see SceneCanvasSizeButton).
+  const [defaultCanvasConfig, setDefaultCanvasConfig] = useState<CanvasConfig>(DEFAULT_CANVAS_CONFIG)
   useEffect(() => {
-    window.obscure.getCanvasConfig().then(setCanvasConfig)
+    window.obscure.getCanvasConfig().then(setDefaultCanvasConfig)
   }, [])
+  const canvasConfig = overlay?.canvasConfig ?? defaultCanvasConfig
 
   const { playToken, eventPhase, eventVars, processClockMs, testStatus, handlePlay, handleTest } = useScenePlayback({
     overlay,
@@ -254,6 +257,8 @@ export function SceneBuilderPage({
             testStatus={testStatus}
             onTest={() => void handleTest()}
             onStartTour={() => startTour('sceneBuilder')}
+            defaultCanvasConfig={defaultCanvasConfig}
+            onChangeCanvasConfig={(config) => void saveOverlay({ ...overlay, canvasConfig: config })}
           />
           <AddNodePalette isNarrow={isNarrow} onPaletteDragStart={onPaletteDragStart} />
           <ScenePreviewPanel

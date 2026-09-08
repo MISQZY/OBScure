@@ -1,4 +1,5 @@
 import type { Node, Edge } from '@xyflow/react'
+import type { CanvasConfig } from './canvasConfig'
 
 export interface NowPlayingPayload {
   source: 'spotify' | 'windows'
@@ -34,6 +35,8 @@ export interface CustomOverlay {
   folderId?: string
   /** Lucide icon name shown in the sidebar for this scene (see overlay-icons.ts). Omitted falls back to the default Workflow icon. */
   icon?: string
+  /** Per-scene override of the Scene Builder preview's reference canvas (see shared/canvasConfig.ts). Omitted falls back to the app-wide default from Settings → Canvas. */
+  canvasConfig?: CanvasConfig
 }
 
 /** Purely a sidebar organization concept — folders group CustomOverlay entries in the Overlays nav section, nothing more (no effect on OBS URLs or the scene graph). */
