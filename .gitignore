@@ -44,3 +44,4 @@ CLAUDE.md
 
 # Optional: lock file (uncomment if you prefer not to track it)
 # package-lock.json
+scene-examples/
