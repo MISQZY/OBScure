@@ -2,6 +2,7 @@ import React, { useRef } from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
 import { Bold, Italic } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Slider } from '@/components/ui/slider'
 import { cn } from '@/lib/utils'
 import { useSystemFonts } from '@/hooks/use-system-fonts'
 import { useI18n } from '@/providers/I18nProvider'
@@ -192,13 +193,12 @@ export function TextNode({ id, data }: NodeProps) {
             <ColorPicker value={(data.glowColor as string) || '#ffffff'} onChange={(val) => updateNodeData(id, { glowColor: val })} />
           </Field>
           <Field label="Glow opacity">
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              value={(data.glowOpacity as number) ?? 80}
-              onChange={(e) => updateNodeData(id, { glowOpacity: Number(e.target.value) })}
+            <Slider
+              min={0}
+              max={100}
+              step={1}
+              value={[(data.glowOpacity as number) ?? 80]}
+              onValueChange={([next]) => updateNodeData(id, { glowOpacity: next })}
               className="nodrag w-24"
             />
             <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">{(data.glowOpacity as number) ?? 80}%</span>

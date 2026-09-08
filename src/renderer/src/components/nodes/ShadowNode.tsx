@@ -1,5 +1,6 @@
 import React from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
+import { Slider } from '@/components/ui/slider'
 
 import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, numberInputClass } from './utils'
 
@@ -23,7 +24,7 @@ export function ShadowNode({ id, data }: NodeProps) {
         <ColorPicker value={(data.color as string) || '#000000'} onChange={(val) => updateNodeData(id, { color: val })} />
       </Field>
       <Field label="Opacity">
-        <input type="range" min="0" max="100" step="1" value={(data.opacity as number) ?? 60} onChange={(e) => updateNodeData(id, { opacity: Number(e.target.value) })} className="nodrag w-24" />
+        <Slider min={0} max={100} step={1} value={[(data.opacity as number) ?? 60]} onValueChange={([next]) => updateNodeData(id, { opacity: next })} className="nodrag w-24" />
         <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">{(data.opacity as number) ?? 60}%</span>
       </Field>
       <Field label="Blur">

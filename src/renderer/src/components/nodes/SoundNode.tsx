@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
 import { SOUND_IDS } from '@shared/sounds'
+import { Slider } from '@/components/ui/slider'
 
 import { BaseNode, Field, NodeSelect, UploadRow } from './utils'
 
@@ -48,7 +49,7 @@ export function SoundNode({ id, data }: NodeProps) {
           though both write into the same directory). */}
       <UploadRow uploading={uploading} hasCustom={Boolean(customSoundName)} onUpload={() => void upload()} onRemove={() => void removeCustom()} label={customSoundName ? 'Replace' : 'Upload'} />
       <Field label="Volume">
-        <input type="range" min="0" max="1" step="0.05" value={data.volume as number ?? 1} onChange={(e) => updateNodeData(id, { volume: Number(e.target.value) })} className="nodrag w-24" />
+        <Slider min={0} max={1} step={0.05} value={[(data.volume as number) ?? 1]} onValueChange={([next]) => updateNodeData(id, { volume: next })} className="nodrag w-24" />
       </Field>
     </BaseNode>
   )

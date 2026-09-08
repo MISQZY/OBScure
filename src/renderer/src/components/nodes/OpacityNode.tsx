@@ -1,5 +1,6 @@
 import React from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
+import { Slider } from '@/components/ui/slider'
 
 import { BaseNode, Field } from './utils'
 
@@ -10,7 +11,7 @@ export function OpacityNode({ id, data }: NodeProps) {
   return (
     <BaseNode id={id} data={data} title="Opacity" category="style">
       <Field label="Opacity">
-        <input type="range" min="0" max="100" step="1" value={value} onChange={(e) => updateNodeData(id, { value: Number(e.target.value) })} className="nodrag w-24" />
+        <Slider min={0} max={100} step={1} value={[value]} onValueChange={([next]) => updateNodeData(id, { value: next })} className="nodrag w-24" />
         <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">{value}%</span>
       </Field>
     </BaseNode>
