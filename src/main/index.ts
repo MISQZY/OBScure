@@ -35,9 +35,11 @@ import type { GlobalVariable, NowPlayingPayload } from "../shared/types";
 import type { CustomLocalePack } from "../shared/customConfig";
 import {
   DEFAULT_EVENTS_CONFIGS,
+  matchesChatCommand,
   normalizeQueueConfig,
   normalizeRandomConfig,
   normalizeRouletteConfig,
+  type CommandEntryMode,
   type EventTarget,
   type QueueConfig,
   type RandomConfig,
@@ -185,8 +187,8 @@ const eventLog = new EventLog(eventBus, (entry) => {
   mainWindow?.webContents.send("eventLog:entry", entry);
 });
 
-async function isEligibleForRoulette(
-  mode: RouletteConfig["entryMode"],
+async function isEligibleForCommand(
+  mode: CommandEntryMode,
   userId: string,
 ): Promise<boolean> {
   if (mode === "all") return true;
@@ -197,24 +199,33 @@ async function isEligibleForRoulette(
 }
 
 eventBus.on("chat-message", (payload) => {
-  const cfg = getStoredRouletteConfig();
-  const command = cfg.command.trim().toLowerCase();
-  if (!command) return;
-  const text = payload.text.trim().toLowerCase();
-  if (text !== command && !text.startsWith(`${command} `)) return;
-  void isEligibleForRoulette(cfg.entryMode, payload.userId)
-    .then((eligible) => {
-      if (eligible) rouletteEngine.addEntrant(payload.user, "chat");
-    })
-    .catch((error) => {
-      logError("main", "roulette eligibility check failed for chat entry", error);
-    });
+  const rouletteCfg = getStoredRouletteConfig();
+  if (matchesChatCommand(payload.text, rouletteCfg.command)) {
+    void isEligibleForCommand(rouletteCfg.command.entryMode, payload.userId)
+      .then((eligible) => {
+        if (eligible) rouletteEngine.addEntrant(payload.user, "chat");
+      })
+      .catch((error) => {
+        logError("main", "roulette eligibility check failed for chat entry", error);
+      });
+  }
+
+  const queueCfg = getStoredQueueConfig();
+  if (matchesChatCommand(payload.text, queueCfg.command)) {
+    void isEligibleForCommand(queueCfg.command.entryMode, payload.userId)
+      .then((eligible) => {
+        if (eligible) queueEngine.addEntry(payload.user, "chat");
+      })
+      .catch((error) => {
+        logError("main", "queue eligibility check failed for chat entry", error);
+      });
+  }
 });
 
 eventBus.on("points-redemption", (payload) => {
   const cfg = getStoredRouletteConfig();
   if (!cfg.pointsRewardId || payload.rewardId !== cfg.pointsRewardId) return;
-  void isEligibleForRoulette(cfg.entryMode, payload.userId)
+  void isEligibleForCommand(cfg.command.entryMode, payload.userId)
     .then((eligible) => {
       if (eligible) rouletteEngine.addEntrant(payload.user, "points");
     })

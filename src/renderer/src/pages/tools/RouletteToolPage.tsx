@@ -15,17 +15,12 @@ import {
   ScrollArea
 } from '@/components/ui'
 import { CopyableValue } from '@/components/CopyableValue'
+import { ChatCommandField } from '@/components/ChatCommandField'
 import { usePageVisible } from '@/hooks/use-page-visible'
 import { useI18n } from '@/providers/I18nProvider'
 import { DurationInput } from '@/components/DurationInput'
 import { RouletteWheel, wheelSectorColor, WHEEL_EXTRA_SPINS } from './RouletteWheel'
-import {
-  DEFAULT_ROULETTE_CONFIG,
-  MAX_ROULETTE_DURATION_SECONDS,
-  MIN_ROULETTE_DURATION_SECONDS,
-  type RouletteConfig,
-  type RouletteEntryMode
-} from '@shared/eventsConfig'
+import { DEFAULT_ROULETTE_CONFIG, MAX_ROULETTE_DURATION_SECONDS, MIN_ROULETTE_DURATION_SECONDS, type RouletteConfig } from '@shared/eventsConfig'
 import type { RouletteStatePayload, TwitchCustomReward } from '@shared/types'
 
 const IDLE_STATE: RouletteStatePayload = { phase: 'idle', entrants: [], endsAt: null, winner: null, hash: null, seed: null }
@@ -156,16 +151,14 @@ export function RouletteToolPage() {
       <div className="flex flex-col gap-6 min-[1440px]:flex-row min-[1440px]:items-start">
         <div className="flex flex-col gap-4 min-[1440px]:w-96 min-[1440px]:shrink-0">
           <div className="flex flex-wrap gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="roulette-command">{t.events.roulette.commandLabel}</Label>
-              <Input
-                id="roulette-command"
-                className="w-40"
-                placeholder={t.events.roulette.commandPlaceholder}
-                value={config.command}
-                onChange={(event) => setConfig((c) => ({ ...c, command: event.target.value }))}
-              />
-            </div>
+            <ChatCommandField
+              id="roulette-command"
+              label={t.events.roulette.commandLabel}
+              aliasPlaceholder={t.events.roulette.commandPlaceholder}
+              hint={t.events.roulette.commandHint}
+              value={config.command}
+              onChange={(value) => setConfig((c) => ({ ...c, command: value }))}
+            />
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="roulette-duration">{t.events.roulette.durationLabel}</Label>
               <DurationInput
@@ -195,30 +188,14 @@ export function RouletteToolPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="roulette-entry-mode">{t.events.roulette.entryModeLabel}</Label>
-              <Select
-                value={config.entryMode}
-                onValueChange={(value) => setConfig((c) => ({ ...c, entryMode: value as RouletteEntryMode }))}
-              >
-                <SelectTrigger id="roulette-entry-mode" className="w-44">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t.events.roulette.entryModeAll}</SelectItem>
-                  <SelectItem value="followers">{t.events.roulette.entryModeFollowers}</SelectItem>
-                  <SelectItem value="subscribers">{t.events.roulette.entryModeSubscribers}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
             <Button onClick={save} variant="outline" className="self-end">
               {saved ? t.common.saved : t.common.save}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            {t.events.roulette.commandHint} {t.events.roulette.pointsRewardHint} {t.events.roulette.pointsStackHint}{' '}
-            {config.entryMode === 'followers' && t.events.roulette.entryModeHintFollowers}
-            {config.entryMode === 'subscribers' && t.events.roulette.entryModeHintSubscribers}
+            {t.events.roulette.pointsRewardHint} {t.events.roulette.pointsStackHint}{' '}
+            {config.command.entryMode === 'followers' && t.events.roulette.entryModeHintFollowers}
+            {config.command.entryMode === 'subscribers' && t.events.roulette.entryModeHintSubscribers}
           </p>
 
           <div className="flex flex-wrap items-center gap-3">

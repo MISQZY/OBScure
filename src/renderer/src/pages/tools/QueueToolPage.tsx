@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui'
+import { ChatCommandField } from '@/components/ChatCommandField'
 import { useI18n } from '@/providers/I18nProvider'
 import { DEFAULT_QUEUE_CONFIG, type QueueConfig, type QueueTriggerType } from '@shared/eventsConfig'
 import type { QueueStatePayload } from '@shared/types'
@@ -76,21 +77,18 @@ export function QueueToolPage() {
 
       <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
         <div className="flex flex-wrap items-end gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="queue-command">{t.events.queue.commandLabel}</Label>
-            <Input
-              id="queue-command"
-              className="w-40"
-              placeholder={t.events.queue.commandPlaceholder}
-              value={config.chatCommand}
-              onChange={(event) => setConfig((c) => ({ ...c, chatCommand: event.target.value }))}
-            />
-          </div>
+          <ChatCommandField
+            id="queue-command"
+            label={t.events.queue.commandLabel}
+            aliasPlaceholder={t.events.queue.commandPlaceholder}
+            hint={t.events.queue.commandHint}
+            value={config.command}
+            onChange={(value) => setConfig((c) => ({ ...c, command: value }))}
+          />
           <Button onClick={save} variant="outline">
             {saved ? t.common.saved : t.common.save}
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">{t.events.queue.commandHint}</p>
 
         <div className="flex items-center gap-2">
           <Checkbox
