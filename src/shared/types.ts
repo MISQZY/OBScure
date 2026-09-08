@@ -87,6 +87,18 @@ export interface RouletteStatePayload {
 }
 
 /**
+ * A Variable's own data type — decides both how its `value` is edited (a
+ * text field, a checkbox, a number field) and how it's coerced on every
+ * write (see coerceVariableValue in components/nodes/utils/constants.ts),
+ * so a value can never silently drift out of the shape its type promises
+ * (a 'boolean' variable can't end up holding "3.5", say).
+ */
+export type VariableDataType = 'string' | 'boolean' | 'int' | 'float'
+
+/** The actual runtime shape a `VariableDataType` resolves to. */
+export type VariableValue = string | number | boolean
+
+/**
  * One registered global variable — shared across every scene, unlike a
  * local Variable node's own `data.value` (see PROGRESS_SOCKETS/VariableNode's
  * own doc comments in components/nodes). Managed on the "Данные →
@@ -94,12 +106,16 @@ export interface RouletteStatePayload {
  * node via `data.globalId` once `data.scope === 'global'`. `name` doubles as
  * its `{name}` placeholder token — sanitized to `\w+` (see
  * sanitizePlaceholderName in components/nodes/utils/constants.ts) so it's
- * always a valid template placeholder.
+ * always a valid template placeholder. `type` pins `value`'s own shape (see
+ * VariableDataType's own doc comment) — a variable created before typed
+ * variables existed has no `type` yet, so every reader treats a missing one
+ * as 'float' (its `value` was always a plain number back then).
  */
 export interface GlobalVariable {
   id: string
   name: string
-  value: number
+  type: VariableDataType
+  value: VariableValue
 }
 
 export interface ChatMessagePayload {

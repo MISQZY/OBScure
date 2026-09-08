@@ -1,6 +1,7 @@
 import React from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
-import type { AlertPlatform } from '@shared/types'
+import type { AlertPlatform, VariableDataType } from '@shared/types'
+import { Checkbox } from '@/components/ui'
 import { useGlobalVariables } from '@/providers/GlobalVariablesProvider'
 import { useTwitchStats } from '@/providers/TwitchStatsProvider'
 import { useIntegrationsStatus } from '@/hooks/use-integration-status'
@@ -15,6 +16,9 @@ import {
   numberInputClass,
   sanitizePlaceholderName,
   VARIABLE_SCOPES,
+  VARIABLE_TYPES,
+  VARIABLE_TYPE_LABELS,
+  coerceVariableValue,
   PLATFORM_STAT_SOURCES,
   PLATFORM_STAT_IDS,
   PLATFORM_STAT_LABELS,
@@ -25,11 +29,53 @@ import {
 const NONE_GLOBAL = '__none__'
 
 /**
- * A single named numeric value, registering `{name}` as a template
+ * The Value control for a given VariableDataType — a checkbox for
+ * 'boolean', a plain text field for 'string', otherwise NumberInput (with
+ * `step`/rounding matching 'int' vs 'float' — see coerceVariableValue's own
+ * doc comment for why an 'int' rounds instead of just truncating on
+ * display). Shared by both scope='local' (writes straight to this node's
+ * own `data.value`) and scope='global' (writes to the selected
+ * GlobalVariable instead) below — same type, same editor either way.
+ */
+function VariableValueField({
+  type,
+  value,
+  onChange,
+  savedValue
+}: {
+  type: VariableDataType
+  value: unknown
+  onChange: (next: string | number | boolean) => void
+  savedValue?: number
+}) {
+  if (type === 'boolean') {
+    return <Checkbox checked={!!value} onCheckedChange={(checked) => onChange(!!checked)} className="nodrag" />
+  }
+  if (type === 'string') {
+    return <input type="text" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} className={textInputClass} />
+  }
+  return (
+    <NumberInput
+      value={value as number}
+      onChange={(v) => onChange(type === 'int' ? Math.round(v ?? 0) : (v ?? 0))}
+      step={type === 'int' ? 1 : 0.1}
+      fallback={0}
+      savedValue={savedValue}
+      className={numberInputClass}
+    />
+  )
+}
+
+/**
+ * A single named, typed value (string/boolean/integer/float — see
+ * VariableDataType in shared/types.ts), registering `{name}` as a template
  * placeholder any Text node in THIS scene can use (see
  * useAvailablePlaceholders/variablePlaceholderValues) — same mere-presence
  * "registration" as EVENT_PLACEHOLDERS, no wiring required — and wireable
- * into Progress Bar's own Current/Target sockets (see PROGRESS_SOCKETS).
+ * into Progress Bar's own Current/Target sockets (see PROGRESS_SOCKETS),
+ * which force whatever type this resolves to back to a plain number (see
+ * variablePlaceholderNumericValue) since a bar's fill has no meaning for a
+ * string/boolean.
  *
  * Scope local (default): name + value both live here, editable directly —
  * a manual placeholder for wherever a future live-stat feed will land.
@@ -58,8 +104,10 @@ export function VariableNode({ id, data }: NodeProps) {
   const twitchStats = useTwitchStats()
   const integrationsStatus = useIntegrationsStatus()
   const scope = data.scope === 'global' ? 'global' : data.scope === 'platform' ? 'platform' : 'local'
+  const type = (data.type as VariableDataType) || 'float'
   const globalId = (data.globalId as string) || ''
   const selected = globalVariables.find((v) => v.id === globalId)
+  const selectedType: VariableDataType = selected?.type || 'float'
   const placeholder = scope === 'global' ? (selected ? sanitizePlaceholderName(selected.name) || null : null) : sanitizePlaceholderName((data.name as string) || '') || null
   const connectedPlatforms = PLATFORM_STAT_SOURCES.filter((p) => integrationsStatus?.[p] === 'connected')
   const platform = (data.platform as AlertPlatform) || 'twitch'
@@ -86,8 +134,16 @@ export function VariableNode({ id, data }: NodeProps) {
               className={textInputClass}
             />
           </div>
+          <Field label="Type">
+            <NodeSelect
+              value={type}
+              options={VARIABLE_TYPES}
+              onChange={(next) => updateNodeData(id, { type: next, value: coerceVariableValue(next, data.value) })}
+              renderOption={(opt) => VARIABLE_TYPE_LABELS[opt]}
+            />
+          </Field>
           <Field label="Value">
-            <NumberInput value={data.value as number} onChange={(v) => updateNodeData(id, { value: v })} fallback={0} savedValue={saved.value as number} className={numberInputClass} />
+            <VariableValueField type={type} value={data.value} onChange={(v) => updateNodeData(id, { value: v })} savedValue={saved.value as number} />
           </Field>
         </>
       )}
@@ -102,14 +158,19 @@ export function VariableNode({ id, data }: NodeProps) {
             />
           </Field>
           {selected && (
-            <Field label="Value">
-              <NumberInput
-                value={selected.value}
-                onChange={(v) => void saveVariable({ ...selected, value: v ?? 0 })}
-                fallback={0}
-                className={numberInputClass}
-              />
-            </Field>
+            <>
+              <Field label="Type">
+                <NodeSelect
+                  value={selectedType}
+                  options={VARIABLE_TYPES}
+                  onChange={(next) => void saveVariable({ ...selected, type: next, value: coerceVariableValue(next, selected.value) })}
+                  renderOption={(opt) => VARIABLE_TYPE_LABELS[opt]}
+                />
+              </Field>
+              <Field label="Value">
+                <VariableValueField type={selectedType} value={selected.value} onChange={(v) => void saveVariable({ ...selected, value: v })} />
+              </Field>
+            </>
           )}
           {globalVariables.length === 0 && (
             <p className="text-[11px] text-amber-500 leading-snug w-40">No global variables registered yet — add one on the Данные → Переменные page.</p>

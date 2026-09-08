@@ -213,6 +213,33 @@ function sanitizePlaceholderName(raw) {
   return String(raw || '').replace(/[^\w]/g, '').slice(0, 40)
 }
 
+// Reshapes `raw` into whatever `type` promises — mirrors coerceVariableValue
+// in components/nodes/utils/constants.ts (own doc comment there covers the
+// shared reasoning: keeps a pre-typed-variables value, or one left over from
+// a since-changed type, resolving to exactly the shape its type promises).
+function coerceVariableValue(type, raw) {
+  if (type === 'boolean') {
+    if (typeof raw === 'boolean') return raw
+    if (typeof raw === 'number') return raw !== 0
+    if (typeof raw === 'string') return raw.toLowerCase() === 'true' || raw === '1'
+    return false
+  }
+  if (type === 'string') {
+    if (typeof raw === 'string') return raw
+    if (typeof raw === 'boolean') return raw ? 'true' : 'false'
+    if (typeof raw === 'number' && Number.isFinite(raw)) return String(raw)
+    return ''
+  }
+  // 'int' | 'float'
+  if (typeof raw === 'number' && Number.isFinite(raw)) return type === 'int' ? Math.round(raw) : raw
+  if (typeof raw === 'boolean') return raw ? 1 : 0
+  if (typeof raw === 'string') {
+    const parsed = Number(raw)
+    if (Number.isFinite(parsed)) return type === 'int' ? Math.round(parsed) : parsed
+  }
+  return 0
+}
+
 // A Variable node's own resolved placeholder token, or null if it doesn't
 // have one yet — reads `latestGlobalVariables` (the always-current global
 // populated from GET /overlays/config/global-variables.json + the
@@ -245,8 +272,11 @@ function platformStatValue(platform, stat, stats) {
   return stats.followerCount || 0
 }
 
-// A Variable node's own resolved numeric value — mirrors
-// variablePlaceholderValue in components/nodes/utils/constants.ts.
+// A Variable node's own resolved, correctly-typed value — mirrors
+// variablePlaceholderValue in components/nodes/utils/constants.ts. A missing
+// `d.type` (a scene saved before typed variables existed) defaults to
+// 'float', same as NODE_DEFAULTS.variable, so an old value keeps resolving
+// exactly as it did before.
 function variablePlaceholderValue(node) {
   const d = node.data || {}
   if (d.scope === 'global') {
@@ -256,7 +286,20 @@ function variablePlaceholderValue(node) {
   if (d.scope === 'platform') {
     return platformStatValue(d.platform || 'twitch', d.platformStat || 'followers', latestTwitchStats)
   }
-  return typeof d.value === 'number' && Number.isFinite(d.value) ? d.value : 0
+  return coerceVariableValue(d.type || 'float', d.value)
+}
+
+// `variablePlaceholderValue` above, forced to a plain number — mirrors
+// variablePlaceholderNumericValue in components/nodes/utils/constants.ts, for
+// the one consumer that needs to do arithmetic regardless of the wired
+// variable's own type (Progress Bar's Current/Target, see
+// progressSourceValue below).
+function variablePlaceholderNumericValue(node) {
+  const raw = variablePlaceholderValue(node)
+  if (typeof raw === 'number') return raw
+  if (typeof raw === 'boolean') return raw ? 1 : 0
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
 // `{name}` -> resolved value for every Variable node present ANYWHERE in
@@ -286,7 +329,7 @@ function progressSourceValue(nodeId, socketId, edges, map) {
   const edge = edges.find((e) => e.target === nodeId && e.targetHandle === socketId && map[e.source] && map[e.source].type === 'variable')
   if (!edge) return 0
   const node = map[edge.source]
-  return node ? variablePlaceholderValue(node) : 0
+  return node ? variablePlaceholderNumericValue(node) : 0
 }
 
 // Whether ANY node in the graph is a scope=global Variable node — mirrors

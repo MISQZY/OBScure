@@ -1,6 +1,6 @@
 import { Edge, Node } from "@xyflow/react";
 import type { GlobalVariable, TwitchChannelStats } from "@shared/types";
-import { variablePlaceholderName, variablePlaceholderValue } from "@/components/nodes";
+import { variablePlaceholderName, variablePlaceholderNumericValue, variablePlaceholderValue } from "@/components/nodes";
 import { NodeMap } from "./graph";
 import { SAMPLE_AUDIO_VARS, SAMPLE_ROULETTE_STATE, SAMPLE_RANDOM_STATE } from "./sampleData";
 import { interpolate } from "./sceneTrigger";
@@ -138,7 +138,7 @@ export function progressSourceValue(
   const edge = edges.find((e) => e.target === nodeId && e.targetHandle === socketId && map[e.source]?.type === 'variable')
   if (!edge) return 0
   const node = map[edge.source]
-  return node ? variablePlaceholderValue(node, globalVariables, twitchStats) : 0
+  return node ? variablePlaceholderNumericValue(node, globalVariables, twitchStats) : 0
 }
 
 

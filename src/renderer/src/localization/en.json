@@ -240,15 +240,22 @@
   },
   "variables": {
     "title": "Variables",
-    "description": "Named numeric variables shared across every scene. Place a Variable node in Scene Builder and wire it to a global variable — its value can then be typed as a {name} placeholder in any text, or wired into a Progress Bar's Current/Target.",
+    "description": "Named, typed variables shared across every scene. Place a Variable node in Scene Builder and wire it to a global variable — its value can then be typed as a {name} placeholder in any text, or (Integer/Float only) wired into a Progress Bar's Current/Target.",
     "namePlaceholder": "Variable name",
+    "typeLabel": "Type",
     "valueLabel": "Value",
     "add": "Add",
     "empty": "No global variables yet",
     "deleteTooltip": "Delete variable",
     "deleteConfirm": "Delete variable \"{name}\"? Variable nodes referencing it will be left with no value.",
     "placeholderLabel": "Placeholder",
-    "nameTaken": "A variable with that name already exists"
+    "nameTaken": "A variable with that name already exists",
+    "types": {
+      "string": "String",
+      "boolean": "Boolean",
+      "int": "Integer",
+      "float": "Float"
+    }
   },
   "settings": {
     "title": "Settings",

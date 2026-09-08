@@ -1,5 +1,5 @@
 import type { Node } from '@xyflow/react'
-import { ALERT_TYPES_BY_PLATFORM, type AlertPlatform, type GlobalVariable, type TwitchChannelStats } from '@shared/types'
+import { ALERT_TYPES_BY_PLATFORM, type AlertPlatform, type GlobalVariable, type TwitchChannelStats, type VariableDataType, type VariableValue } from '@shared/types'
 
 /**
  * `nodrag` is an @xyflow/react convention: without it, a click-drag inside
@@ -99,6 +99,48 @@ export const SCROLL_DIRECTIONS = ['up', 'down', 'left', 'right'] as const
 
 export const VARIABLE_SCOPES = ['local', 'global', 'platform'] as const
 
+/** Every data type a Variable's own value can be pinned to — see VariableDataType's own doc comment in shared/types.ts. Offered only for scope='local'/'global' (scope='platform' is always a live numeric stat, nothing to type). */
+export const VARIABLE_TYPES: readonly VariableDataType[] = ['string', 'boolean', 'int', 'float']
+export const VARIABLE_TYPE_LABELS: Record<VariableDataType, string> = {
+  string: 'String',
+  boolean: 'Boolean',
+  int: 'Integer',
+  float: 'Float'
+}
+
+/**
+ * Reshapes `raw` into whatever `type` promises — used both when a Type
+ * picker switches (so an existing value carries over as sensibly as
+ * possible: "42" -> 42, 1 -> true, false -> 0) and as a guard around a
+ * hand-edited/older saved value (a pre-typed-variables scene/GlobalVariable
+ * whose `value` is a bare number, or a value left over from a since-changed
+ * type) so every reader always gets back exactly the shape its type
+ * promises. Mirrors coerceVariableValue in
+ * overlays/custom-content-values.js.
+ */
+export function coerceVariableValue(type: VariableDataType, raw: unknown): VariableValue {
+  if (type === 'boolean') {
+    if (typeof raw === 'boolean') return raw
+    if (typeof raw === 'number') return raw !== 0
+    if (typeof raw === 'string') return raw.toLowerCase() === 'true' || raw === '1'
+    return false
+  }
+  if (type === 'string') {
+    if (typeof raw === 'string') return raw
+    if (typeof raw === 'boolean') return raw ? 'true' : 'false'
+    if (typeof raw === 'number' && Number.isFinite(raw)) return String(raw)
+    return ''
+  }
+  // 'int' | 'float'
+  if (typeof raw === 'number' && Number.isFinite(raw)) return type === 'int' ? Math.round(raw) : raw
+  if (typeof raw === 'boolean') return raw ? 1 : 0
+  if (typeof raw === 'string') {
+    const parsed = Number(raw)
+    if (Number.isFinite(parsed)) return type === 'int' ? Math.round(parsed) : parsed
+  }
+  return 0
+}
+
 /**
  * Which platforms currently expose a live stats feed a scope='platform'
  * Variable node can read (see platformStatValue below) — the intersection
@@ -171,15 +213,18 @@ export function platformStatValue(platform: string, stat: string, twitchStats: T
 }
 
 /**
- * A Variable node's own resolved numeric value — the referenced
- * GlobalVariable's `value` once scope=global (0 if nothing's picked, or the
- * picked entry has since been deleted, same "unwired optional input"
- * convention as everywhere else in this graph), a live platform stat once
- * scope=platform (see platformStatValue above), otherwise this node's own
- * `data.value`. Mirrors variablePlaceholderValue in
+ * A Variable node's own resolved, correctly-typed value — the referenced
+ * GlobalVariable's own `value` once scope=global (0 if nothing's picked, or
+ * the picked entry has since been deleted, same "unwired optional input"
+ * convention as everywhere else in this graph), a live numeric platform stat
+ * once scope=platform (see platformStatValue above), otherwise this node's
+ * own `data.value` coerced to its own `data.type` (missing type/value — a
+ * scene saved before typed variables existed — defaults to 'float', same as
+ * NODE_DEFAULTS.variable, so an old value keeps resolving exactly as it did
+ * before). Mirrors variablePlaceholderValue in
  * overlays/custom-content-values.js.
  */
-export function variablePlaceholderValue(node: Node, globalVariables: GlobalVariable[], twitchStats: TwitchChannelStats | null): number {
+export function variablePlaceholderValue(node: Node, globalVariables: GlobalVariable[], twitchStats: TwitchChannelStats | null): VariableValue {
   if (node.data.scope === 'global') {
     const gv = globalVariables.find((v) => v.id === node.data.globalId)
     return gv ? gv.value : 0
@@ -187,8 +232,25 @@ export function variablePlaceholderValue(node: Node, globalVariables: GlobalVari
   if (node.data.scope === 'platform') {
     return platformStatValue((node.data.platform as string) || 'twitch', (node.data.platformStat as string) || 'followers', twitchStats)
   }
-  const raw = node.data.value
-  return typeof raw === 'number' && Number.isFinite(raw) ? raw : 0
+  return coerceVariableValue((node.data.type as VariableDataType) || 'float', node.data.value)
+}
+
+/**
+ * `variablePlaceholderValue` above, forced to a plain number — for the ONE
+ * consumer that needs to do arithmetic with it regardless of the wired
+ * variable's own type (Progress Bar's Current/Target, see
+ * progressSourceValue in pages/overlays/sceneUtils/contentValues.ts): a
+ * 'boolean' variable counts as 1/0, a 'string' one parses as a number (0 if
+ * it doesn't look like one), same coercion rules as switching a variable's
+ * own Type picker TO 'int'/'float' (see coerceVariableValue above). Mirrors
+ * variablePlaceholderNumericValue in overlays/custom-content-values.js.
+ */
+export function variablePlaceholderNumericValue(node: Node, globalVariables: GlobalVariable[], twitchStats: TwitchChannelStats | null): number {
+  const raw = variablePlaceholderValue(node, globalVariables, twitchStats)
+  if (typeof raw === 'number') return raw
+  if (typeof raw === 'boolean') return raw ? 1 : 0
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
 /** A Progress Bar's fill axis — 'horizontal' fills left-to-right (width), 'vertical' fills bottom-to-top (height), same convention a volume/health bar reads by. */

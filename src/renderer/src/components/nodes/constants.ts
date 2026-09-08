@@ -710,7 +710,7 @@ export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
   // "Данные → Переменные" page). scope 'platform': value instead comes live
   // from whichever connected platform `platform` names, whichever field
   // `platformStat` picks — see VariableNode's own doc comment.
-  variable: { scope: 'local', name: '', value: 0, globalId: null, platform: 'twitch', platformStat: 'followers' },
+  variable: { scope: 'local', name: '', type: 'float', value: 0, globalId: null, platform: 'twitch', platformStat: 'followers' },
   backgroundAnimation: { type: 'none', color: '#18181b', speed: 1, repeat: false },
   sound: { soundId: 'none', volume: 1 },
   event: { kind: 'alert', platform: 'twitch', alertType: ALERT_TYPES_BY_PLATFORM.twitch[0] },
