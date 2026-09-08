@@ -3,7 +3,7 @@ import { Node } from "@xyflow/react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/providers/I18nProvider";
 import { formatClockDate } from "@/components/nodes";
-import { interpolate, textColorStyle, Anim, OverflowAutoScroll } from "../sceneUtils";
+import { interpolate, textColorStyle, textOutlineStyle, textGlowStyle, Anim, OverflowAutoScroll } from "../sceneUtils";
 
 /**
  * Renders `children` twice back-to-back inside a track animated by CSS
@@ -204,6 +204,14 @@ export function TextView({
           lineHeight: node.data.lineHeight != null ? (node.data.lineHeight as number) : undefined,
           ...style,
           ...textColorStyle((node.data.color as string) || '#ffffff'),
+          ...textOutlineStyle(Boolean(node.data.outlineEnabled), (node.data.outlineWidth as number) ?? 2, (node.data.outlineColor as string) || '#000000'),
+          ...textGlowStyle(
+            Boolean(node.data.glowEnabled),
+            (node.data.glowType as string) || 'outer',
+            (node.data.glowColor as string) || '#ffffff',
+            (node.data.glowOpacity as number) ?? 80,
+            (node.data.glowBlur as number) ?? 12
+          ),
           textAlign: align,
           fontFamily: node.data.fontFamily ? `"${node.data.fontFamily as string}"` : undefined,
           ...(anim?.duration ? { '--anim-duration': `${anim.duration}ms` } : {})

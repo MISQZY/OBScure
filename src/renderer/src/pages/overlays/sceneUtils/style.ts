@@ -250,6 +250,41 @@ export function textColorStyle(value: string): React.CSSProperties {
 }
 
 
+/**
+ * A Text outline's width+color as `-webkit-text-stroke` — `{}` unless the node's own Outline
+ * checkbox is on; every pre-existing Text node has no outline fields at all, so this must never
+ * apply a default width/color unless `enabled` is explicitly true. Mirrors applyTextOutline in
+ * overlays/custom-style.js.
+ */
+export function textOutlineStyle(enabled: boolean, width: number, color: string): React.CSSProperties {
+  if (!enabled) return {}
+  return { WebkitTextStroke: `${width}px ${color}` } as React.CSSProperties
+}
+
+/**
+ * A Text glow's color+opacity+blur+type as a `text-shadow` value, or `{}` when off. 'outer' stacks a
+ * tight + wide layer for a diffuse halo that radiates outward from each glyph (the standard neon-text
+ * technique); 'inner' uses a single layer at a THIRD of the blur so it hugs each glyph's own edge
+ * instead of spreading broadly outward. True inner glow — masked so it never bleeds past a glyph's
+ * own edge — isn't achievable with plain CSS text-shadow (nothing in CSS clips a blur to per-glyph
+ * shape), so this is the closest practical approximation rather than the real thing. A gradient color
+ * stacks one shadow per stop, the same approximation shadowFilter already makes for the Shadow
+ * modifier. Mirrors applyTextGlow in overlays/custom-style.js.
+ */
+export function textGlowStyle(enabled: boolean, type: string, color: string, opacityPercent: number, blur: number): React.CSSProperties {
+  if (!enabled) return {}
+  const colors = isGradientColor(color) ? gradientStopColors(color) : [color]
+  if (type === 'inner') {
+    const innerBlur = Math.max(1, Math.round(blur / 3))
+    return { textShadow: colors.map((c) => `0 0 ${innerBlur}px ${hexToRgba(c, opacityPercent)}`).join(', ') }
+  }
+  const layers = [
+    ...colors.map((c) => `0 0 ${blur}px ${hexToRgba(c, opacityPercent)}`),
+    ...colors.map((c) => `0 0 ${blur * 2}px ${hexToRgba(c, Math.round(opacityPercent * 0.6))}`)
+  ]
+  return { textShadow: layers.join(', ') }
+}
+
 /** Ordering modifier node wired into a target (Box or Scene), expressed as a tailwind flex-direction class. */
 export function orderingClass(mods: Node[]): string {
   const ordering = mods.find((m) => m.type === 'ordering')

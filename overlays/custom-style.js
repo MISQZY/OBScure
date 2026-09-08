@@ -10,19 +10,30 @@ function hexToRgba(hex, opacityPercent) {
 }
 
 // A color field (Box's background/border, Text's color, Shadow's
-// color, ...) is either a plain `#rrggbb` or a `linear-gradient(...)`
-// CSS string from ColorPicker's Gradient tab — mirrors isGradientColor/
-// gradientStopColors/backgroundLayer in lib/gradient.ts. Only ever
-// needs to round-trip strings that ColorPicker itself produced (hex
-// stops, always a `<n>%` position), same scope as the TS parser.
+// color, ...) is either a plain `#rrggbb` or a `linear-gradient(...)`/
+// `radial-gradient(...)` CSS string from ColorPicker's Gradient tab —
+// mirrors isGradientColor/gradientStopColors/backgroundLayer in
+// lib/gradient.ts. Only ever needs to round-trip strings that
+// ColorPicker itself produced (hex stops, always a `<n>%` position),
+// same scope as the TS parser — and only these two functions, since
+// this render-time mirror never needs parseGradient/buildGradient
+// (editor-only, TS side).
 function isGradientColor(value) {
-  return typeof value === 'string' && value.trim().startsWith('linear-gradient(')
+  if (typeof value !== 'string') return false
+  const v = value.trim()
+  return v.startsWith('linear-gradient(') || v.startsWith('radial-gradient(')
 }
 
 function gradientStopColors(value) {
-  const match = /^linear-gradient\(([\s\S]*)\)$/.exec(value.trim())
-  if (!match) return []
-  const parts = match[1].split(',').map((s) => s.trim()).filter(Boolean)
+  const trimmed = value.trim()
+  const radial = /^radial-gradient\(([\s\S]*)\)$/.exec(trimmed)
+  if (radial) {
+    const parts = radial[1].split(',').map((s) => s.trim()).filter(Boolean)
+    return parts.slice(1).map((p) => p.split(/\s+/)[0])
+  }
+  const linear = /^linear-gradient\(([\s\S]*)\)$/.exec(trimmed)
+  if (!linear) return []
+  const parts = linear[1].split(',').map((s) => s.trim()).filter(Boolean)
   const rest = /^-?\d+(\.\d+)?deg$/.test(parts[0]) ? parts.slice(1) : parts
   return rest.map((p) => p.split(/\s+/)[0])
 }
@@ -58,6 +69,45 @@ function applyTextColor(el, value) {
   el.style.backgroundClip = 'text'
   el.style.color = 'transparent'
   el.style.webkitTextFillColor = 'transparent'
+}
+
+// A Text outline's width+color as `-webkit-text-stroke` — no-op unless the
+// node's own Outline checkbox is on; every pre-existing Text node has no
+// outline fields at all, so this must never apply a default width/color
+// unless `d.outlineEnabled` is explicitly true. Mirrors textOutlineStyle in
+// sceneUtils/style.ts.
+function applyTextOutline(el, d) {
+  if (!d.outlineEnabled) return
+  el.style.webkitTextStroke = `${d.outlineWidth ?? 2}px ${d.outlineColor || '#000000'}`
+}
+
+// A Text glow's color+opacity+blur+type as `text-shadow` — no-op unless the
+// node's own Glow checkbox is on. 'outer' stacks a tight + wide layer for a
+// diffuse halo that radiates outward from each glyph (the standard neon-text
+// technique); 'inner' uses a single layer at a THIRD of the blur so it hugs
+// each glyph's own edge instead of spreading broadly outward. True inner
+// glow — masked so it never bleeds past a glyph's own edge — isn't
+// achievable with plain CSS text-shadow (nothing in CSS clips a blur to
+// per-glyph shape), so this is the closest practical approximation rather
+// than the real thing. A gradient color stacks one shadow per stop, the same
+// approximation shadowFilter already makes for the Shadow modifier. Mirrors
+// textGlowStyle in sceneUtils/style.ts.
+function applyTextGlow(el, d) {
+  if (!d.glowEnabled) return
+  const color = d.glowColor || '#ffffff'
+  const opacity = d.glowOpacity ?? 80
+  const blur = d.glowBlur ?? 12
+  const colors = isGradientColor(color) ? gradientStopColors(color) : [color]
+  if ((d.glowType || 'outer') === 'inner') {
+    const innerBlur = Math.max(1, Math.round(blur / 3))
+    el.style.textShadow = colors.map((c) => `0 0 ${innerBlur}px ${hexToRgba(c, opacity)}`).join(', ')
+    return
+  }
+  const layers = [
+    ...colors.map((c) => `0 0 ${blur}px ${hexToRgba(c, opacity)}`),
+    ...colors.map((c) => `0 0 ${blur * 2}px ${hexToRgba(c, Math.round(opacity * 0.6))}`)
+  ]
+  el.style.textShadow = layers.join(', ')
 }
 
 function applyModifierStyle(el, mods) {

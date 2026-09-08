@@ -1,6 +1,7 @@
 import React, { useRef } from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
 import { Bold, Italic } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import { useSystemFonts } from '@/hooks/use-system-fonts'
 import { useI18n } from '@/providers/I18nProvider'
@@ -24,6 +25,9 @@ export function TextNode({ id, data }: NodeProps) {
   // set" already meant.
   const bold = data.bold !== false
   const italic = Boolean(data.italic)
+  const outlineEnabled = Boolean(data.outlineEnabled)
+  const glowEnabled = Boolean(data.glowEnabled)
+  const glowType = (data.glowType as string) || 'outer'
   const { variables: globalVariables } = useGlobalVariables()
   const availablePlaceholders = useAvailablePlaceholders(id, globalVariables)
   // Roulette Entrants' Content output REPLACES this Text's own template
@@ -151,6 +155,66 @@ export function TextNode({ id, data }: NodeProps) {
           </button>
         </div>
       </Field>
+      <Field label="Outline">
+        <Checkbox checked={outlineEnabled} onCheckedChange={(checked) => updateNodeData(id, { outlineEnabled: !!checked })} className="nodrag" />
+      </Field>
+      {outlineEnabled && (
+        <>
+          <Field label="Outline width">
+            <NumberInput
+              value={data.outlineWidth as number}
+              onChange={(v) => updateNodeData(id, { outlineWidth: v })}
+              min={0}
+              fallback={2}
+              savedValue={saved.outlineWidth as number}
+              className={numberInputClass}
+            />
+          </Field>
+          <Field label="Outline color">
+            <ColorPicker value={(data.outlineColor as string) || '#000000'} onChange={(val) => updateNodeData(id, { outlineColor: val })} />
+          </Field>
+        </>
+      )}
+      <Field label="Glow">
+        <Checkbox checked={glowEnabled} onCheckedChange={(checked) => updateNodeData(id, { glowEnabled: !!checked })} className="nodrag" />
+      </Field>
+      {glowEnabled && (
+        <>
+          <Field label="Glow type">
+            <NodeSelect
+              value={glowType}
+              options={['outer', 'inner']}
+              onChange={(next) => updateNodeData(id, { glowType: next })}
+              renderOption={(opt) => <span className="capitalize">{opt}</span>}
+            />
+          </Field>
+          <Field label="Glow color">
+            <ColorPicker value={(data.glowColor as string) || '#ffffff'} onChange={(val) => updateNodeData(id, { glowColor: val })} />
+          </Field>
+          <Field label="Glow opacity">
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={(data.glowOpacity as number) ?? 80}
+              onChange={(e) => updateNodeData(id, { glowOpacity: Number(e.target.value) })}
+              className="nodrag w-24"
+            />
+            <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">{(data.glowOpacity as number) ?? 80}%</span>
+          </Field>
+          <Field label="Glow blur">
+            <NumberInput
+              value={data.glowBlur as number}
+              onChange={(v) => updateNodeData(id, { glowBlur: v })}
+              min={0}
+              fallback={12}
+              savedValue={saved.glowBlur as number}
+              className={numberInputClass}
+            />
+          </Field>
+        </>
+      )}
     </BaseNode>
   )
 }

@@ -79,6 +79,8 @@ function buildText(node, mods, animate, vars, registry, crossAxis, contentValues
     if (textClockTickIntervalId == null) textClockTickIntervalId = setInterval(tickTextClocks, 1000)
   }
   applyTextColor(el, d.color || '#ffffff')
+  applyTextOutline(el, d)
+  applyTextGlow(el, d)
   const align = d.align || 'left'
   const verticalAlign = d.verticalAlign || 'top'
   el.style.textAlign = align
