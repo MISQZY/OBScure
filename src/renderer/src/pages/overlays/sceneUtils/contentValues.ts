@@ -1,5 +1,5 @@
 import { Edge, Node } from "@xyflow/react";
-import type { GlobalVariable, TwitchChannelStats } from "@shared/types";
+import type { GlobalVariable, StreamerBotGlobalVariable, TwitchChannelStats } from "@shared/types";
 import { variablePlaceholderName, variablePlaceholderNumericValue, variablePlaceholderValue } from "@/components/nodes";
 import { NodeMap } from "./graph";
 import { SAMPLE_AUDIO_VARS, SAMPLE_ROULETTE_STATE, SAMPLE_RANDOM_STATE } from "./sampleData";
@@ -133,12 +133,13 @@ export function progressSourceValue(
   edges: Edge[],
   map: NodeMap,
   globalVariables: GlobalVariable[],
-  twitchStats: TwitchChannelStats | null
+  twitchStats: TwitchChannelStats | null,
+  streamerbotVariables: StreamerBotGlobalVariable[] = []
 ): number {
   const edge = edges.find((e) => e.target === nodeId && e.targetHandle === socketId && map[e.source]?.type === 'variable')
   if (!edge) return 0
   const node = map[edge.source]
-  return node ? variablePlaceholderNumericValue(node, globalVariables, twitchStats) : 0
+  return node ? variablePlaceholderNumericValue(node, globalVariables, twitchStats, streamerbotVariables) : 0
 }
 
 
@@ -153,13 +154,18 @@ export function progressSourceValue(
  * name, or scope=global with nothing picked) contributes nothing. Mirrors
  * variablePlaceholderValues in overlays/custom-content-values.js.
  */
-export function variablePlaceholderValues(nodes: Node[], globalVariables: GlobalVariable[], twitchStats: TwitchChannelStats | null): Record<string, string> {
+export function variablePlaceholderValues(
+  nodes: Node[],
+  globalVariables: GlobalVariable[],
+  twitchStats: TwitchChannelStats | null,
+  streamerbotVariables: StreamerBotGlobalVariable[] = []
+): Record<string, string> {
   const out: Record<string, string> = {}
   for (const n of nodes) {
     if (n.type !== 'variable') continue
     const name = variablePlaceholderName(n, globalVariables)
     if (!name) continue
-    out[name] = String(variablePlaceholderValue(n, globalVariables, twitchStats))
+    out[name] = String(variablePlaceholderValue(n, globalVariables, twitchStats, streamerbotVariables))
   }
   return out
 }

@@ -3,12 +3,14 @@ import type { SpotifyIntegration } from "../integrations/spotify";
 import type { WindowsMediaIntegration } from "../integrations/windowsMedia";
 import type { TwitchIntegration } from "../integrations/twitch";
 import type { YoutubeIntegration } from "../integrations/youtube";
+import type { StreamerBotIntegration } from "../integrations/streamerbot";
 import type { NowPlayingCache } from "../nowPlayingCache";
 import type {
   ConnectResult,
   IntegrationKey,
   IntegrationsStatusMap,
   NowPlayingPayload,
+  StreamerBotGlobalVariable,
   TwitchChannelStats,
   TwitchCustomReward,
 } from "../../shared/types";
@@ -18,6 +20,7 @@ interface Integrations {
   windowsMedia: WindowsMediaIntegration;
   twitch: TwitchIntegration;
   youtube: YoutubeIntegration;
+  streamerbot: StreamerBotIntegration;
 }
 
 interface IntegrationsHandlersDeps {
@@ -32,6 +35,7 @@ const VALID_INTEGRATION_KEYS: ReadonlySet<string> = new Set([
   "windowsMedia",
   "twitch",
   "youtube",
+  "streamerbot",
 ] satisfies IntegrationKey[]);
 
 function isIntegrationKey(key: unknown): key is IntegrationKey {
@@ -48,6 +52,7 @@ export function registerIntegrationsHandlers(
     windowsMedia: integrations().windowsMedia.getStatus(),
     twitch: integrations().twitch.getStatus(),
     youtube: integrations().youtube.getStatus(),
+    streamerbot: integrations().streamerbot.getStatus(),
   }));
 
   ipcMain.handle(
@@ -70,6 +75,12 @@ export function registerIntegrationsHandlers(
         return null;
       }
     },
+  );
+
+  ipcMain.handle(
+    "streamerbot:getGlobals",
+    (): StreamerBotGlobalVariable[] =>
+      integrations().streamerbot.getGlobalVariables(),
   );
 
   ipcMain.handle("nowPlaying:get", (): NowPlayingPayload | null => {

@@ -272,6 +272,17 @@ function platformStatValue(platform, stat, stats) {
   return stats.followerCount || 0
 }
 
+// A scope='streamerbot' Variable node's own resolved value — mirrors
+// streamerbotVariableValue in components/nodes/utils/constants.ts. `vars` is
+// `latestStreamerBotGlobals` (see custom-state.js) — empty until Streamer.bot
+// is connected/the first GetGlobals poll lands, same "0 for an unresolved
+// value" convention as platformStatValue above.
+function streamerbotVariableValue(name, vars) {
+  const found = vars.find((v) => v.name === name)
+  if (!found) return 0
+  return found.value === null || found.value === undefined ? '' : found.value
+}
+
 // A Variable node's own resolved, correctly-typed value — mirrors
 // variablePlaceholderValue in components/nodes/utils/constants.ts. A missing
 // `d.type` (a scene saved before typed variables existed) defaults to
@@ -285,6 +296,9 @@ function variablePlaceholderValue(node) {
   }
   if (d.scope === 'platform') {
     return platformStatValue(d.platform || 'twitch', d.platformStat || 'followers', latestTwitchStats)
+  }
+  if (d.scope === 'streamerbot') {
+    return streamerbotVariableValue(d.streamerbotName || '', latestStreamerBotGlobals)
   }
   return coerceVariableValue(d.type || 'float', d.value)
 }
@@ -350,6 +364,14 @@ function hasGlobalVariableDeps(overlay) {
 function hasTwitchStatDeps(overlay) {
   const nodes = (overlay && overlay.nodes) || []
   return nodes.some((n) => n.type === 'variable' && n.data && n.data.scope === 'platform')
+}
+
+// Whether ANY node in the graph is a scope=streamerbot Variable node — same
+// gating role as hasTwitchStatDeps above, for the 'streamerbot-globals' WS
+// tick instead of 'twitch-stats'.
+function hasStreamerBotVariableDeps(overlay) {
+  const nodes = (overlay && overlay.nodes) || []
+  return nodes.some((n) => n.type === 'variable' && n.data && n.data.scope === 'streamerbot')
 }
 
 // Whether a Random Widget node should currently be rendered at all —

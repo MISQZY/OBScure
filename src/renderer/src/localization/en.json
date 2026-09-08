@@ -7,7 +7,8 @@
     "integrations": "Integrations",
     "integrationGroups": {
       "platform": "Platforms",
-      "music": "Music"
+      "music": "Music",
+      "automation": "Automation"
     },
     "settings": "Settings",
     "releaseNotes": "View release notes on GitHub",
@@ -109,6 +110,8 @@
   "connect": {
     "connect": "Connect via OAuth",
     "connecting": "Opening browser...",
+    "connectLocal": "Connect",
+    "connectingLocal": "Connecting...",
     "disconnect": "Disconnect",
     "genericError": "Failed to connect"
   },
@@ -157,6 +160,13 @@
       "clientIdPlaceholder": "From Google Cloud Console",
       "clientSecretLabel": "Client Secret",
       "clientSecretPlaceholder": "From Google Cloud Console"
+    },
+    "streamerbot": {
+      "description": "Connects to Streamer.bot's own WebSocket server — reads global variables and listens for commands/events for the Queue integration.",
+      "setupNote": "Enable the WebSocket Server in Streamer.bot (Servers/Clients → WebSocket Server) and use the same host/port here. A password is only needed if authentication is enabled in Streamer.bot.",
+      "endpointLabel": "Endpoint",
+      "passwordLabel": "Password",
+      "passwordPlaceholder": "Only if authentication is enabled in Streamer.bot"
     }
   },
   "sound": {
@@ -236,6 +246,36 @@
       "helpTitle": "How this works",
       "helpDescription": "SHA-256(seed) is published the moment the round starts — before anyone could enter. The seed is revealed as soon as entries close, so anyone can recompute the hash and re-run the draw themselves.",
       "helpFormula": "roll = parseInt(SHA-256(seed).slice(0, 8), 16) % totalWeight\nwinner = first entrant (in join order) whose running weight total > roll"
+    },
+    "queue": {
+      "title": "Queue",
+      "description": "A simple viewer queue: while it's open, entries are added via a chat command or the Streamer.bot integration — the streamer calls the next one manually.",
+      "commandLabel": "Chat command",
+      "commandPlaceholder": "!queue",
+      "commandHint": "A viewer's message matching this text (case-insensitive) adds them to the queue while it's open.",
+      "streamerbotEnabledLabel": "Add entries from Streamer.bot",
+      "triggerTypeLabel": "Streamer.bot source",
+      "triggerTypeCustomEvent": "Custom Event (Raise Event)",
+      "triggerTypeCommand": "Streamer.bot command",
+      "eventNameLabel": "Event name",
+      "nameArgKeyLabel": "Name argument key",
+      "customEventHint": "Build a Streamer.bot Action with a \"Raise Event\" sub-action whose Event Name matches the one above, and pass the viewer's name in an argument with this key.",
+      "commandNameLabel": "Command name",
+      "commandNameHint": "Matches that Streamer.bot command's own Command field (case-insensitive) — triggering it adds whoever ran it.",
+      "open": "Open queue",
+      "close": "Close queue",
+      "callNext": "Call next",
+      "clear": "Clear",
+      "statusOpen": "Queue is open",
+      "statusClosed": "Queue is closed",
+      "namePlaceholder": "Viewer name",
+      "addManual": "Add manually",
+      "entries": "Entries",
+      "noEntries": "No one is in the queue yet",
+      "removeEntry": "Remove from queue",
+      "entrySourceChat": "chat",
+      "entrySourceStreamerbot": "Streamer.bot",
+      "entrySourceManual": "manual"
     }
   },
   "variables": {
@@ -256,6 +296,15 @@
       "int": "Integer",
       "float": "Float"
     }
+  },
+  "eventLog": {
+    "title": "Event Log",
+    "pause": "Pause",
+    "resume": "Resume",
+    "clear": "Clear",
+    "statusPaused": "Paused — new events aren't shown",
+    "statusLive": "Updating live",
+    "empty": "Nothing has happened yet"
   },
   "settings": {
     "title": "Settings",

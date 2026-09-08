@@ -4,6 +4,7 @@ import type { AlertPlatform, VariableDataType } from '@shared/types'
 import { Checkbox } from '@/components/ui'
 import { useGlobalVariables } from '@/providers/GlobalVariablesProvider'
 import { useTwitchStats } from '@/providers/TwitchStatsProvider'
+import { useStreamerBotVariables } from '@/providers/StreamerBotVariablesProvider'
 import { useIntegrationsStatus } from '@/hooks/use-integration-status'
 
 import {
@@ -23,8 +24,11 @@ import {
   PLATFORM_STAT_IDS,
   PLATFORM_STAT_LABELS,
   ALERT_PLATFORM_LABELS,
-  platformStatValue
+  platformStatValue,
+  streamerbotVariableValue
 } from './utils'
+
+const NONE_STREAMERBOT = '__none__'
 
 const NONE_GLOBAL = '__none__'
 
@@ -102,8 +106,16 @@ export function VariableNode({ id, data }: NodeProps) {
   const saved = useSavedNodeData(id)
   const { variables: globalVariables, saveVariable } = useGlobalVariables()
   const twitchStats = useTwitchStats()
+  const streamerbotVariables = useStreamerBotVariables()
   const integrationsStatus = useIntegrationsStatus()
-  const scope = data.scope === 'global' ? 'global' : data.scope === 'platform' ? 'platform' : 'local'
+  const scope =
+    data.scope === 'global'
+      ? 'global'
+      : data.scope === 'platform'
+        ? 'platform'
+        : data.scope === 'streamerbot'
+          ? 'streamerbot'
+          : 'local'
   const type = (data.type as VariableDataType) || 'float'
   const globalId = (data.globalId as string) || ''
   const selected = globalVariables.find((v) => v.id === globalId)
@@ -207,6 +219,38 @@ export function VariableNode({ id, data }: NodeProps) {
           </Field>
           {connectedPlatforms.length === 0 && (
             <p className="text-[11px] text-amber-500 leading-snug w-40">No connected platform provides a live stat yet — connect Twitch on the Integrations page.</p>
+          )}
+        </>
+      )}
+      {scope === 'streamerbot' && (
+        <>
+          <div className="flex flex-col gap-1 text-xs">
+            <label>Placeholder</label>
+            <input
+              type="text"
+              placeholder="sbVar"
+              value={(data.name as string) || ''}
+              onChange={(e) => updateNodeData(id, { name: sanitizePlaceholderName(e.target.value) })}
+              className={textInputClass}
+            />
+          </div>
+          <Field label="Variable">
+            <NodeSelect
+              value={(data.streamerbotName as string) || NONE_STREAMERBOT}
+              options={[NONE_STREAMERBOT, ...streamerbotVariables.map((v) => v.name)]}
+              onChange={(next) => updateNodeData(id, { streamerbotName: next === NONE_STREAMERBOT ? '' : next })}
+              renderOption={(opt) => (opt === NONE_STREAMERBOT ? 'Select...' : opt)}
+            />
+          </Field>
+          {data.streamerbotName ? (
+            <Field label="Value">
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {String(streamerbotVariableValue(data.streamerbotName as string, streamerbotVariables))}
+              </span>
+            </Field>
+          ) : null}
+          {streamerbotVariables.length === 0 && (
+            <p className="text-[11px] text-amber-500 leading-snug w-40">No Streamer.bot global variables seen yet — connect Streamer.bot on the Integrations page and make sure it has at least one.</p>
           )}
         </>
       )}

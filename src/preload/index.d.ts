@@ -3,15 +3,19 @@ import type {
   ConnectResult,
   CustomOverlay,
   GlobalVariable,
+  EventLogEntry,
   IntegrationKey,
   IntegrationsStatusMap,
   NowPlayingPayload,
   OverlayAddress,
   OverlayFolder,
   OverlayUrls,
+  QueueEntry,
+  QueueStatePayload,
   RandomStatePayload,
   RouletteStatePayload,
   SettingKey,
+  StreamerBotGlobalVariable,
   TwitchChannelStats,
   TwitchCustomReward,
   WhatsNewPayload
@@ -86,6 +90,20 @@ export interface ObscureApi {
   downloadUpdate: () => Promise<void>
   onUpdaterStatus: (callback: (status: AppUpdaterStatus) => void) => () => void
   getWhatsNew: () => Promise<WhatsNewPayload | null>
+  getStreamerBotGlobals: () => Promise<StreamerBotGlobalVariable[]>
+  onStreamerBotGlobalsUpdate: (callback: (variables: StreamerBotGlobalVariable[]) => void) => () => void
+  openQueue: () => Promise<QueueStatePayload>
+  closeQueue: () => Promise<QueueStatePayload>
+  addQueueEntry: (name: string) => Promise<QueueStatePayload>
+  removeQueueEntry: (id: string) => Promise<QueueStatePayload>
+  popQueueNext: () => Promise<{ state: QueueStatePayload; popped: QueueEntry | null }>
+  clearQueue: () => Promise<QueueStatePayload>
+  reorderQueue: (ids: string[]) => Promise<QueueStatePayload>
+  getQueueState: () => Promise<QueueStatePayload>
+  onQueueState: (callback: (state: QueueStatePayload) => void) => () => void
+  getEventLog: () => Promise<EventLogEntry[]>
+  clearEventLog: () => Promise<void>
+  onEventLogEntry: (callback: (entry: EventLogEntry) => void) => () => void
 }
 
 declare global {

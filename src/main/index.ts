@@ -18,8 +18,11 @@ import { SpotifyIntegration } from "./integrations/spotify";
 import { WindowsMediaIntegration } from "./integrations/windowsMedia";
 import { TwitchIntegration } from "./integrations/twitch";
 import { YoutubeIntegration } from "./integrations/youtube";
-import { RandomEngine, RouletteEngine } from "./eventsEngine";
+import { StreamerBotIntegration } from "./integrations/streamerbot";
+import { QueueEngine, RandomEngine, RouletteEngine } from "./eventsEngine";
+import { EventLog } from "./eventLog";
 import { registerOverlayHandlers } from "./ipc/overlayHandlers";
+import { registerEventLogHandlers } from "./ipc/eventLogHandlers";
 import { registerMediaHandlers } from "./ipc/mediaHandlers";
 import { registerSettingsHandlers } from "./ipc/settingsHandlers";
 import { registerEventsHandlers } from "./ipc/eventsHandlers";
@@ -32,9 +35,11 @@ import type { GlobalVariable, NowPlayingPayload } from "../shared/types";
 import type { CustomLocalePack } from "../shared/customConfig";
 import {
   DEFAULT_EVENTS_CONFIGS,
+  normalizeQueueConfig,
   normalizeRandomConfig,
   normalizeRouletteConfig,
   type EventTarget,
+  type QueueConfig,
   type RandomConfig,
   type RouletteConfig,
 } from "../shared/eventsConfig";
@@ -78,6 +83,7 @@ const DEFAULT_OVERLAY_PORT = 47890;
 const EVENTS_CONFIG_SETTING_KEYS: Record<EventTarget, string> = {
   random: "events.random.config",
   roulette: "events.roulette.config",
+  queue: "events.queue.config",
 };
 
 const CANVAS_CONFIG_SETTING_KEY = "canvas.config";
@@ -125,6 +131,15 @@ function getStoredRouletteConfig(): RouletteConfig {
   );
 }
 
+function getStoredQueueConfig(): QueueConfig {
+  return normalizeQueueConfig(
+    config.getSetting(
+      EVENTS_CONFIG_SETTING_KEYS.queue,
+      DEFAULT_EVENTS_CONFIGS.queue,
+    ),
+  );
+}
+
 function getStoredCustomLocales(): CustomLocalePack[] {
   return config.getSetting<CustomLocalePack[]>("customLocales", []);
 }
@@ -155,10 +170,20 @@ let integrations = {
   ),
   twitch: new TwitchIntegration("twitch", eventBus, config, credentialsStore),
   youtube: new YoutubeIntegration("youtube", eventBus, config, credentialsStore),
+  streamerbot: new StreamerBotIntegration(
+    "streamerbot",
+    eventBus,
+    config,
+    credentialsStore,
+  ),
 };
 
 const randomEngine = new RandomEngine(eventBus);
 const rouletteEngine = new RouletteEngine(eventBus);
+const queueEngine = new QueueEngine(eventBus);
+const eventLog = new EventLog(eventBus, (entry) => {
+  mainWindow?.webContents.send("eventLog:entry", entry);
+});
 
 async function isEligibleForRoulette(
   mode: RouletteConfig["entryMode"],
@@ -202,6 +227,31 @@ eventBus.on("roulette-state", (state) => {
   mainWindow?.webContents.send("roulette:state", state);
 });
 
+eventBus.on("queue-state", (state) => {
+  mainWindow?.webContents.send("queue:state", state);
+});
+
+eventBus.on("streamerbot-trigger", (payload) => {
+  const cfg = getStoredQueueConfig();
+  if (!cfg.streamerbotEnabled) return;
+  if (cfg.streamerbotTriggerType === "command") {
+    if (payload.kind !== "command") return;
+    const commandName = cfg.streamerbotCommandName.trim().toLowerCase();
+    if (!commandName || (payload.command ?? "").toLowerCase() !== commandName) {
+      return;
+    }
+    if (payload.user) queueEngine.addEntry(payload.user, "streamerbot");
+    return;
+  }
+  if (payload.kind !== "customEvent") return;
+  const eventName = cfg.streamerbotEventName.trim();
+  if (!eventName || payload.eventName !== eventName) return;
+  const name = payload.args?.[cfg.streamerbotNameArgKey || "name"];
+  if (typeof name === "string" && name.trim()) {
+    queueEngine.addEntry(name, "streamerbot");
+  }
+});
+
 const nowPlayingRaw: Partial<
   Record<NowPlayingPayload["source"], NowPlayingPayload>
 > = {};
@@ -238,12 +288,18 @@ eventBus.on("twitch-stats", (stats) => {
   overlayServer.pushTwitchStats(stats);
 });
 
+eventBus.on("streamerbot-globals", (variables) => {
+  mainWindow?.webContents.send("streamerbot-globals:update", variables);
+  overlayServer.setStreamerBotGlobals(variables);
+});
+
 eventBus.on("integration-status", () => {
   mainWindow?.webContents.send("integrations:status-update", {
     spotify: integrations.spotify.getStatus(),
     windowsMedia: integrations.windowsMedia.getStatus(),
     twitch: integrations.twitch.getStatus(),
     youtube: integrations.youtube.getStatus(),
+    streamerbot: integrations.streamerbot.getStatus(),
   });
 });
 
@@ -254,6 +310,7 @@ async function reinitializeForActiveProfile(): Promise<void> {
   nowPlayingFileCache.reset();
   overlayServer.pushNowPlaying(null);
   overlayServer.pushTwitchStats(null);
+  overlayServer.setStreamerBotGlobals([]);
 
   const profileDir = profileManager.getActiveProfileDir();
   config = new ConfigStore(profileDir);
@@ -271,6 +328,12 @@ async function reinitializeForActiveProfile(): Promise<void> {
     twitch: new TwitchIntegration("twitch", eventBus, config, credentialsStore),
     youtube: new YoutubeIntegration(
       "youtube",
+      eventBus,
+      config,
+      credentialsStore,
+    ),
+    streamerbot: new StreamerBotIntegration(
+      "streamerbot",
       eventBus,
       config,
       credentialsStore,
@@ -454,6 +517,7 @@ registerSettingsHandlers({
   credentials: () => credentialsStore,
   mainWindow: () => mainWindow,
   windowsMedia: () => integrations.windowsMedia,
+  streamerbot: () => integrations.streamerbot,
   getStoredCanvasConfig,
   canvasConfigSettingKey: CANVAS_CONFIG_SETTING_KEY,
   onMinimizeToTrayChanged: (enabled) => {
@@ -468,9 +532,11 @@ registerEventsHandlers({
   config: () => config,
   randomEngine,
   rouletteEngine,
+  queueEngine,
   eventsConfigSettingKeys: EVENTS_CONFIG_SETTING_KEYS,
   getStoredRandomConfig,
   getStoredRouletteConfig,
+  getStoredQueueConfig,
 });
 
 registerProfileHandlers({
@@ -483,6 +549,8 @@ registerIntegrationsHandlers({
   getEffectiveNowPlaying,
   nowPlayingFileCache,
 });
+
+registerEventLogHandlers({ eventLog });
 
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {

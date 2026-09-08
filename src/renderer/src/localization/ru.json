@@ -7,7 +7,8 @@
     "integrations": "Интеграции",
     "integrationGroups": {
       "platform": "Платформы",
-      "music": "Музыка"
+      "music": "Музыка",
+      "automation": "Автоматизация"
     },
     "settings": "Настройки",
     "releaseNotes": "Список изменений на GitHub",
@@ -109,6 +110,8 @@
   "connect": {
     "connect": "Подключить через OAuth",
     "connecting": "Открываю браузер...",
+    "connectLocal": "Подключить",
+    "connectingLocal": "Подключение...",
     "disconnect": "Отключить",
     "genericError": "Не удалось подключиться"
   },
@@ -157,6 +160,13 @@
       "clientIdPlaceholder": "Из Google Cloud Console",
       "clientSecretLabel": "Client Secret",
       "clientSecretPlaceholder": "Из Google Cloud Console"
+    },
+    "streamerbot": {
+      "description": "Подключается к WebSocket-серверу Streamer.bot — читает глобальные переменные и слушает команды/события для интеграции с Очередью.",
+      "setupNote": "Включи WebSocket Server в Streamer.bot (Servers/Clients → WebSocket Server) и укажи те же host/порт здесь. Пароль нужен только если в Streamer.bot включена авторизация.",
+      "endpointLabel": "Endpoint",
+      "passwordLabel": "Пароль",
+      "passwordPlaceholder": "Только если включена авторизация в Streamer.bot"
     }
   },
   "sound": {
@@ -236,6 +246,36 @@
       "helpTitle": "Как это работает",
       "helpDescription": "Хэш SHA-256(seed) публикуется в момент старта раунда — до того как кто-либо успел войти. Seed раскрывается сразу, как приём участников завершится, — любой может пересчитать хэш и повторить розыгрыш сам.",
       "helpFormula": "roll = parseInt(SHA-256(seed).slice(0, 8), 16) % totalWeight\nпобедитель = первый участник (в порядке входа), у кого сумма весов > roll"
+    },
+    "queue": {
+      "title": "Очередь",
+      "description": "Простая очередь зрителей: пока открыта, участники добавляются по команде в чате или через интеграцию со Streamer.bot — стример вызывает следующего вручную.",
+      "commandLabel": "Команда в чате",
+      "commandPlaceholder": "!очередь",
+      "commandHint": "Сообщение зрителя, совпадающее с этим текстом (без учёта регистра), добавляет его в очередь, пока она открыта.",
+      "streamerbotEnabledLabel": "Добавлять из Streamer.bot",
+      "triggerTypeLabel": "Источник в Streamer.bot",
+      "triggerTypeCustomEvent": "Custom Event (Raise Event)",
+      "triggerTypeCommand": "Команда Streamer.bot",
+      "eventNameLabel": "Имя события",
+      "nameArgKeyLabel": "Ключ аргумента с именем",
+      "customEventHint": "Создай в Streamer.bot Action с саб-экшеном «Raise Event», где Event Name совпадает с указанным выше, и передай имя зрителя в аргументе с этим ключом.",
+      "commandNameLabel": "Имя команды",
+      "commandNameHint": "Совпадает с полем Command той команды в Streamer.bot (без учёта регистра) — сработавшая команда добавит вызвавшего её зрителя.",
+      "open": "Открыть очередь",
+      "close": "Закрыть очередь",
+      "callNext": "Вызвать следующего",
+      "clear": "Очистить",
+      "statusOpen": "Очередь открыта",
+      "statusClosed": "Очередь закрыта",
+      "namePlaceholder": "Имя зрителя",
+      "addManual": "Добавить вручную",
+      "entries": "Участники",
+      "noEntries": "Пока никого нет в очереди",
+      "removeEntry": "Убрать из очереди",
+      "entrySourceChat": "чат",
+      "entrySourceStreamerbot": "Streamer.bot",
+      "entrySourceManual": "вручную"
     }
   },
   "variables": {
@@ -256,6 +296,15 @@
       "int": "Целое",
       "float": "Дробное"
     }
+  },
+  "eventLog": {
+    "title": "Журнал событий",
+    "pause": "Пауза",
+    "resume": "Продолжить",
+    "clear": "Очистить",
+    "statusPaused": "На паузе — новые события не показываются",
+    "statusLive": "Обновляется в реальном времени",
+    "empty": "Пока не произошло ни одного события"
   },
   "settings": {
     "title": "Настройки",

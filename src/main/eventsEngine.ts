@@ -1,6 +1,9 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { EventBus } from "./eventBus";
 import type {
+  QueueEntry,
+  QueueEntrySource,
+  QueueStatePayload,
   RandomStatePayload,
   RouletteEntrant,
   RouletteEntrantSource,
@@ -211,6 +214,87 @@ export class RouletteEngine {
   private emit(): RouletteStatePayload {
     const state = this.getState();
     this.eventBus.emit("roulette-state", state);
+    return state;
+  }
+}
+
+/**
+ * A simple ordered viewer queue (sign-up line) — no timer/phase, unlike
+ * RouletteEngine above: entries just sit in join order until popped or
+ * removed. Open/closed gates whether addEntry does anything, same role
+ * RouletteEngine's 'collecting' phase plays for its own addEntrant.
+ */
+export class QueueEngine {
+  private readonly eventBus: EventBus;
+  private isOpen = false;
+  private entries: QueueEntry[] = [];
+
+  constructor(eventBus: EventBus) {
+    this.eventBus = eventBus;
+  }
+
+  getState(): QueueStatePayload {
+    return { isOpen: this.isOpen, entries: this.entries };
+  }
+
+  open(): QueueStatePayload {
+    this.isOpen = true;
+    return this.emit();
+  }
+
+  close(): QueueStatePayload {
+    this.isOpen = false;
+    return this.emit();
+  }
+
+  addEntry(name: string, source: QueueEntrySource): QueueStatePayload {
+    const trimmed = name.trim();
+    if (!this.isOpen || !trimmed) return this.getState();
+    const key = trimmed.toLowerCase();
+    if (this.entries.some((entry) => entry.name.toLowerCase() === key)) {
+      return this.getState();
+    }
+    this.entries.push({
+      id: randomUUID(),
+      name: trimmed,
+      source,
+      addedAt: Date.now(),
+    });
+    return this.emit();
+  }
+
+  removeEntry(id: string): QueueStatePayload {
+    this.entries = this.entries.filter((entry) => entry.id !== id);
+    return this.emit();
+  }
+
+  /** Removes and returns the first entry ("call next"), or null if the queue is empty. */
+  popNext(): QueueEntry | null {
+    const popped = this.entries.shift() ?? null;
+    this.emit();
+    return popped;
+  }
+
+  clear(): QueueStatePayload {
+    this.entries = [];
+    return this.emit();
+  }
+
+  /** Reorders to match `ids`; any existing entry not named in `ids` is kept, appended after — a stale/partial reorder request never silently drops entries. */
+  reorder(ids: string[]): QueueStatePayload {
+    const byId = new Map(this.entries.map((entry) => [entry.id, entry]));
+    const reordered = ids
+      .map((id) => byId.get(id))
+      .filter((entry): entry is QueueEntry => !!entry);
+    const reorderedIds = new Set(reordered.map((entry) => entry.id));
+    const remaining = this.entries.filter((entry) => !reorderedIds.has(entry.id));
+    this.entries = [...reordered, ...remaining];
+    return this.emit();
+  }
+
+  private emit(): QueueStatePayload {
+    const state = this.getState();
+    this.eventBus.emit("queue-state", state);
     return state;
   }
 }

@@ -2,6 +2,7 @@ import { Node, Edge } from "@xyflow/react";
 import type { OverlayUrls } from "@shared/types";
 import { useGlobalVariables } from "@/providers/GlobalVariablesProvider";
 import { useTwitchStats } from "@/providers/TwitchStatsProvider";
+import { useStreamerBotVariables } from "@/providers/StreamerBotVariablesProvider";
 import {
   incoming,
   audioContentValues,
@@ -59,6 +60,7 @@ export function ContentView({
 }) {
   const { variables: globalVariables } = useGlobalVariables()
   const twitchStats = useTwitchStats()
+  const streamerbotVariables = useStreamerBotVariables()
   // A nested Box or Group (see BOX_SOCKETS' own doc comment in
   // components/nodes/index.tsx) — BoxView resolves its OWN schedule/style/
   // vars, same as a top-level one, and handles both node types identically
@@ -93,7 +95,7 @@ export function ContentView({
   // PLACEHOLDERS already uses for {user}/{amount}/{message}/{source}.
   const audioValues = node.type === 'text' ? audioContentValues(node.id, edges, map) : null
   const randomValues = node.type === 'text' ? randomContentValues(node.id, edges, map) : null
-  const variableValues = node.type === 'text' ? variablePlaceholderValues(Object.values(map), globalVariables, twitchStats) : null
+  const variableValues = node.type === 'text' ? variablePlaceholderValues(Object.values(map), globalVariables, twitchStats, streamerbotVariables) : null
   const hasVariableValues = variableValues != null && Object.keys(variableValues).length > 0
   const contentValues = audioValues || randomValues || hasVariableValues ? { ...variableValues, ...audioValues, ...randomValues } : null
   // Clock is different from the three above: it's not a value resolved once

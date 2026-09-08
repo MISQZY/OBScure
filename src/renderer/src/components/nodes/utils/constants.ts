@@ -1,5 +1,5 @@
 import type { Node } from '@xyflow/react'
-import { ALERT_TYPES_BY_PLATFORM, type AlertPlatform, type GlobalVariable, type TwitchChannelStats, type VariableDataType, type VariableValue } from '@shared/types'
+import { ALERT_TYPES_BY_PLATFORM, type AlertPlatform, type GlobalVariable, type StreamerBotGlobalVariable, type TwitchChannelStats, type VariableDataType, type VariableValue } from '@shared/types'
 
 /**
  * `nodrag` is an @xyflow/react convention: without it, a click-drag inside
@@ -97,7 +97,7 @@ export const CONDITION_OPERATOR_LABELS: Record<ConditionOperator, string> = {
 /** Which way an Overflow node's Auto-scroll animates its content — see overflowAutoScroll in overlays/sceneUtils.tsx. 'up'/'down' pick the vertical keyframe, 'left'/'right' the horizontal one; 'down'/'right' just play the same keyframe in reverse. */
 export const SCROLL_DIRECTIONS = ['up', 'down', 'left', 'right'] as const
 
-export const VARIABLE_SCOPES = ['local', 'global', 'platform'] as const
+export const VARIABLE_SCOPES = ['local', 'global', 'platform', 'streamerbot'] as const
 
 /** Every data type a Variable's own value can be pinned to — see VariableDataType's own doc comment in shared/types.ts. Offered only for scope='local'/'global' (scope='platform' is always a live numeric stat, nothing to type). */
 export const VARIABLE_TYPES: readonly VariableDataType[] = ['string', 'boolean', 'int', 'float']
@@ -213,6 +213,22 @@ export function platformStatValue(platform: string, stat: string, twitchStats: T
 }
 
 /**
+ * A scope='streamerbot' Variable node's own resolved value — the live
+ * Streamer.bot global variable named `data.streamerbotName` (see
+ * StreamerBotVariablesProvider), 0 if nothing's picked or the named
+ * variable hasn't arrived yet (same "0 for an unresolved value" convention
+ * as platformStatValue above). Unlike scope='global' (which stores a
+ * `globalId` and looks the name up FROM the registry), this stores the
+ * Streamer.bot variable's own name directly — there's no local id to keep
+ * in sync with, Streamer.bot's own name IS the identity. Mirrors
+ * streamerbotVariableValue in overlays/custom-content-values.js.
+ */
+export function streamerbotVariableValue(name: string, streamerbotVariables: StreamerBotGlobalVariable[]): VariableValue {
+  const found = streamerbotVariables.find((v) => v.name === name)
+  return found ? found.value ?? '' : 0
+}
+
+/**
  * A Variable node's own resolved, correctly-typed value — the referenced
  * GlobalVariable's own `value` once scope=global (0 if nothing's picked, or
  * the picked entry has since been deleted, same "unwired optional input"
@@ -224,13 +240,21 @@ export function platformStatValue(platform: string, stat: string, twitchStats: T
  * before). Mirrors variablePlaceholderValue in
  * overlays/custom-content-values.js.
  */
-export function variablePlaceholderValue(node: Node, globalVariables: GlobalVariable[], twitchStats: TwitchChannelStats | null): VariableValue {
+export function variablePlaceholderValue(
+  node: Node,
+  globalVariables: GlobalVariable[],
+  twitchStats: TwitchChannelStats | null,
+  streamerbotVariables: StreamerBotGlobalVariable[] = []
+): VariableValue {
   if (node.data.scope === 'global') {
     const gv = globalVariables.find((v) => v.id === node.data.globalId)
     return gv ? gv.value : 0
   }
   if (node.data.scope === 'platform') {
     return platformStatValue((node.data.platform as string) || 'twitch', (node.data.platformStat as string) || 'followers', twitchStats)
+  }
+  if (node.data.scope === 'streamerbot') {
+    return streamerbotVariableValue((node.data.streamerbotName as string) || '', streamerbotVariables)
   }
   return coerceVariableValue((node.data.type as VariableDataType) || 'float', node.data.value)
 }
@@ -245,8 +269,13 @@ export function variablePlaceholderValue(node: Node, globalVariables: GlobalVari
  * own Type picker TO 'int'/'float' (see coerceVariableValue above). Mirrors
  * variablePlaceholderNumericValue in overlays/custom-content-values.js.
  */
-export function variablePlaceholderNumericValue(node: Node, globalVariables: GlobalVariable[], twitchStats: TwitchChannelStats | null): number {
-  const raw = variablePlaceholderValue(node, globalVariables, twitchStats)
+export function variablePlaceholderNumericValue(
+  node: Node,
+  globalVariables: GlobalVariable[],
+  twitchStats: TwitchChannelStats | null,
+  streamerbotVariables: StreamerBotGlobalVariable[] = []
+): number {
+  const raw = variablePlaceholderValue(node, globalVariables, twitchStats, streamerbotVariables)
   if (typeof raw === 'number') return raw
   if (typeof raw === 'boolean') return raw ? 1 : 0
   const parsed = Number(raw)

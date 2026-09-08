@@ -88,6 +88,14 @@ let latestGlobalVariables = []
 // above.
 let latestTwitchStats = null
 
+// Live Streamer.bot global variables — see streamerbotVariableValue in
+// custom-content-values.js. Empty until the streamerbot-globals.json fetch
+// below resolves (or if Streamer.bot isn't connected), kept current
+// afterward by the 'streamerbot-globals' WS broadcast (see
+// OverlayServer.setStreamerBotGlobals), same live pattern as
+// latestTwitchStats above.
+let latestStreamerBotGlobals = []
+
 // Per auto-scrolling node (keyed by node id): when its loop FIRST
 // started, and the measured size/duration its CURRENT pace is based
 // on — deliberately module-level (survives renderStatic's own

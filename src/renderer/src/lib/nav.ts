@@ -4,11 +4,14 @@ export type NavKey =
   | 'dashboard'
   | 'tools/random'
   | 'tools/roulette'
+  | 'tools/queue'
   | 'data/variables'
+  | 'data/event-log'
   | 'integrations/spotify'
   | 'integrations/windows-media'
   | 'integrations/twitch'
   | 'integrations/youtube'
+  | 'integrations/streamerbot'
   | 'settings'
   | `overlays/custom/${string}`
 
@@ -29,7 +32,9 @@ export function getNavBreadcrumbs(t: Dictionary): Record<string, BreadcrumbCrumb
     dashboard: [dashboard],
     'tools/random': [dashboard, { label: t.sidebar.tools }, { label: t.events.random.title }],
     'tools/roulette': [dashboard, { label: t.sidebar.tools }, { label: t.events.roulette.title }],
+    'tools/queue': [dashboard, { label: t.sidebar.tools }, { label: t.events.queue.title }],
     'data/variables': [dashboard, { label: t.sidebar.data }, { label: t.variables.title }],
+    'data/event-log': [dashboard, { label: t.sidebar.data }, { label: t.eventLog.title }],
     'integrations/spotify': [dashboard, { label: t.sidebar.integrations }, { label: 'Spotify' }],
     'integrations/windows-media': [
       dashboard,
@@ -38,6 +43,7 @@ export function getNavBreadcrumbs(t: Dictionary): Record<string, BreadcrumbCrumb
     ],
     'integrations/twitch': [dashboard, { label: t.sidebar.integrations }, { label: 'Twitch' }],
     'integrations/youtube': [dashboard, { label: t.sidebar.integrations }, { label: 'YouTube' }],
+    'integrations/streamerbot': [dashboard, { label: t.sidebar.integrations }, { label: 'Streamer.bot' }],
     settings: [dashboard, { label: t.sidebar.settings }]
   }
 }

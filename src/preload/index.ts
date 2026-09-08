@@ -4,15 +4,19 @@ import type {
   ConnectResult,
   CustomOverlay,
   GlobalVariable,
+  EventLogEntry,
   IntegrationKey,
   IntegrationsStatusMap,
   NowPlayingPayload,
   OverlayAddress,
   OverlayFolder,
   OverlayUrls,
+  QueueEntry,
+  QueueStatePayload,
   RandomStatePayload,
   RouletteStatePayload,
   SettingKey,
+  StreamerBotGlobalVariable,
   TwitchChannelStats,
   TwitchCustomReward,
   WhatsNewPayload
@@ -129,7 +133,34 @@ const api = {
     ipcRenderer.on('updater:status', listener)
     return () => ipcRenderer.off('updater:status', listener)
   },
-  getWhatsNew: (): Promise<WhatsNewPayload | null> => ipcRenderer.invoke('whatsNew:get')
+  getWhatsNew: (): Promise<WhatsNewPayload | null> => ipcRenderer.invoke('whatsNew:get'),
+  getStreamerBotGlobals: (): Promise<StreamerBotGlobalVariable[]> => ipcRenderer.invoke('streamerbot:getGlobals'),
+  onStreamerBotGlobalsUpdate: (callback: (variables: StreamerBotGlobalVariable[]) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, variables: StreamerBotGlobalVariable[]): void => callback(variables)
+    ipcRenderer.on('streamerbot-globals:update', listener)
+    return () => ipcRenderer.off('streamerbot-globals:update', listener)
+  },
+  openQueue: (): Promise<QueueStatePayload> => ipcRenderer.invoke('events:queue:open'),
+  closeQueue: (): Promise<QueueStatePayload> => ipcRenderer.invoke('events:queue:close'),
+  addQueueEntry: (name: string): Promise<QueueStatePayload> => ipcRenderer.invoke('events:queue:addEntry', name),
+  removeQueueEntry: (id: string): Promise<QueueStatePayload> => ipcRenderer.invoke('events:queue:removeEntry', id),
+  popQueueNext: (): Promise<{ state: QueueStatePayload; popped: QueueEntry | null }> =>
+    ipcRenderer.invoke('events:queue:popNext'),
+  clearQueue: (): Promise<QueueStatePayload> => ipcRenderer.invoke('events:queue:clear'),
+  reorderQueue: (ids: string[]): Promise<QueueStatePayload> => ipcRenderer.invoke('events:queue:reorder', ids),
+  getQueueState: (): Promise<QueueStatePayload> => ipcRenderer.invoke('events:queue:getState'),
+  onQueueState: (callback: (state: QueueStatePayload) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, state: QueueStatePayload): void => callback(state)
+    ipcRenderer.on('queue:state', listener)
+    return () => ipcRenderer.off('queue:state', listener)
+  },
+  getEventLog: (): Promise<EventLogEntry[]> => ipcRenderer.invoke('eventLog:getEntries'),
+  clearEventLog: (): Promise<void> => ipcRenderer.invoke('eventLog:clear'),
+  onEventLogEntry: (callback: (entry: EventLogEntry) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, entry: EventLogEntry): void => callback(entry)
+    ipcRenderer.on('eventLog:entry', listener)
+    return () => ipcRenderer.off('eventLog:entry', listener)
+  }
 }
 
 contextBridge.exposeInMainWorld('obscure', api)

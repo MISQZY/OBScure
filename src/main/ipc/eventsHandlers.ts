@@ -1,7 +1,8 @@
 import { ipcMain } from "electron";
 import type { ConfigStore } from "../configStore";
-import type { RandomEngine, RouletteEngine } from "../eventsEngine";
+import type { QueueEngine, RandomEngine, RouletteEngine } from "../eventsEngine";
 import type {
+  QueueStatePayload,
   RandomStatePayload,
   RouletteStatePayload,
 } from "../../shared/types";
@@ -9,6 +10,7 @@ import {
   DEFAULT_EVENTS_CONFIGS,
   MAX_ROULETTE_DURATION_SECONDS,
   MIN_ROULETTE_DURATION_SECONDS,
+  normalizeQueueConfig,
   normalizeRandomConfig,
   normalizeRouletteConfig,
   type EventsConfigs,
@@ -19,9 +21,21 @@ interface EventsHandlersDeps {
   config: () => ConfigStore;
   randomEngine: RandomEngine;
   rouletteEngine: RouletteEngine;
+  queueEngine: QueueEngine;
   eventsConfigSettingKeys: Record<EventTarget, string>;
   getStoredRandomConfig: () => EventsConfigs["random"];
   getStoredRouletteConfig: () => EventsConfigs["roulette"];
+  getStoredQueueConfig: () => EventsConfigs["queue"];
+}
+
+/** normalize/get fns per EventTarget — keeps events:getConfig/setConfig from growing an if/else per tool as new ones (Queue, ...) are added. */
+function normalizeEventsConfig(
+  target: EventTarget,
+  value: unknown,
+): EventsConfigs[EventTarget] {
+  if (target === "roulette") return normalizeRouletteConfig(value);
+  if (target === "queue") return normalizeQueueConfig(value);
+  return normalizeRandomConfig(value);
 }
 
 export function registerEventsHandlers(deps: EventsHandlersDeps): void {
@@ -29,15 +43,18 @@ export function registerEventsHandlers(deps: EventsHandlersDeps): void {
     config,
     randomEngine,
     rouletteEngine,
+    queueEngine,
     eventsConfigSettingKeys,
     getStoredRandomConfig,
     getStoredRouletteConfig,
+    getStoredQueueConfig,
   } = deps;
 
   ipcMain.handle(
     "events:getConfig",
     (_event, target: EventTarget): EventsConfigs[EventTarget] => {
       if (target === "roulette") return getStoredRouletteConfig();
+      if (target === "queue") return getStoredQueueConfig();
       return getStoredRandomConfig();
     },
   );
@@ -45,10 +62,7 @@ export function registerEventsHandlers(deps: EventsHandlersDeps): void {
   ipcMain.handle(
     "events:setConfig",
     (_event, target: EventTarget, value: EventsConfigs[EventTarget]) => {
-      const normalized =
-        target === "roulette"
-          ? normalizeRouletteConfig(value)
-          : normalizeRandomConfig(value);
+      const normalized = normalizeEventsConfig(target, value);
       config().setSetting(eventsConfigSettingKeys[target], normalized);
       return normalized;
     },
@@ -104,5 +118,45 @@ export function registerEventsHandlers(deps: EventsHandlersDeps): void {
 
   ipcMain.handle("events:roulette:getState", (): RouletteStatePayload =>
     rouletteEngine.getState(),
+  );
+
+  ipcMain.handle("events:queue:open", (): QueueStatePayload =>
+    queueEngine.open(),
+  );
+
+  ipcMain.handle("events:queue:close", (): QueueStatePayload =>
+    queueEngine.close(),
+  );
+
+  ipcMain.handle(
+    "events:queue:addEntry",
+    (_event, name: string): QueueStatePayload =>
+      queueEngine.addEntry(name, "manual"),
+  );
+
+  ipcMain.handle(
+    "events:queue:removeEntry",
+    (_event, id: string): QueueStatePayload => queueEngine.removeEntry(id),
+  );
+
+  ipcMain.handle(
+    "events:queue:popNext",
+    (): { state: QueueStatePayload; popped: ReturnType<QueueEngine["popNext"]> } => {
+      const popped = queueEngine.popNext();
+      return { state: queueEngine.getState(), popped };
+    },
+  );
+
+  ipcMain.handle("events:queue:clear", (): QueueStatePayload =>
+    queueEngine.clear(),
+  );
+
+  ipcMain.handle(
+    "events:queue:reorder",
+    (_event, ids: string[]): QueueStatePayload => queueEngine.reorder(ids),
+  );
+
+  ipcMain.handle("events:queue:getState", (): QueueStatePayload =>
+    queueEngine.getState(),
   );
 }

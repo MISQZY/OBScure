@@ -140,6 +140,50 @@ export interface TwitchCustomReward {
   title: string
 }
 
+/** One Streamer.bot global variable, as returned by the WS API's GetGlobal(s) request — read-only from OBScure's side (Streamer.bot's WS API has no SetGlobal request; writing one requires triggering a Streamer.bot Action that sets it internally, out of scope here). `lastWrite` is an ISO timestamp string Streamer.bot stamps on every write, kept only for parity with the wire shape (not surfaced anywhere yet). */
+export interface StreamerBotGlobalVariable {
+  name: string
+  value: string | number | boolean | null
+  lastWrite: string
+}
+
+/**
+ * A normalized Streamer.bot push-event relevant to the Queue integration —
+ * either a Command.Triggered (chat command run through Streamer.bot's own
+ * command system) or a Custom.Event (raised by a Streamer.bot Action's
+ * "Raise Event" sub-action). Emitted by StreamerBotIntegration regardless of
+ * whether anything is listening for it; matched against the active
+ * QueueConfig in main/index.ts, same separation as TwitchIntegration's own
+ * chat-message/points-redemption events being matched against
+ * RouletteConfig there instead of inside the integration itself.
+ */
+export interface StreamerBotTriggerPayload {
+  kind: 'command' | 'customEvent'
+  /** Command.Triggered's own `command` field (the trigger phrase, e.g. "!queue"); null for a customEvent trigger. */
+  command: string | null
+  /** Custom.Event's own `eventName` field; null for a command trigger. */
+  eventName: string | null
+  /** Custom.Event's own `args` object; null for a command trigger or when the action raised no args. */
+  args: Record<string, unknown> | null
+  /** Resolved display name for a command trigger (Command.Triggered's user.display/user.name) — null for a customEvent trigger, where the entrant name (if any) instead lives inside `args`. */
+  user: string | null
+}
+
+export type QueueEntrySource = 'manual' | 'chat' | 'streamerbot'
+
+export interface QueueEntry {
+  id: string
+  name: string
+  source: QueueEntrySource
+  addedAt: number
+}
+
+/** A simple ordered viewer queue (sign-up line) — no timer/phase, unlike Roulette: entries just sit in order until popped or removed. See eventsConfig.ts's own QueueConfig for the settings that feed it. */
+export interface QueueStatePayload {
+  isOpen: boolean
+  entries: QueueEntry[]
+}
+
 export interface AppEvents {
   'now-playing': NowPlayingPayload
   alert: AlertPayload
@@ -155,6 +199,27 @@ export interface AppEvents {
   'global-variables': GlobalVariable[]
   /** Broadcast on every periodic Twitch stats poll while connected (see TwitchIntegration's own poll/OverlayServer.pushTwitchStats) — feeds a scope='twitch' Variable node's live follower/subscriber/viewer count, same live pattern as global-variables. Null once Twitch disconnects or a profile switch tears the integration down. */
   'twitch-stats': TwitchChannelStats | null
+  /** Broadcast on every periodic GetGlobals poll while Streamer.bot is connected (see StreamerBotIntegration's own polling/OverlayServer.setStreamerBotGlobals), and as an empty array on disconnect/profile switch — feeds a scope='streamerbot' Variable node, same live pattern as 'twitch-stats'. */
+  'streamerbot-globals': StreamerBotGlobalVariable[]
+  /** Raised on every Command.Triggered/Custom.Event push from Streamer.bot, regardless of whether the Queue feature (or anything else) is listening — see StreamerBotTriggerPayload's own doc comment. */
+  'streamerbot-trigger': StreamerBotTriggerPayload
+  /** Broadcast on every Queue open/close/add/remove/pop/clear/reorder — see QueueEngine. */
+  'queue-state': QueueStatePayload
+}
+
+/**
+ * One entry in the live Event Log (Данные → Журнал событий) — a raw record
+ * of a discrete AppEvents tick, in the same "watch everything happen" spirit
+ * as Streamer.bot's own Events panel. `event` is loosely typed as `string`
+ * rather than `keyof AppEvents` since it crosses the IPC boundary (main →
+ * renderer) where the union is erased anyway; see EventLog (main/eventLog.ts)
+ * for which AppEvents keys are actually tapped.
+ */
+export interface EventLogEntry {
+  id: string
+  timestamp: number
+  event: string
+  payload: unknown
 }
 
 export interface OverlayAddress {
@@ -168,7 +233,7 @@ export interface OverlayUrls extends OverlayAddress {
   customBase: string
 }
 
-export type IntegrationKey = 'spotify' | 'windowsMedia' | 'twitch' | 'youtube'
+export type IntegrationKey = 'spotify' | 'windowsMedia' | 'twitch' | 'youtube' | 'streamerbot'
 export type IntegrationsStatusMap = Record<IntegrationKey, string>
 
 /** Plain (non-secret) config keys editable from the Integrations settings pages. */
@@ -178,6 +243,10 @@ export type SettingKey =
   | 'twitch.clientId'
   | 'youtube.clientId'
   | 'youtube.clientSecret'
+  | 'streamerbot.host'
+  | 'streamerbot.port'
+  | 'streamerbot.endpoint'
+  | 'streamerbot.password'
   | 'overlay.host'
   | 'overlay.port'
   | 'customOverlays'

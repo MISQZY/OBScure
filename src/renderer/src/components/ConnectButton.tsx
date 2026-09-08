@@ -7,9 +7,11 @@ interface ConnectButtonProps {
   integrationKey: IntegrationKey
   status: string
   onChanged: () => void
+  /** 'oauth' (default) shows "Connect via OAuth"/"Opening browser..." — accurate for Spotify/Twitch/YouTube. 'local' shows plain "Connect"/"Connecting..." for an integration with no browser-based auth step, like Streamer.bot's own local WebSocket connection. */
+  variant?: 'oauth' | 'local'
 }
 
-export function ConnectButton({ integrationKey, status, onChanged }: ConnectButtonProps) {
+export function ConnectButton({ integrationKey, status, onChanged, variant = 'oauth' }: ConnectButtonProps) {
   const { t } = useI18n()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -46,7 +48,13 @@ export function ConnectButton({ integrationKey, status, onChanged }: ConnectButt
         </Button>
       ) : (
         <Button onClick={connect} disabled={pending} className="w-fit">
-          {pending ? t.connect.connecting : t.connect.connect}
+          {variant === 'local'
+            ? pending
+              ? t.connect.connectingLocal
+              : t.connect.connectLocal
+            : pending
+              ? t.connect.connecting
+              : t.connect.connect}
         </Button>
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}

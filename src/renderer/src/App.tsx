@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState, type ComponentType } from 'react'
 import { CustomOverlaysProvider } from '@/providers/CustomOverlaysProvider'
 import { GlobalVariablesProvider } from '@/providers/GlobalVariablesProvider'
 import { TwitchStatsProvider } from '@/providers/TwitchStatsProvider'
+import { StreamerBotVariablesProvider } from '@/providers/StreamerBotVariablesProvider'
 import { AppSidebar } from '@/components/layout/AppSidebar'
 import { TitleBar } from '@/components/layout/TitleBar'
 import { TourOverlay } from '@/components/TourOverlay'
@@ -25,10 +26,13 @@ import { SpotifyPage } from '@/pages/integrations/SpotifyPage'
 import { WindowsMediaPage } from '@/pages/integrations/WindowsMediaPage'
 import { TwitchPage } from '@/pages/integrations/TwitchPage'
 import { YoutubePage } from '@/pages/integrations/YoutubePage'
+import { StreamerBotPage } from '@/pages/integrations/StreamerBotPage'
 import { SceneBuilderPage } from '@/pages/overlays/SceneBuilderPage'
 import { RandomToolPage } from '@/pages/tools/RandomToolPage'
 import { RouletteToolPage } from '@/pages/tools/RouletteToolPage'
+import { QueueToolPage } from '@/pages/tools/QueueToolPage'
 import { VariablesPage } from '@/pages/data/VariablesPage'
+import { EventLogPage } from '@/pages/data/EventLogPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { getDefaultBreadcrumbs, getNavBreadcrumbs, type NavKey } from '@/lib/nav'
 import { I18nProvider, useI18n } from '@/providers/I18nProvider'
@@ -39,11 +43,14 @@ import { TourProvider, useTour } from '@/providers/TourProvider'
 const PAGES: Partial<Record<NavKey, ComponentType>> = {
   'tools/random': RandomToolPage,
   'tools/roulette': RouletteToolPage,
+  'tools/queue': QueueToolPage,
   'data/variables': VariablesPage,
+  'data/event-log': EventLogPage,
   'integrations/spotify': SpotifyPage,
   'integrations/windows-media': WindowsMediaPage,
   'integrations/twitch': TwitchPage,
   'integrations/youtube': YoutubePage,
+  'integrations/streamerbot': StreamerBotPage,
   settings: SettingsPage
 }
 
@@ -129,12 +136,14 @@ function App() {
             <CustomOverlaysProvider>
               <GlobalVariablesProvider>
                 <TwitchStatsProvider>
-                  <div className="flex h-screen flex-col overflow-hidden">
-                    <TitleBar />
-                    <div className="min-h-0 flex-1">
-                      <AppShell />
+                  <StreamerBotVariablesProvider>
+                    <div className="flex h-screen flex-col overflow-hidden">
+                      <TitleBar />
+                      <div className="min-h-0 flex-1">
+                        <AppShell />
+                      </div>
                     </div>
-                  </div>
+                  </StreamerBotVariablesProvider>
                 </TwitchStatsProvider>
               </GlobalVariablesProvider>
             </CustomOverlaysProvider>

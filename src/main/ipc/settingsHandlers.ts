@@ -4,6 +4,7 @@ import { getFonts } from "font-list";
 import type { ConfigStore } from "../configStore";
 import type { CredentialsStore } from "../credentialsStore";
 import type { WindowsMediaIntegration } from "../integrations/windowsMedia";
+import type { StreamerBotIntegration } from "../integrations/streamerbot";
 import type { SettingKey } from "../../shared/types";
 import {
   normalizeCanvasConfig,
@@ -15,18 +16,20 @@ interface SettingsHandlersDeps {
   credentials: () => CredentialsStore;
   mainWindow: () => BrowserWindow | null;
   windowsMedia: () => WindowsMediaIntegration;
+  streamerbot: () => StreamerBotIntegration;
   getStoredCanvasConfig: () => CanvasConfig;
   canvasConfigSettingKey: string;
   /** Called right after "app.minimizeToTray" is written — lets the tray icon be torn down immediately when the setting is turned off, instead of lingering until quit. */
   onMinimizeToTrayChanged: (enabled: boolean) => void;
 }
 
-/** Client ID / client secret keys — persisted via CredentialsStore, not ConfigStore. */
+/** Client ID / client secret keys — persisted via CredentialsStore, not ConfigStore. streamerbot.password isn't an OAuth token either (same reasoning as youtube.clientSecret), so it's stored the same "sensitive but not OS-encrypted" way rather than through ConfigStore.setSecret. */
 const CREDENTIAL_SETTING_KEYS: ReadonlySet<SettingKey> = new Set([
   "spotify.clientId",
   "twitch.clientId",
   "youtube.clientId",
   "youtube.clientSecret",
+  "streamerbot.password",
 ]);
 
 /** Every key SettingKey (shared/types.ts) actually allows — mirrored here so settings:set can reject unknown keys from the renderer at runtime, since the SettingKey type itself is erased by then. */
@@ -36,6 +39,10 @@ const VALID_SETTING_KEYS: ReadonlySet<string> = new Set([
   "twitch.clientId",
   "youtube.clientId",
   "youtube.clientSecret",
+  "streamerbot.host",
+  "streamerbot.port",
+  "streamerbot.endpoint",
+  "streamerbot.password",
   "overlay.host",
   "overlay.port",
   "customOverlays",
@@ -44,12 +51,21 @@ const VALID_SETTING_KEYS: ReadonlySet<string> = new Set([
   "app.minimizeToTray",
 ] satisfies SettingKey[]);
 
+/** Changing any of these should reconnect Streamer.bot with the new value immediately, same reasoning as windowsMedia.enabled's own stop/start below. */
+const STREAMERBOT_RECONNECT_KEYS: ReadonlySet<SettingKey> = new Set([
+  "streamerbot.host",
+  "streamerbot.port",
+  "streamerbot.endpoint",
+  "streamerbot.password",
+]);
+
 export function registerSettingsHandlers(deps: SettingsHandlersDeps): void {
   const {
     config,
     credentials,
     mainWindow,
     windowsMedia,
+    streamerbot,
     getStoredCanvasConfig,
     canvasConfigSettingKey,
     onMinimizeToTrayChanged,
@@ -97,6 +113,10 @@ export function registerSettingsHandlers(deps: SettingsHandlersDeps): void {
     if (key === "windowsMedia.enabled") {
       windowsMedia().stop();
       void windowsMedia().start();
+    }
+    if (STREAMERBOT_RECONNECT_KEYS.has(key)) {
+      streamerbot().stop();
+      void streamerbot().start();
     }
     if (key === "app.minimizeToTray") {
       onMinimizeToTrayChanged(Boolean(value));

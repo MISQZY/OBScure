@@ -481,6 +481,17 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
                         <span>{t.variables.title}</span>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton
+                        isActive={active === 'data/event-log'}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          onNavigate('data/event-log')
+                        }}
+                      >
+                        <span>{t.eventLog.title}</span>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
                   </SidebarMenuSub>
                 )}
               </SidebarMenuItem>

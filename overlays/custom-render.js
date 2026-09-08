@@ -559,13 +559,17 @@ if (!key) {
       .catch(() => null),
     fetch('/overlays/config/twitch-stats.json')
       .then((res) => res.json())
+      .catch(() => null),
+    fetch('/overlays/config/streamerbot-globals.json')
+      .then((res) => res.json())
       .catch(() => null)
   ])
-    .then(([overlay, nowPlaying, rouletteState, randomState, globalVariables, twitchStats]) => {
+    .then(([overlay, nowPlaying, rouletteState, randomState, globalVariables, twitchStats, streamerbotGlobals]) => {
       if (nowPlaying) latestNowPlaying = nowPlaying
       if (randomState) latestRandomState = randomState
       if (globalVariables) latestGlobalVariables = globalVariables
       if (twitchStats) latestTwitchStats = twitchStats
+      if (streamerbotGlobals) latestStreamerBotGlobals = streamerbotGlobals
       if (rouletteState) {
         latestRouletteState = rouletteState
         // A page opened/reloaded mid-round (or after one already
@@ -789,6 +793,15 @@ if (!key) {
         // that actually have a scope=twitch Variable node somewhere.
         latestTwitchStats = payload
         if (hasTwitchStatDeps(latestOverlay)) render(latestOverlay, false)
+      } else if (type === 'streamerbot-globals') {
+        // Pushed every ~5s while Streamer.bot is connected (see
+        // StreamerBotIntegration's own pollGlobals/OverlayServer.
+        // setStreamerBotGlobals), and once with `[]` on disconnect/profile
+        // switch. Silent refresh (animate=false), same reasoning as the
+        // 'twitch-stats' branch above — gated to scenes that actually have a
+        // scope=streamerbot Variable node somewhere.
+        latestStreamerBotGlobals = payload
+        if (hasStreamerBotVariableDeps(latestOverlay)) render(latestOverlay, false)
       }
     }
     ws.onclose = () => setTimeout(connect, 1000)
