@@ -70,7 +70,7 @@ function renderStatic(overlay, animate) {
       container.style.borderRadius = `${d.borderRadius ?? 10}px`
       if (d.borderEnabled) container.style.border = `${d.borderWidth ?? 2}px solid ${d.borderColor || '#ffffff'}`
     }
-    for (const n of images) container.appendChild(buildImage(n, [], animate, null))
+    for (const n of images) container.appendChild(buildImage(n, [], animate, null, undefined, false, edges, map))
     for (const n of texts) container.appendChild(buildText(n, [], animate, undefined, undefined, 'horizontal'))
     sceneEl.appendChild(container)
     return

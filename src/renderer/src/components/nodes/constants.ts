@@ -120,6 +120,14 @@ export const RANDOM_WIDGET_SOCKETS: InputSocket[] = [
   // buildRandomWidget in overlays/custom.html.
   { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' }
 ]
+// Node types allowed into a container's `children` socket — shared by
+// BOX_SOCKETS, RANDOM_PICK_SOCKETS, and IMAGE_SOCKETS/VIDEO_SOCKETS' own
+// `children` below (see BOX_SOCKETS' own doc comment for why Image/Video can
+// hold this same set: they render their media as a backdrop, same as Box's
+// background, with these children stacked on top via the same Ordering-driven
+// layout — see ImageView/VideoView's own doc comments).
+const CONTAINER_CHILD_TYPES = ['text', 'image', 'video', 'progress', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget']
+
 // Same "Content" concept as TEXT_SOCKETS' own socket above, but for Image:
 // wiring Audio Player's Content output in shows the live now-playing album
 // art unconditionally (see buildImage's own doc comment), taking priority
@@ -128,8 +136,23 @@ export const RANDOM_WIDGET_SOCKETS: InputSocket[] = [
 // shown. Own id (not 'content') purely so a Text's Content socket and this
 // one read as visibly different rows despite the identical label — the SAME
 // Content output can reach either (see AUDIO_PLAYER_OUTPUTS' own `feeds`).
-export const IMAGE_SOCKETS: InputSocket[] = [{ id: 'imageContent', label: 'Content', accepts: ['audioPlayer'], kind: 'content' }, ...MODIFIER_SOCKETS]
-export const VIDEO_SOCKETS: InputSocket[] = MODIFIER_SOCKETS
+//
+// `children` (own doc comment above) lets an Image/Video act as a container
+// too, same as Box — its media renders as a backdrop with these children
+// laid out on top of it (ImageView/VideoView), rather than only being
+// placeable INSIDE some other container. `ordering` controls that layout the
+// same way it does for Box.
+export const IMAGE_SOCKETS: InputSocket[] = [
+  { id: 'imageContent', label: 'Content', accepts: ['audioPlayer'], kind: 'content' },
+  { id: 'children', label: 'Children', accepts: CONTAINER_CHILD_TYPES, kind: 'content', multi: true },
+  ...MODIFIER_SOCKETS,
+  { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' }
+]
+export const VIDEO_SOCKETS: InputSocket[] = [
+  { id: 'children', label: 'Children', accepts: CONTAINER_CHILD_TYPES, kind: 'content', multi: true },
+  ...MODIFIER_SOCKETS,
+  { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' }
+]
 /**
  * A Progress Bar's own sockets: Label (optional — wire a Text node in to
  * caption the bar with THAT node's own full styling: color/font/size/align/
@@ -169,7 +192,7 @@ export const PROGRESS_SOCKETS: InputSocket[] = [
  * nested, same as at the top level.
  */
 export const BOX_SOCKETS: InputSocket[] = [
-  { id: 'children', label: 'Children', accepts: ['text', 'image', 'video', 'progress', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true },
+  { id: 'children', label: 'Children', accepts: CONTAINER_CHILD_TYPES, kind: 'content', multi: true },
   ...MODIFIER_SOCKETS,
   { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' }
 ]
@@ -187,7 +210,7 @@ export const BOX_SOCKETS: InputSocket[] = [
  * RandomPickNode/RandomPickView's own doc comments for the rest.
  */
 export const RANDOM_PICK_SOCKETS: InputSocket[] = [
-  { id: 'children', label: 'Options', accepts: ['text', 'image', 'video', 'progress', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true }
+  { id: 'children', label: 'Options', accepts: CONTAINER_CHILD_TYPES, kind: 'content', multi: true }
 ]
 
 export const SCENE_SOCKETS: InputSocket[] = [

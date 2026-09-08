@@ -132,8 +132,8 @@ export function nextProcessNode(nodeId: string, edges: Edge[], map: NodeMap, var
 
 export const CONTENT_TYPES = new Set(['text', 'image', 'video', 'progress', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'])
 
-/** Box, Group, and Random Pick — the node types that can nest one another (directly or through a mix of the three) via a shared `children` socket (see BOX_SOCKETS'/RANDOM_PICK_SOCKETS' own doc comments in components/nodes/index.tsx), and so are the only ones isValidConnection's cycle guard needs to walk. */
-export const CONTAINER_TYPES = new Set(['box', 'group', 'randomPick'])
+/** Box, Group, Random Pick, Image, and Video — the node types that can nest one another (directly or through a mix of the five) via a shared `children` socket (see BOX_SOCKETS'/RANDOM_PICK_SOCKETS'/IMAGE_SOCKETS'/VIDEO_SOCKETS' own doc comments in components/nodes/constants.ts), and so are the only ones isValidConnection's cycle guard needs to walk. */
+export const CONTAINER_TYPES = new Set(['box', 'group', 'randomPick', 'image', 'video'])
 
 /** Same as CONTENT_TYPES plus 'scene' — used for the MiniMap's node coloring below, where Scene (never an edge SOURCE, so absent from CONTENT_TYPES) still needs to read as "content" like Text/Image/Box. */
 export const CONTENT_TYPES_WITH_SCENE = new Set([...CONTENT_TYPES, 'scene'])

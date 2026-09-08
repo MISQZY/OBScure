@@ -425,10 +425,11 @@ export function useSceneGraph(overlay: CustomOverlay | undefined, locked: boolea
         const outSocket = outputSockets.find((o) => o.id === connection.sourceHandle)
         if (!outSocket || !outSocket.feeds.includes(connection.targetHandle!)) return false
       }
-      // Box and Group can each nest either one (see BOX_SOCKETS' own doc
-      // comment in components/nodes/index.tsx) — the one connection shape in
+      // Box, Group, Random Pick, Image, and Video can each nest one another
+      // (see CONTAINER_TYPES' own doc comment) — the one connection shape in
       // this whole graph that CAN form a cycle (A contains B contains A),
-      // which would recurse forever in BoxView/buildBox. Reject a
+      // which would recurse forever in BoxView/buildBox (or ImageView/
+      // VideoView and their overlays/custom-builders.js mirrors). Reject a
       // container→container `children` connection if the target is already
       // a descendant of the source — i.e. the source already (transitively)
       // contains the target, so wiring the target to also contain the

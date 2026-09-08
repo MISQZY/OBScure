@@ -82,10 +82,10 @@ export function ScenePreview({
         }
       >
         {images.map((n) => (
-          <ImageView key={`${n.id}-${playToken}`} node={n} style={{}} anim={null} played={playToken > 0} hiding={false} urls={urls} audioCover={false} />
+          <ImageView key={`${n.id}-${playToken}`} node={n} style={{}} anim={null} played={playToken > 0} hiding={false} urls={urls} audioCover={false} edges={edges} map={map} playToken={playToken} vars={null} schedule={schedule} clockMs={clockMs} />
         ))}
         {videos.map((n) => (
-          <VideoView key={`${n.id}-${playToken}`} node={n} style={{}} anim={null} played={playToken > 0} hiding={false} />
+          <VideoView key={`${n.id}-${playToken}`} node={n} style={{}} anim={null} played={playToken > 0} hiding={false} urls={urls} edges={edges} map={map} playToken={playToken} vars={null} schedule={schedule} clockMs={clockMs} />
         ))}
         {texts.map((n) => (
           <TextView key={`${n.id}-${playToken}`} node={n} style={{}} anim={null} played={playToken > 0} hiding={false} vars={null} contentValues={null} replaceText={null} crossAxis="horizontal" />

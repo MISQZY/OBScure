@@ -14,6 +14,9 @@ import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, RadiusFiel
  * OBS's embedded Browser Source is no exception — a Sound node wired
  * alongside it is the reliable way to get audio out of an alert anyway (see
  * SoundNode). Connect into a Box/Group or straight into Scene, same as Image.
+ * Also a container in its own right (see VIDEO_SOCKETS' `children`) — wire
+ * Text/other content into its own Children socket to overlay it on top of
+ * the clip, same as Box/Image.
  */
 export function VideoNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()

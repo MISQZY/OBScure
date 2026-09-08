@@ -21,7 +21,7 @@ import {
   IMAGE_FIT_LABELS
 } from './utils'
 
-/** A static image or (left blank) the live now-playing album art — see showAlbumArt. Connect into a Box/Group or straight into Scene. */
+/** A static image or (left blank) the live now-playing album art — see showAlbumArt. Connect into a Box/Group or straight into Scene. Also a container in its own right (see IMAGE_SOCKETS' `children`) — wire Text/other content into its own Children socket to overlay a caption/badge on top of the image, same as Box. */
 export function ImageNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
   const { t } = useI18n()

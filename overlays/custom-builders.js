@@ -120,7 +120,52 @@ function buildText(node, mods, animate, vars, registry, crossAxis, contentValues
   return el
 }
 
-function buildImage(node, mods, animate, vars, registry, forceAudioCover) {
+// Appends whatever's wired into `node`'s own `children` socket (see
+// IMAGE_SOCKETS'/VIDEO_SOCKETS' own doc comments in components/nodes/
+// constants.ts) on TOP of `wrap`'s already-built media, as one absolutely
+// positioned overlay layer laid out by the same Ordering-driven flex/gap
+// Box's own children use — mirrors ImageView/VideoView's own children
+// overlay. `depth` is THIS node's own nesting level (buildContent's dispatch
+// already added the +1 for entering it — see buildBox's own doc comment for
+// why the increment lives there, not here); a fresh Ordering read off
+// `node`'s own incoming wires, independent of `mods` (which only ever
+// carries Transform/Style modifiers, never a container's own Ordering — see
+// BOX_SOCKETS keeping `ordering` a separate socket from MODIFIER_SOCKETS).
+function appendContainerChildren(wrap, node, edges, map, animate, vars, registry, depth) {
+  const incomingNodes = incoming(node.id, edges, map)
+  const children =
+    depth >= MAX_BOX_DEPTH
+      ? []
+      : incomingNodes.filter(
+          (n) =>
+            n.type === 'text' ||
+            n.type === 'image' ||
+            n.type === 'video' ||
+            n.type === 'progress' ||
+            n.type === 'box' ||
+            n.type === 'group' ||
+            n.type === 'randomPick' ||
+            n.type === 'rouletteWidget' ||
+            n.type === 'randomWidget'
+        )
+  if (children.length === 0) return
+  const layer = document.createElement('div')
+  layer.style.position = 'absolute'
+  layer.style.inset = '0'
+  layer.style.display = 'flex'
+  layer.style.alignItems = 'center'
+  layer.style.justifyContent = 'center'
+  layer.style.flexDirection = orderingFlexDirection(incomingNodes)
+  layer.style.gap = `${orderingGap(incomingNodes)}px`
+  const childCrossAxis = crossAxisFor(incomingNodes)
+  for (const child of children) {
+    const childEl = buildContent(child, edges, map, animate, vars, registry, depth, childCrossAxis)
+    if (childEl) layer.appendChild(childEl)
+  }
+  wrap.appendChild(layer)
+}
+
+function buildImage(node, mods, animate, vars, registry, forceAudioCover, edges = [], map = {}, depth = 0) {
   const d = node.data || {}
   const wrap = document.createElement('div')
   wrap.className = 'image-node'
@@ -129,6 +174,7 @@ function buildImage(node, mods, animate, vars, registry, forceAudioCover) {
   // applyModifierStyle below overrides it when a Size node is wired.
   wrap.style.width = '96px'
   wrap.style.height = '96px'
+  wrap.style.position = 'relative'
   wrap.style.borderRadius = radiusCss(d, 8)
   applyBorder(wrap, d, 'rgba(255, 255, 255, 0.08)')
   // An explicit Content wire (forceAudioCover, from Audio Player's own
@@ -172,16 +218,18 @@ function buildImage(node, mods, animate, vars, registry, forceAudioCover) {
   applyModifierStyle(wrap, mods)
   applyAnimation(wrap, mods, animate)
   if (registry) registry[node.id] = wrap
+  appendContainerChildren(wrap, node, edges, map, animate, vars, registry, depth)
   return wrap
 }
 
-function buildVideo(node, mods, animate, registry) {
+function buildVideo(node, mods, animate, registry, edges = [], map = {}, vars, depth = 0) {
   const d = node.data || {}
   const wrap = document.createElement('div')
   wrap.className = 'image-node'
   // No own Width/Height field, same reasoning as buildImage above.
   wrap.style.width = '320px'
   wrap.style.height = '180px'
+  wrap.style.position = 'relative'
   wrap.style.borderRadius = radiusCss(d, 8)
   applyBorder(wrap, d, 'rgba(255, 255, 255, 0.08)')
   if (d.src) {
@@ -205,6 +253,7 @@ function buildVideo(node, mods, animate, registry) {
   applyModifierStyle(wrap, mods)
   applyAnimation(wrap, mods, animate)
   if (registry) registry[node.id] = wrap
+  appendContainerChildren(wrap, node, edges, map, animate, vars, registry, depth)
   return wrap
 }
 
@@ -336,8 +385,8 @@ function buildContent(node, edges, map, animate, vars, registry, depth = 0, cros
     const replaceText = rouletteEntrantsTextValue(node.id, edges, map)
     return buildText(node, mods, animate, vars, registry, crossAxis, contentValues, replaceText, clockFormat)
   }
-  if (node.type === 'image') return buildImage(node, mods, animate, vars, registry, hasAudioCover(node.id, edges, map))
-  if (node.type === 'video') return buildVideo(node, mods, animate, registry)
+  if (node.type === 'image') return buildImage(node, mods, animate, vars, registry, hasAudioCover(node.id, edges, map), edges, map, depth + 1)
+  if (node.type === 'video') return buildVideo(node, mods, animate, registry, edges, map, vars, depth + 1)
   if (node.type === 'progress') return buildProgress(node, edges, map, mods, animate, registry)
   if (node.type === 'rouletteWidget') return rouletteWidgetVisible(node.id, edges, map) ? buildRouletteWheel(node, mods, animate, registry) : null
   if (node.type === 'randomWidget') return randomWidgetVisible(node.id, edges, map) ? buildRandomWidget(node, mods, animate, registry) : null

@@ -111,8 +111,8 @@ export function ContentView({
     const task = computeTaskState(schedule, node.id, clockMs, mods)
     if (!task.visible) return null
     if (node.type === 'text') return <TextView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} vars={vars} contentValues={contentValues} replaceText={replaceText} crossAxis={crossAxis} autoScroll={autoScroll} clockFormat={clockFormat} />
-    if (node.type === 'image') return <ImageView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} urls={urls} audioCover={audioCover} />
-    if (node.type === 'video') return <VideoView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} />
+    if (node.type === 'image') return <ImageView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} urls={urls} audioCover={audioCover} edges={edges} map={map} playToken={playToken} vars={vars} schedule={schedule} clockMs={clockMs} depth={depth} />
+    if (node.type === 'video') return <VideoView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} urls={urls} edges={edges} map={map} playToken={playToken} vars={vars} schedule={schedule} clockMs={clockMs} depth={depth} />
     if (node.type === 'progress') return <ProgressView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} mods={mods} edges={edges} map={map} />
     if (node.type === 'rouletteWidget') return <RouletteWheelView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} />
     if (node.type === 'randomWidget') return <RandomWidgetView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} mods={mods} />
@@ -121,8 +121,8 @@ export function ContentView({
   const style = modifierStyle(mods)
   const anim = animationAttrs(mods)
   if (node.type === 'text') return <TextView node={node} style={style} anim={anim} played={played} hiding={hiding} vars={vars} contentValues={contentValues} replaceText={replaceText} crossAxis={crossAxis} autoScroll={autoScroll} clockFormat={clockFormat} />
-  if (node.type === 'image') return <ImageView node={node} style={style} anim={anim} played={played} hiding={hiding} urls={urls} audioCover={audioCover} />
-  if (node.type === 'video') return <VideoView node={node} style={style} anim={anim} played={played} hiding={hiding} />
+  if (node.type === 'image') return <ImageView node={node} style={style} anim={anim} played={played} hiding={hiding} urls={urls} audioCover={audioCover} edges={edges} map={map} playToken={playToken} vars={vars} schedule={schedule} clockMs={clockMs} depth={depth} />
+  if (node.type === 'video') return <VideoView node={node} style={style} anim={anim} played={played} hiding={hiding} urls={urls} edges={edges} map={map} playToken={playToken} vars={vars} schedule={schedule} clockMs={clockMs} depth={depth} />
   if (node.type === 'progress') return <ProgressView node={node} style={style} anim={anim} played={played} hiding={hiding} mods={mods} edges={edges} map={map} />
   if (node.type === 'rouletteWidget') return <RouletteWheelView node={node} style={style} anim={anim} played={played} hiding={hiding} />
   if (node.type === 'randomWidget') return <RandomWidgetView node={node} style={style} anim={anim} played={played} hiding={hiding} mods={mods} />
