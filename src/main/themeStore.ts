@@ -1,12 +1,6 @@
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
+import { writeFileAtomic } from "./atomicWrite";
 import type { CustomThemePack } from "../shared/customConfig";
 
 /**
@@ -59,11 +53,7 @@ export class ThemeStore {
   }
 
   saveTheme(theme: CustomThemePack): void {
-    writeFileSync(
-      this.pathFor(theme.id),
-      JSON.stringify(theme, null, 2),
-      "utf-8",
-    );
+    writeFileAtomic(this.pathFor(theme.id), JSON.stringify(theme, null, 2));
   }
 
   deleteTheme(id: string): void {

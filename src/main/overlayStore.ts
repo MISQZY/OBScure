@@ -1,12 +1,6 @@
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
+import { writeFileAtomic } from "./atomicWrite";
 import type { CustomOverlay, OverlayFolder } from "../shared/types";
 
 const FOLDERS_FILE = "folders.json";
@@ -61,11 +55,7 @@ export class OverlayStore {
   }
 
   saveOverlay(overlay: CustomOverlay): void {
-    writeFileSync(
-      this.pathFor(overlay.id),
-      JSON.stringify(overlay, null, 2),
-      "utf-8",
-    );
+    writeFileAtomic(this.pathFor(overlay.id), JSON.stringify(overlay, null, 2));
   }
 
   deleteOverlay(id: string): void {
@@ -89,10 +79,6 @@ export class OverlayStore {
   }
 
   saveFolders(folders: OverlayFolder[]): void {
-    writeFileSync(
-      this.foldersPath,
-      JSON.stringify(folders, null, 2),
-      "utf-8",
-    );
+    writeFileAtomic(this.foldersPath, JSON.stringify(folders, null, 2));
   }
 }

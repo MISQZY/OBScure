@@ -59,6 +59,12 @@ export function useOverlayMeta({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlay?.id])
 
+  /** Surfaces a failed background save the same way handleSave's catch does — flashes the Save button red. */
+  const reportSaveError = (): void => {
+    setSaveStatus('error')
+    setTimeout(() => setSaveStatus('idle'), 2000)
+  }
+
   const commitName = (): void => {
     if (!overlay) return
     const name = nameInput.trim()
@@ -77,12 +83,12 @@ export function useOverlayMeta({
       const key = uniqueUrlKey(name, overlays.filter((o) => o.id !== overlay.id).map((o) => o.urlKey))
       setUrlKeyInput(key)
       if (name === overlay.name && key === overlay.urlKey) return
-      void saveOverlay({ ...overlay, name, urlKey: key })
+      saveOverlay({ ...overlay, name, urlKey: key }).catch(reportSaveError)
       return
     }
 
     if (name === overlay.name) return
-    void saveOverlay({ ...overlay, name })
+    saveOverlay({ ...overlay, name }).catch(reportSaveError)
   }
 
   const commitUrlKey = (): void => {
@@ -99,7 +105,7 @@ export function useOverlayMeta({
     }
     setUrlKeyInput(key)
     setUrlKeyError(null)
-    void saveOverlay({ ...overlay, urlKey: key })
+    saveOverlay({ ...overlay, urlKey: key }).catch(reportSaveError)
   }
 
   const handleDelete = async (): Promise<void> => {

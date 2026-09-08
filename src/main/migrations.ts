@@ -1,12 +1,6 @@
-﻿import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+﻿import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { writeFileAtomic } from "./atomicWrite";
 import type { CustomOverlay } from "../shared/types";
 import type { CustomThemePack } from "../shared/customConfig";
 import { logInfo, logWarn } from "./logger";
@@ -82,7 +76,7 @@ function patchConfigJson(
 ): void {
   const configPath = join(profileDir, "config.json");
   try {
-    writeFileSync(configPath, JSON.stringify(next, null, 2), "utf-8");
+    writeFileAtomic(configPath, JSON.stringify(next, null, 2));
   } catch (e) {
     logWarn("migrations", `failed to patch config.json in ${profileDir}`, e);
   }
@@ -119,7 +113,7 @@ function migrateOverlaysToPerFileStorage(userDataDir: string): void {
         const dest = join(overlaysDir, `${overlay.id}.json`);
         if (!existsSync(dest)) {
           try {
-            writeFileSync(dest, JSON.stringify(overlay, null, 2), "utf-8");
+            writeFileAtomic(dest, JSON.stringify(overlay, null, 2));
             count++;
           } catch (e) {
             logWarn(
@@ -135,7 +129,7 @@ function migrateOverlaysToPerFileStorage(userDataDir: string): void {
     const foldersPath = join(overlaysDir, "folders.json");
     if (Array.isArray(folders) && !existsSync(foldersPath)) {
       try {
-        writeFileSync(foldersPath, JSON.stringify(folders, null, 2), "utf-8");
+        writeFileAtomic(foldersPath, JSON.stringify(folders, null, 2));
       } catch (e) {
         logWarn(
           "migrations",
@@ -196,7 +190,7 @@ function migrateThemesToGlobalFolder(userDataDir: string): void {
       const dest = join(themesDir, `${theme.id}.json`);
       if (!existsSync(dest)) {
         try {
-          writeFileSync(dest, JSON.stringify(theme, null, 2), "utf-8");
+          writeFileAtomic(dest, JSON.stringify(theme, null, 2));
           count++;
         } catch (e) {
           logWarn(
@@ -295,11 +289,7 @@ function migrateCredentialsToOwnFile(userDataDir: string): void {
     }
 
     try {
-      writeFileSync(
-        credentialsPath,
-        JSON.stringify(credentials, null, 2),
-        "utf-8",
-      );
+      writeFileAtomic(credentialsPath, JSON.stringify(credentials, null, 2));
     } catch (e) {
       logWarn(
         "migrations",

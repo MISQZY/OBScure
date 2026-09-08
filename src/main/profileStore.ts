@@ -1,13 +1,7 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { writeFileAtomic } from "./atomicWrite";
 import {
   AVATAR_COLORS,
   DEFAULT_PROFILE_NAME,
@@ -81,7 +75,7 @@ export class ProfileManager {
   }
 
   private save(): void {
-    writeFileSync(this.indexPath, JSON.stringify(this.data, null, 2), "utf-8");
+    writeFileAtomic(this.indexPath, JSON.stringify(this.data, null, 2));
   }
 
   private dirFor(id: string): string {

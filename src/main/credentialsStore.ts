@@ -1,6 +1,7 @@
 import { safeStorage } from "electron";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { writeFileAtomic } from "./atomicWrite";
 import { logError } from "./logger";
 
 interface StoredCredentials {
@@ -40,7 +41,7 @@ export class CredentialsStore {
   }
 
   private save(): void {
-    writeFileSync(this.filePath, JSON.stringify(this.data, null, 2), "utf-8");
+    writeFileAtomic(this.filePath, JSON.stringify(this.data, null, 2));
   }
 
   getClientId(key: string): string | null {
