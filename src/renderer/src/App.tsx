@@ -12,12 +12,14 @@ import {
   BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
-  BreadcrumbSeparator
-} from '@/components/ui/breadcrumb'
-import { Separator } from '@/components/ui/separator'
-import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { TooltipProvider } from '@/components/ui/tooltip'
+  BreadcrumbSeparator,
+  Separator,
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+  ScrollArea,
+  TooltipProvider
+} from '@/components/ui'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { SpotifyPage } from '@/pages/integrations/SpotifyPage'
 import { WindowsMediaPage } from '@/pages/integrations/WindowsMediaPage'

@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Button, Input, Label } from '@/components/ui'
 import { interpolate } from '@/lib/i18n/interpolate'
 import { useI18n } from '@/providers/I18nProvider'
 import type { OverlayUrls } from '@shared/types'

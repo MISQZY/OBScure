@@ -2,7 +2,7 @@ import React from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
 import { BACKGROUND_ANIMATION_IDS } from '@shared/overlayConfig'
 import { MBadge } from '@/components/MBadge'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Checkbox } from '@/components/ui'
 import { useI18n } from '@/providers/I18nProvider'
 
 import { BACKGROUND_FX_SOCKETS } from './constants'

@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
 import { cn } from '@/lib/utils'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Checkbox } from '@/components/ui'
 import { useI18n } from '@/providers/I18nProvider'
 
 import { IMAGE_SOCKETS, IMAGE_OUTPUTS } from './constants'

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui'
 import { CanvasSettingsForm } from '@/components/CanvasSettingsForm'
 import { CollapsibleSection } from '@/components/CollapsibleSection'
 import { OverlayAddressForm } from '@/components/OverlayAddressForm'

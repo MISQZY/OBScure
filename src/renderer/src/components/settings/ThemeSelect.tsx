@@ -1,4 +1,10 @@
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui'
 import { useTheme } from '@/providers/ThemeProvider'
 import { useI18n } from '@/providers/I18nProvider'
 import { BUILTIN_THEMES } from '@/lib/theme'

@@ -1,7 +1,6 @@
 import React from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
-import { Checkbox } from '@/components/ui/checkbox'
-
+import { Checkbox } from '@/components/ui'
 import { BOX_SOCKETS, BOX_OUTPUTS } from './constants'
 import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, NodeSelect, RadiusField, numberInputClass, BOX_SHAPE_IDS } from './utils'
 

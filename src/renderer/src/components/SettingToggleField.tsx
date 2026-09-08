@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
+import { Label, Switch } from '@/components/ui'
 import type { SettingKey } from '@shared/types'
 
 interface SettingToggleFieldProps {

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui'
 import { useI18n } from '@/providers/I18nProvider'
 import type { IntegrationKey } from '@shared/types'
 

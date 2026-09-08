@@ -2,14 +2,21 @@ import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Handle, Position, useReactFlow } from '@xyflow/react'
 import { Trash2, ChevronDown, ChevronUp, Copy, Pencil } from 'lucide-react'
-import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
+} from '@/components/ui'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/providers/I18nProvider'
 import { interpolate } from '@/lib/i18n/interpolate'
 import { NodeCategory, InputSocket, OutputSocket, CATEGORY_STYLES, CATEGORY_DOT, SOCKET_DOT } from '../constants'
 import { usePriorityInfo, useSequenceInfo } from './hooks'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-
 /** One labeled input-socket row — the dot is nested inside this (relatively positioned) row rather than placed by percentage on the whole node, so any number of sockets stacks cleanly regardless of node height. */
 export function SocketRow({ id, label, dotClass, title }: { id: string; label: string; dotClass: string; title: string }) {
   return (

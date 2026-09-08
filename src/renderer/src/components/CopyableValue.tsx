@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, Copy } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui'
 import { TRANSIENT_FEEDBACK_MS } from '@/components/constants'
 import { useI18n } from '@/providers/I18nProvider'
 import { cn } from '@/lib/utils'

@@ -1,7 +1,6 @@
 import React from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
-import { Slider } from '@/components/ui/slider'
-
+import { Slider } from '@/components/ui'
 import { useSavedNodeData, BaseNode, Field, NumberInput, ColorPicker, numberInputClass } from './utils'
 
 /**

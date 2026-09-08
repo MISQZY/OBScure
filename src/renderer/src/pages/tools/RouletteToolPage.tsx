@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  Button,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  ScrollArea
+} from '@/components/ui'
 import { CopyableValue } from '@/components/CopyableValue'
 import { usePageVisible } from '@/hooks/use-page-visible'
 import { useI18n } from '@/providers/I18nProvider'

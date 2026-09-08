@@ -15,7 +15,7 @@ import {
   AlertDialogFooter,
   AlertDialogTitle,
   AlertDialogTrigger
-} from '@/components/ui/alert-dialog'
+} from '@/components/ui'
 import type { SaveStatus } from '../sceneUtils'
 
 /**

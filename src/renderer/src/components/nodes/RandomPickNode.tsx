@@ -1,7 +1,6 @@
 import React from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
-import { Checkbox } from '@/components/ui/checkbox'
-
+import { Checkbox } from '@/components/ui'
 import { useI18n } from '@/providers/I18nProvider'
 import { RANDOM_PICK_SOCKETS } from './constants'
 import { useConnectedVariants, BaseNode, Field, NumberInput, numberInputClass } from './utils'

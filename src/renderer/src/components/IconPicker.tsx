@@ -1,7 +1,11 @@
 import { useMemo, useState } from 'react'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Input,
+  ScrollArea
+} from '@/components/ui'
 import { cn } from '@/lib/utils'
 import { OVERLAY_ICONS, OVERLAY_ICON_NAMES, getOverlayIcon } from '@/lib/overlay-icons'
 import { useI18n } from '@/providers/I18nProvider'

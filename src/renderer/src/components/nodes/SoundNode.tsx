@@ -1,8 +1,7 @@
 import React, { useState } from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
 import { SOUND_IDS } from '@shared/sounds'
-import { Slider } from '@/components/ui/slider'
-
+import { Slider } from '@/components/ui'
 import { BaseNode, Field, NodeSelect, UploadRow } from './utils'
 
 /** Alert sound + volume — see SoundId. Connect into Scene to say this scene plays a sound. Custom uploaded sounds aren't picked from here; choose a bundled preset or none. */

@@ -7,10 +7,12 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { useSidebar } from '@/components/ui/sidebar'
+  DropdownMenuTrigger,
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  useSidebar
+} from '@/components/ui'
 import { useI18n } from '@/providers/I18nProvider'
 import { AVATAR_COLOR_CLASSES, profileInitials } from '@/lib/profile-avatar'
 import { customImageUrl } from '@/lib/custom-image-url'

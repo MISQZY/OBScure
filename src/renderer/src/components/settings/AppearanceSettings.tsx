@@ -1,11 +1,9 @@
 import { useState } from 'react'
 import { Download, Trash2, Upload } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { ThemeSelect } from '@/components/settings/ThemeSelect'
-import { LocaleSelect } from '@/components/settings/LocaleSelect'
 import {
+  Button,
+  Label,
+  ScrollArea,
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -13,7 +11,9 @@ import {
   AlertDialogFooter,
   AlertDialogTitle,
   AlertDialogTrigger
-} from '@/components/ui/alert-dialog'
+} from '@/components/ui'
+import { ThemeSelect } from '@/components/settings/ThemeSelect'
+import { LocaleSelect } from '@/components/settings/LocaleSelect'
 import { useI18n } from '@/providers/I18nProvider'
 import { useCustomConfig } from '@/providers/CustomConfigProvider'
 import { interpolate } from '@/lib/i18n/interpolate'

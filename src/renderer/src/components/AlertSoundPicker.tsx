@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { Pause, Play, Upload, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Slider } from '@/components/ui/slider'
+import {
+  Button,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Slider
+} from '@/components/ui'
 import { useI18n } from '@/providers/I18nProvider'
 import { PRESET_SOUND_IDS, type PresetSoundId, type SoundId } from '@shared/sounds'
 

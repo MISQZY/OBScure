@@ -1,7 +1,6 @@
 import React from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
-import { Slider } from '@/components/ui/slider'
-
+import { Slider } from '@/components/ui'
 import { BaseNode, Field } from './utils'
 
 /** Constant transparency (0–100%) on whatever it's wired into — separate from Animation's fade, which only plays a transition, not a resting state. Wire into a Task's own Opacity socket too, to fade something in/out as a process step instead of (or alongside) Animation's fade type. */

@@ -1,6 +1,6 @@
 import React from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Checkbox } from '@/components/ui'
 import { BaseNode, Field, NodeSelect, NumberInput, numberInputClass, SCROLL_DIRECTIONS } from './utils'
 
 /**

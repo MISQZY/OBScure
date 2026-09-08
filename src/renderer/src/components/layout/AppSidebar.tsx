@@ -12,9 +12,7 @@ import {
   SidebarMenuItem,
   SidebarMenuSub,
   SidebarMenuSubButton,
-  SidebarMenuSubItem
-} from '@/components/ui/sidebar'
-import {
+  SidebarMenuSubItem,
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -22,7 +20,7 @@ import {
   AlertDialogFooter,
   AlertDialogTitle,
   AlertDialogTrigger
-} from '@/components/ui/alert-dialog'
+} from '@/components/ui'
 import { ProfileSwitcher } from '@/components/layout/ProfileSwitcher'
 import { IconPicker } from '@/components/IconPicker'
 import { cn } from '@/lib/utils'

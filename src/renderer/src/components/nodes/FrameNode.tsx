@@ -1,7 +1,13 @@
 import React, { useState } from 'react'
 import { Handle, NodeProps, NodeResizer, Position, useReactFlow } from '@xyflow/react'
 import { ChevronDown, Copy, Pencil, Trash2 } from 'lucide-react'
-import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator
+} from '@/components/ui'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/providers/I18nProvider'
 import { CATEGORY_STYLES, CATEGORY_DOT } from './constants'

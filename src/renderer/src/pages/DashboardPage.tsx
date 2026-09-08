@@ -5,19 +5,19 @@ import ReactGridLayout, { WidthProvider } from 'react-grid-layout'
 import type { Layout } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import { Plus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  ScrollBar
+} from '@/components/ui'
 import BorderGlow from '@/components/effects/BorderGlow'
 import { GridCard } from '@/components/dashboard/GridCard'
 import { IntegrationsCard } from '@/components/dashboard/IntegrationsCard'
 import { NowPlayingCard } from '@/components/dashboard/NowPlayingCard'
 import { TwitchStatsCard } from '@/components/dashboard/TwitchStatsCard'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { ScrollBar } from '@/components/ui/scroll-area'
 import type { Dictionary } from '@/lib/i18n/types'
 import { usePageVisible } from '@/hooks/use-page-visible'
 import { useI18n } from '@/providers/I18nProvider'

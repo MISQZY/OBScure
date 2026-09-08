@@ -1,6 +1,12 @@
 import { useState } from 'react'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui'
 import { useI18n } from '@/providers/I18nProvider'
 
 export type DurationUnitId = 'seconds' | 'minutes' | 'hours' | 'days' | 'weeks'

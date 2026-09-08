@@ -5,9 +5,9 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+  DialogTitle,
+  Button
+} from '@/components/ui'
 import { useWhatsNew } from '@/hooks/use-whats-new'
 import { useI18n } from '@/providers/I18nProvider'
 import { interpolate } from '@/lib/i18n/interpolate'

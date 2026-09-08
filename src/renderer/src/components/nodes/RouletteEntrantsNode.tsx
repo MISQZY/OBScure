@@ -1,6 +1,6 @@
 import React, { useRef } from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Checkbox } from '@/components/ui'
 import { useI18n } from '@/providers/I18nProvider'
 
 import { ROULETTE_ENTRANTS_SOCKETS, ROULETTE_ENTRANTS_OUTPUTS } from './constants'

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui'
 import { useTour } from '@/providers/TourProvider'
 import { useI18n } from '@/providers/I18nProvider'
 import { interpolate } from '@/lib/i18n/interpolate'
