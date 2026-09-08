@@ -1,6 +1,6 @@
 import { HexColorPicker, HexColorInput } from 'react-colorful'
 import { cn } from '@/lib/utils'
-import { buildGradient, isGradientColor, parseGradient } from '@/lib/gradient'
+import { buildGradient, defaultGradientValue, isGradientColor, parseGradient } from '@/lib/gradient'
 import { NodePopover } from './NodePopover'
 import { GradientEditor } from './GradientEditor'
 
@@ -40,7 +40,7 @@ export function ColorPicker({
   }
   const setGradient = (): void => {
     if (isGradient) return
-    onChange(buildGradient(90, [{ color: value || '#ffffff', position: 0 }, { color: '#000000', position: 100 }]))
+    onChange(buildGradient(defaultGradientValue(value)))
   }
 
   return (
@@ -60,7 +60,7 @@ export function ColorPicker({
         trigger={
           <button
             type="button"
-            className="size-5 rounded border shadow-sm ring-1 ring-border/50 cursor-pointer p-0 shrink-0"
+            className="size-5 rounded shadow-sm ring-1 ring-border/50 cursor-pointer p-0 shrink-0"
             style={{ background: value }}
           />
         }
@@ -84,7 +84,7 @@ export function ColorPicker({
           </div>
         )}
         {isGradient ? (
-          <GradientEditor value={gradient} onChange={(g) => onChange(buildGradient(g.angle, g.stops))} />
+          <GradientEditor value={gradient} onChange={(g) => onChange(buildGradient(g))} />
         ) : (
           <>
             <HexColorPicker color={value} onChange={onChange} />
