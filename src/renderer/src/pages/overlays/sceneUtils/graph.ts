@@ -138,8 +138,8 @@ export const CONTAINER_TYPES = new Set(['box', 'group', 'randomPick', 'image', '
 /** Same as CONTENT_TYPES plus 'scene' — used for the MiniMap's node coloring below, where Scene (never an edge SOURCE, so absent from CONTENT_TYPES) still needs to read as "content" like Text/Image/Box. */
 export const CONTENT_TYPES_WITH_SCENE = new Set([...CONTENT_TYPES, 'scene'])
 
-/** Position/Size/Transform/Animation/Hide/Display/Ordering — see NodeCategory's 'style' bucket in components/nodes/index.tsx. */
-export const STYLE_TYPES = new Set(['position', 'size', 'transform', 'opacity', 'shadow', 'animation', 'hide', 'overflow', 'ordering'])
+/** Position/Size/Transform/Animation/Hide/Display/Ordering/Spacing — see NodeCategory's 'style' bucket in components/nodes/index.tsx. */
+export const STYLE_TYPES = new Set(['position', 'size', 'transform', 'opacity', 'shadow', 'animation', 'hide', 'overflow', 'ordering', 'spacing'])
 
 /** Event/Sound/Timer/Background FX/Random/Roulette/Audio Player/Variable — see NodeCategory's 'data' bucket. */
 export const DATA_TYPES = new Set(['event', 'sound', 'timer', 'backgroundAnimation', 'randomSource', 'rouletteSource', 'audioPlayer', 'variable', 'clock'])
