@@ -1,0 +1,402 @@
+/*
+  The 'paratrooper' background effect (see paratrooper.js, which spawns/
+  removes .paratrooper units on a loop while #bg is data-bg="paratrooper"
+  and .visible). Unlike the plain CSS patterns in background-animations.css
+  (gradient/pulse/stars, which are just a `background` on #bg itself), this
+  one needs real child elements — a soldier built from separate parts so
+  every piece of gear (see paratrooper.js's per-part color lists) can be
+  recolored independently — so it lives in its own file.
+
+  Each unit runs three CSS-driven phases, advanced by paratrooper.js adding
+  one class at a time (JS owns the *timing*, CSS owns the *motion*):
+    .pt-falling  -> parachute descent, swaying, down to ground level
+    .pt-landed   -> chute falls away, quick landing squat
+    .pt-running  -> runs off along the bottom edge, legs cycling
+*/
+
+.paratrooper {
+  position: absolute;
+  bottom: 0;
+  left: var(--pt-land-x, 50%);
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.pt-fall {
+  /* Anchored by its own bottom/left (not normal flow) so the figure's feet
+     sit exactly on .paratrooper's 0x0 ground point — a static top-left flow
+     position would instead put the TOP of this 40px box on the ground line,
+     leaving the figure dangling 40px below it. */
+  position: absolute;
+  bottom: 0;
+  left: -13px;
+  width: 26px;
+  height: 40px;
+  transform: translate(0, -105vh);
+}
+
+.paratrooper.pt-falling .pt-fall {
+  animation: pt-fall var(--pt-fall-duration, 3.6s) cubic-bezier(0.36, 0.06, 0.2, 0.97) forwards;
+}
+
+.paratrooper.pt-running {
+  animation: pt-run var(--pt-run-duration, 2.6s) linear forwards;
+}
+
+/* Nickname tag — a sibling of .pt-figure (not a child of it), so it never
+   inherits the figure's scaleX() facing-direction flip and always reads
+   upright/left-to-right regardless of which way the soldier ends up running. */
+
+.pt-nickname {
+  position: absolute;
+  /* Clear of the canopy (top: -38px, 24px tall) with a few px to spare, so it
+     never overlaps the chute while he's still descending. */
+  top: -58px;
+  left: 50%;
+  transform: translateX(-50%);
+  transition: top 0.3s ease;
+  max-width: 90px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font: 600 9px/1.4 -apple-system, Segoe UI, Roboto, sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  z-index: 4;
+}
+
+.paratrooper.pt-landed .pt-nickname,
+.paratrooper.pt-running .pt-nickname {
+  top: -8px;
+}
+
+.pt-nickname-hidden {
+  display: none;
+}
+
+/* Ground shadow — grounds the landing/run phases; skipped while still airborne. */
+
+.pt-shadow {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 16px;
+  height: 4px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.4), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.paratrooper.pt-landed .pt-shadow,
+.paratrooper.pt-running .pt-shadow {
+  opacity: 1;
+}
+
+/* Parachute */
+
+.pt-chute {
+  position: absolute;
+  top: -38px;
+  left: -9px;
+  width: 44px;
+  height: 24px;
+  transform-origin: 50% 100%;
+}
+
+.paratrooper.pt-falling .pt-chute {
+  animation: pt-chute-sway 1.1s ease-in-out infinite;
+}
+
+.paratrooper.pt-landed .pt-chute {
+  opacity: 0;
+  transform: translateY(-16px) scale(0.6);
+  transition:
+    opacity 0.35s ease,
+    transform 0.35s ease;
+}
+
+.pt-canopy {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at 50% 28%,
+    color-mix(in oklch, var(--pt-chute, #8a9a5b) 60%, white) 0%,
+    var(--pt-chute, #8a9a5b) 65%
+  );
+  border-radius: 50% 50% 8% 8% / 70% 70% 15% 15%;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.15);
+}
+
+/*
+  Suspension lines: an actual inverted pyramid — all four share ONE anchor
+  point (left:50%, bottom:-31px, pivoted via transform-origin: bottom center)
+  and only differ by rotation, fanning UP and OUT to different points along
+  the canopy's bottom edge instead of each hanging from its own separate spot.
+
+  That shared anchor is deliberately placed at .pt-figure's horizontal
+  CENTER — not the backpack's own (off-center, direction-flipped) position —
+  converted into .pt-chute's coordinate frame: figure center-x within
+  .pt-fall is 5 (its left) + 8 (half its 16 width) = 13, at torso-top height
+  (pt-fall-local y 16-17); .pt-chute sits at top:-38/left:-9, so that point is
+  chute-local (13-(-9), 17-(-38)) = (22, 55) — 22 is exactly the canopy's own
+  horizontal center, and 55 is 31px below the canopy's 24px-tall box (hence
+  bottom:-31px). Using the figure's center rather than the backpack means the
+  lines stay correctly placed under the canopy no matter which way --pt-dir
+  flips the (figure-local, mirrored) backpack.
+
+  Each line's height is tuned per angle (31px / cos(angle)) so every tip still
+  lands exactly on the canopy's bottom edge despite the foreshortening from
+  rotating around a fixed-length pivot. Since .pt-chute is earlier in
+  .pt-fall's DOM order than .pt-figure, the torso paints over the shared
+  anchor point itself, so the lines read as converging BEHIND his back
+  instead of floating in open air above him.
+*/
+.pt-line {
+  position: absolute;
+  left: 50%;
+  bottom: -31px;
+  width: 1px;
+  background: var(--pt-chute, #8a9a5b);
+  opacity: 0.8;
+  transform-origin: bottom center;
+}
+
+.pt-line-a {
+  height: 36px;
+  transform: rotate(-30deg);
+}
+
+.pt-line-b {
+  height: 36px;
+  transform: rotate(30deg);
+}
+
+.pt-line-c {
+  height: 32px;
+  transform: rotate(-14deg);
+}
+
+.pt-line-d {
+  height: 32px;
+  transform: rotate(14deg);
+}
+
+/* Figure */
+
+.pt-figure {
+  position: absolute;
+  bottom: 0;
+  left: 5px;
+  width: 16px;
+  height: 30px;
+  transform: scaleX(var(--pt-dir, 1));
+}
+
+.paratrooper.pt-landed .pt-figure {
+  animation: pt-land-squat 0.25s ease-out;
+}
+
+.pt-leg,
+.pt-arm {
+  position: absolute;
+  width: 4px;
+  height: 12px;
+  border-radius: 2px;
+  transform-origin: top center;
+}
+
+.pt-leg {
+  bottom: 0;
+  /* Two-tone: trouser color above, boot color below — no extra elements needed. */
+  background: linear-gradient(to bottom, var(--pt-pants, #43502c) 0%, var(--pt-pants, #43502c) 65%, var(--pt-boot, #1c1c1c) 65%, var(--pt-boot, #1c1c1c) 100%);
+}
+
+.pt-leg-back {
+  left: 2px;
+}
+
+.pt-leg-front {
+  left: 9px;
+}
+
+.paratrooper.pt-running .pt-leg-front {
+  animation: pt-swing-a 0.32s linear infinite;
+}
+
+.paratrooper.pt-running .pt-leg-back {
+  animation: pt-swing-b 0.32s linear infinite;
+}
+
+.pt-arm {
+  top: 6px;
+  height: 11px;
+  /* Sleeve color above, glove (reuses boot color) below. */
+  background: linear-gradient(to bottom, var(--pt-uniform, #5c6b3b) 0%, var(--pt-uniform, #5c6b3b) 75%, var(--pt-boot, #1c1c1c) 75%, var(--pt-boot, #1c1c1c) 100%);
+}
+
+.pt-arm-back {
+  left: 1px;
+}
+
+.pt-arm-front {
+  left: 12px;
+}
+
+.paratrooper.pt-running .pt-arm-front {
+  animation: pt-swing-b 0.32s linear infinite;
+}
+
+.paratrooper.pt-running .pt-arm-back {
+  animation: pt-swing-a 0.32s linear infinite;
+}
+
+.pt-backpack {
+  position: absolute;
+  top: 5px;
+  left: -2px;
+  width: 7px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--pt-pack, #33361f);
+  z-index: 0;
+}
+
+.pt-torso {
+  position: absolute;
+  top: 6px;
+  left: 3px;
+  width: 10px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--pt-uniform, #5c6b3b);
+  z-index: 1;
+}
+
+.pt-rig {
+  /* Chest rig / ammo pouch strip, worn over the torso. */
+  position: absolute;
+  top: 8px;
+  left: 5px;
+  width: 6px;
+  height: 3px;
+  border-radius: 1px;
+  background: var(--pt-rig, #2f2f1f);
+  z-index: 2;
+}
+
+.pt-weapon {
+  position: absolute;
+  top: 4px;
+  left: 5px;
+  width: 2px;
+  height: 15px;
+  background: var(--pt-weapon, #2b2b2b);
+  transform: rotate(-32deg);
+  transform-origin: top center;
+  z-index: 2;
+}
+
+.pt-head {
+  position: absolute;
+  top: 0;
+  left: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pt-skin, #caa274);
+  z-index: 2;
+}
+
+.pt-helmet {
+  position: absolute;
+  top: -3px;
+  left: 3px;
+  width: 10px;
+  height: 5px;
+  border-radius: 5px 5px 1px 1px;
+  background: var(--pt-helmet, #4b5320);
+  z-index: 3;
+}
+
+/* Keyframes */
+
+@keyframes pt-fall {
+  0% {
+    transform: translate(0, -105vh);
+  }
+  15% {
+    transform: translate(7px, -85vh);
+  }
+  32% {
+    transform: translate(-7px, -60vh);
+  }
+  48% {
+    transform: translate(6px, -38vh);
+  }
+  65% {
+    transform: translate(-4px, -17vh);
+  }
+  85% {
+    transform: translate(2px, -3vh);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes pt-chute-sway {
+  0%,
+  100% {
+    transform: rotate(-5deg);
+  }
+  50% {
+    transform: rotate(5deg);
+  }
+}
+
+@keyframes pt-land-squat {
+  0% {
+    transform: scaleX(var(--pt-dir, 1)) scaleY(1);
+  }
+  40% {
+    transform: scaleX(var(--pt-dir, 1)) scaleY(0.72);
+  }
+  100% {
+    transform: scaleX(var(--pt-dir, 1)) scaleY(1);
+  }
+}
+
+@keyframes pt-run {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(calc(var(--pt-dir, 1) * 130vw));
+  }
+}
+
+@keyframes pt-swing-a {
+  0%,
+  100% {
+    transform: rotate(30deg);
+  }
+  50% {
+    transform: rotate(-30deg);
+  }
+}
+
+@keyframes pt-swing-b {
+  0%,
+  100% {
+    transform: rotate(-30deg);
+  }
+  50% {
+    transform: rotate(30deg);
+  }
+}

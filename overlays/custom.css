@@ -1,0 +1,118 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  font-family: system-ui, sans-serif;
+}
+#scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+#scene .box,
+#scene .group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+#scene .image-node {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+#scene .image-node img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+#scene .roulette-wheel-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+#scene .roulette-wheel-svg {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+}
+#scene .roulette-wheel-badge {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 9999px;
+  background: #f4f4f5;
+  color: #18181b;
+  padding: 4px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+#scene .random-widget-node {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+#scene .random-slot-box {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-weight: 700;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+#scene .random-slot-track {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+#scene .random-slot-cell {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+#scene .text-node {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  font-size: 32px;
+  font-weight: 700;
+  color: #ffffff;
+  width: 100%;
+  /* Content's own field is a multi-line textarea (see TextNode in
+     components/nodes/index.tsx) - preserves the line breaks the user
+     typed, on top of normal word-wrapping, instead of collapsing
+     every newline to a space like the default `normal` would. */
+  white-space: pre-wrap;
+}
+#missing {
+  display: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+}

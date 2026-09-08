@@ -1,0 +1,86 @@
+/*
+  Enlarges each connection dot's actual clickable/draggable area well beyond
+  its tiny visible size (10-12px — see SocketRow/OutputRow/BaseNode's plain
+  "output" Handle in components/nodes/index.tsx) without changing how big it
+  LOOKS, via a transparent, oversized ::after pseudo-element. Needed because
+  starting a drag requires the pointer-down to land on the Handle's own DOM
+  box — React Flow's connectionRadius prop (see the <ReactFlow> element in
+  SceneBuilderPage.tsx) only forgives imprecision once a drag is already
+  under way and you're aiming for the drop target, not the initial click.
+
+  8px capped on every side: SocketRow/OutputRow stack sockets in fixed 20px
+  rows, so anything past an 8px radius (16px total) would start overlapping
+  the next socket's own hit area and make aiming WORSE, not better.
+*/
+.react-flow__handle::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+/*
+  React Flow ships a default look (fixed 150px width, padding, border, a
+  translucent grey background) for its own reserved built-in node type
+  names — input/default/output/group — applied purely by matching the
+  node's `type` string via a `.react-flow__node-<type>` class, completely
+  independent of whatever component `nodeTypes` actually maps that type
+  to (dist/style.css in @xyflow/react). Our own "group" node (GroupNode —
+  an invisible content-grouping wrapper, unrelated to React Flow's own
+  grouping concept) collides with that reserved name, so every Group node
+  was quietly inheriting this stray box drawn behind its own custom
+  markup. Neutralize it so GroupNode's own rendering is the only thing
+  visible.
+*/
+.react-flow__node-group {
+  width: auto;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+}
+
+/*
+  React Flow's own nodesDraggable/nodesConnectable/elementsSelectable props
+  (see the <ReactFlow> element in SceneBuilderPage.tsx, driven by the
+  Controls panel's lock button) only govern React Flow's OWN drag/connect/
+  select gestures on a node — they have no effect on plain DOM <input>s,
+  <textarea>s, checkboxes, or buttons a custom node renders as its own
+  content (every node in components/nodes/*.tsx). Locked mode needs those
+  blocked too, or a scene that's supposedly locked can still be edited by
+  just typing into any field.
+*/
+.react-flow.locked .react-flow__node {
+  pointer-events: none;
+}
+
+/*
+  React Flow's Controls/Background/MiniMap read their colors from its own
+  --xy-* custom properties, which only ever resolve to ONE of two hardcoded
+  palettes (see --xy-controls-*-default in @xyflow/react/dist/style.css,
+  under `.react-flow` and `.react-flow.dark`) selected by the `colorMode`
+  prop on <ReactFlow> in SceneBuilderPage.tsx — a binary light/dark switch
+  that knows nothing about this app's actual palette (theme/light.json,
+  dark.json, or any custom uploaded theme). Overriding the non-"-default"
+  variant here — which every one of those internal `var(--xy-x, --xy-x-
+  default)` lookups prefers when present — points Controls at our own CSS
+  vars instead, so its buttons track whatever theme (built-in or custom) is
+  actually active rather than just "dark or not."
+*/
+.react-flow {
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--accent);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-color-hover: var(--accent-foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: 0 1px 4px 0 rgb(0 0 0 / 0.15);
+  --xy-background-color: var(--scene-canvas);
+  --xy-background-pattern-dots-color: var(--border);
+  --xy-background-pattern-lines-color: var(--border);
+  --xy-background-pattern-cross-color: var(--border);
+}
+
+/* Same rounded-corner, bordered-card look as every other floating panel in the app (see MiniMap's className in SceneBuilderPage.tsx) instead of React Flow's own default square, border-less stack. */
+.react-flow__controls {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}

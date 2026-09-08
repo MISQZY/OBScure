@@ -1,0 +1,602 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  applyNodeChanges,
+  applyEdgeChanges,
+  addEdge,
+  Node,
+  Edge,
+  NodeChange,
+  EdgeChange,
+  Connection,
+  ReactFlowInstance
+} from '@xyflow/react'
+import { NODE_SOCKETS, NODE_OUTPUTS, NODE_DEFAULTS } from '@/components/nodes'
+import type { CustomOverlay } from '@shared/types'
+import { PROCESS_TYPES, CONTAINER_TYPES, sortNodesForParenting, withFrameZIndex, FRAME_Z_INDEX, layoutGraph, migrateLegacyModifierEdges, migrateLegacyAudioPlayerEdges, migrateLegacyContentOutputEdges } from '../sceneUtils'
+import { defaultNodes, defaultEdges } from '../sceneBuilderConstants'
+
+/**
+ * Every "instrumental data source" type (see RandomSourceNode.tsx's own doc
+ * comment) that addNode below auto-pairs with a mandatory Widget the moment
+ * it's placed. Roulette additionally gets its own optional, freely-deletable
+ * secondary node (Roulette Entrants — see onNodesChange's cascade loop below
+ * for how that one cascades); Random has no secondary of its own — its
+ * Content output wires straight into a Text node's own Content socket
+ * instead, a placeholder MERGE (same shape as Audio Player's own Content
+ * wire — see RANDOM_OUTPUTS' own doc comment in components/nodes/
+ * constants.ts), not a node of its own to own that formatting. The single
+ * source of truth isMandatoryWidgetPairEdge and isValidConnection's own
+ * widget-lock check both read off of.
+ */
+const SOURCE_PAIRINGS: Record<string, { widget: string; secondary?: string }> = {
+  rouletteSource: { widget: 'rouletteWidget', secondary: 'rouletteEntrants' },
+  randomSource: { widget: 'randomWidget' }
+}
+
+/**
+ * Whether `edge` is a mandatory Source -> Widget pairing edge created by
+ * addNode below (see SOURCE_PAIRINGS) — the one kind of edge in the whole
+ * graph that can't be removed on its own (see onNodesChange/onEdgesChange/
+ * onEdgeDoubleClick). Identified structurally (source is one of
+ * SOURCE_PAIRINGS' own keys, target is ITS OWN paired widget type, landed on
+ * the widget's own `source` socket) rather than by a stored flag, so it
+ * still holds even across a save/reload round-trip. Roulette Entrants (the
+ * only secondary node left — see SOURCE_PAIRINGS' own doc comment) is
+ * auto-created the same way but deliberately NOT locked like this — it
+ * keeps its own normal delete/rewire behavior, only cascading in the
+ * Source -> secondary direction (see onNodesChange).
+ */
+function isMandatoryWidgetPairEdge(edge: Edge, nodes: Node[]): boolean {
+  if (edge.targetHandle !== 'source') return false
+  const source = nodes.find((n) => n.id === edge.source)
+  const target = nodes.find((n) => n.id === edge.target)
+  return !!source && SOURCE_PAIRINGS[source.type!]?.widget === target?.type
+}
+
+/**
+ * Owns the graph itself — nodes/edges state, loading them from the selected
+ * overlay, and every React Flow interaction handler (wiring, dragging,
+ * dropping from the Add Node palette, Prettify). Everything here only
+ * touches local editor state; nothing is persisted until Save (see
+ * useOverlayMeta's own handleSave), so any of it is always safe to try and
+ * undo by just not saving — see also the actual in-editor undo/redo stack
+ * below, which is a separate, faster way to recover from the same kind of
+ * accident without reloading the scene.
+ */
+
+interface GraphSnapshot {
+  nodes: Node[]
+  edges: Edge[]
+}
+
+const MAX_HISTORY = 50
+
+export function useSceneGraph(overlay: CustomOverlay | undefined, locked: boolean) {
+  const [nodes, setNodes] = useState<Node[]>(defaultNodes)
+  const [edges, setEdges] = useState<Edge[]>(defaultEdges)
+  /** Captured via onInit on <ReactFlow> — SceneBuilderPage renders it itself rather than being a descendant of it, so useReactFlow() isn't available directly; this ref is the standard workaround for reaching imperative methods (fitView, getIntersectingNodes) from outside the flow tree. */
+  const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null)
+
+  // Undo/redo for structural changes (add/remove node or edge, connect,
+  // drag, Prettify) — NOT per-keystroke node data edits (a Text node's
+  // Content, an Image node's URL, ...), which go through React Flow's own
+  // updateNodeData rather than onNodesChange and so never reach this stack;
+  // those already get the browser's native per-field undo, which is what
+  // Ctrl+Z was silently falling back to for EVERYTHING before this existed
+  // (including a deleted node, which no text field's undo history could
+  // ever bring back — see the keydown handler below and commit's callers).
+  const [past, setPast] = useState<GraphSnapshot[]>([])
+  const [future, setFuture] = useState<GraphSnapshot[]>([])
+
+  const commit = useCallback(() => {
+    setPast((p) => [...p.slice(-(MAX_HISTORY - 1)), { nodes, edges }])
+    setFuture([])
+  }, [nodes, edges])
+
+  /**
+   * Single choke point for every handler that unconditionally mutates the
+   * graph as one discrete action (Prettify, drag start, connect, add node,
+   * edge double-click delete) — pairs the locked-mode gate with the history
+   * snapshot so the two can't drift apart per call site (onNodesChange/
+   * onEdgesChange don't use this: they only want to gate/commit the
+   * 'remove' changes within a larger batch, not abort the whole handler).
+   * Returns false (with no commit) when locked, so callers just do
+   * `if (!beginMutation()) return`.
+   */
+  const beginMutation = useCallback((): boolean => {
+    if (locked) return false
+    commit()
+    return true
+  }, [locked, commit])
+
+  // undo/redo each call setNodes/setEdges directly rather than from inside
+  // setPast/setFuture's own updater — nesting a setState call inside
+  // another's updater is a side effect, and React 18 StrictMode (see
+  // main.tsx) deliberately double-invokes updater functions in dev to catch
+  // exactly that, which duplicated entries in the opposite stack on every
+  // single Ctrl+Z. Reading `past`/`future` directly (not just their
+  // setters) is what makes that possible.
+  const undo = useCallback(() => {
+    if (past.length === 0) return
+    const previous = past[past.length - 1]
+    setFuture((f) => [...f, { nodes, edges }])
+    setPast((p) => p.slice(0, -1))
+    setNodes(previous.nodes)
+    setEdges(previous.edges)
+  }, [nodes, edges, past])
+
+  const redo = useCallback(() => {
+    if (future.length === 0) return
+    const next = future[future.length - 1]
+    setPast((p) => [...p, { nodes, edges }])
+    setFuture((f) => f.slice(0, -1))
+    setNodes(next.nodes)
+    setEdges(next.edges)
+  }, [nodes, edges, future])
+
+  useEffect(() => {
+    if (overlay) {
+      const isBlank = !overlay.nodes || overlay.nodes.length === 0
+      setNodes(isBlank ? defaultNodes : withFrameZIndex(sortNodesForParenting(overlay.nodes)))
+      setEdges(isBlank ? defaultEdges : migrateLegacyContentOutputEdges(migrateLegacyAudioPlayerEdges(migrateLegacyModifierEdges(overlay.edges || []))))
+    } else {
+      setNodes(defaultNodes)
+      setEdges(defaultEdges)
+    }
+    // A different scene's history is meaningless here — without this, Ctrl+Z
+    // right after switching scenes would silently reach back into whatever
+    // the PREVIOUS scene's last edit was.
+    setPast([])
+    setFuture([])
+    // Deliberately keyed on the scene's id, not the overlay object itself —
+    // this should reset the graph (and its undo history) only when switching
+    // scenes, not on every edit that flows the updated overlay back down as
+    // a new prop reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overlay?.id])
+
+  // Ctrl+Z / Ctrl+Shift+Z (and Ctrl+Y, the common Windows redo chord) for the
+  // graph itself. Skipped while focus is inside a text field so the
+  // browser's own native undo for that field still works exactly as before —
+  // this only steps in for everything that field-level undo could never
+  // cover (node/edge structure).
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null): boolean => {
+      if (!(target instanceof HTMLElement)) return false
+      return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+    }
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (!(e.ctrlKey || e.metaKey) || isEditableTarget(e.target)) return
+      const key = e.key.toLowerCase()
+      if (key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+      } else if ((key === 'z' && e.shiftKey) || key === 'y') {
+        e.preventDefault()
+        redo()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [undo, redo])
+
+  /**
+   * One-shot auto-arrange via layoutGraph (dagre) — only touches local
+   * editor state (`nodes`), same as dragging a node by hand; nothing is
+   * persisted until Save, so it's always safe to try and undo by just not
+   * saving. The double rAF before fitView gives React (and ReactFlow's own
+   * internal node measurement) one full paint cycle to actually apply the
+   * new positions before the camera tries to frame them — calling fitView
+   * synchronously right after setNodes would still see the OLD layout.
+   */
+  const handlePrettify = (): void => {
+    if (!beginMutation()) return
+    setNodes((nds) => layoutGraph(nds, edges))
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        reactFlowInstanceRef.current?.fitView({ duration: 300, padding: 0.15 })
+      })
+    })
+  }
+
+  /**
+   * Replaces the graph with an imported nodes/edges pair (see
+   * useSceneImportExport) — the same normalization the initial overlay-load
+   * effect above applies (sortNodesForParenting/withFrameZIndex/legacy edge
+   * migrations), so a file exported from an older build still lands
+   * correctly, plus the same beginMutation/fitView treatment as Prettify so
+   * it's one more undo-able step rather than bypassing history.
+   */
+  const importGraph = useCallback(
+    (importedNodes: Node[], importedEdges: Edge[]): void => {
+      if (!beginMutation()) return
+      setNodes(withFrameZIndex(sortNodesForParenting(importedNodes)))
+      setEdges(migrateLegacyContentOutputEdges(migrateLegacyAudioPlayerEdges(migrateLegacyModifierEdges(importedEdges))))
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          reactFlowInstanceRef.current?.fitView({ duration: 300, padding: 0.15 })
+        })
+      })
+    },
+    [beginMutation]
+  )
+
+  /**
+   * Snapshots the pre-drag position for undo. React Flow streams a node's
+   * position continuously through onNodesChange as the pointer moves (each
+   * one already carries the NEW position, applied immediately), so there's
+   * no single "before" state to capture there — drag start is the only point
+   * where `nodes` still holds the position a Ctrl+Z should return to.
+   */
+  const onNodeDragStart = useCallback(() => {
+    beginMutation()
+  }, [beginMutation])
+
+  const onNodeDragStop = useCallback(
+    (_: MouseEvent | TouchEvent, node: Node) => {
+      const instance = reactFlowInstanceRef.current
+      if (!instance || node.type === 'frame') return
+
+      const intersections = instance.getIntersectingNodes(node).filter((n) => n.type === 'frame')
+      const targetFrame = intersections[0]
+
+      // Wait for React Flow to finish flushing its position changes (dragging: false)
+      setTimeout(() => {
+        setNodes((nds) => {
+          const getAbsolute = (nId: string) => {
+            let curr = nds.find((x) => x.id === nId)
+            if (!curr) return { x: 0, y: 0 }
+            let x = curr.position.x
+            let y = curr.position.y
+            while (curr.parentId) {
+              curr = nds.find((x) => x.id === curr!.parentId)
+              if (!curr) break
+              x += curr.position.x
+              y += curr.position.y
+            }
+            return { x, y }
+          }
+
+          const absNodePos = getAbsolute(node.id)
+
+          const reparented = nds.map((n) => {
+            if (n.id === node.id) {
+              if (targetFrame && n.parentId !== targetFrame.id) {
+                const absFramePos = getAbsolute(targetFrame.id)
+                return {
+                  ...n,
+                  position: {
+                    x: absNodePos.x - absFramePos.x,
+                    y: absNodePos.y - absFramePos.y
+                  },
+                  parentId: targetFrame.id
+                }
+              } else if (!targetFrame && n.parentId) {
+                return {
+                  ...n,
+                  position: {
+                    x: absNodePos.x,
+                    y: absNodePos.y
+                  },
+                  parentId: undefined
+                }
+              }
+            }
+            return n
+          })
+
+          // A newly-set parentId only helps if the Frame is actually ahead
+          // of this node in the array — see sortNodesForParenting's own doc
+          // comment for why React Flow silently mispositions the child
+          // otherwise (the exact "flies off" bug this fixes).
+          return sortNodesForParenting(reparented)
+        })
+      }, 50) // Use 50ms to ensure onNodesChange has fully executed
+    },
+    [setNodes]
+  )
+
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      // Locked mode's own nodesDraggable/elementsSelectable/deleteKeyCode
+      // (see the <ReactFlow> props in SceneBuilderPage.tsx) already stop a
+      // removal at the source, but a locked scene should never lose a node
+      // no matter what triggers a 'remove' change, so it's filtered again
+      // here too rather than trusting a single layer to hold.
+      const effectiveChanges = locked ? changes.filter((c) => c.type !== 'remove') : changes
+      const removeIds = new Set(effectiveChanges.filter((c) => c.type === 'remove').map((c) => c.id))
+      if (removeIds.size > 0) {
+        commit()
+        // Each Source <-> Widget pairing (see SOURCE_PAIRINGS above) is
+        // mandatory — deleting either half cascades to the other, so a scene
+        // never ends up with a dangling half-pair. The secondary node
+        // (Roulette Entrants, the only one left) is auto-created the same
+        // way but only cascades ONE direction — deleting its Source takes
+        // it with it, but deleting the secondary on its own leaves the
+        // Source (and Widget) alone.
+        for (const edge of edges) {
+          if (edge.targetHandle !== 'source') continue
+          const source = nodes.find((n) => n.id === edge.source)
+          const target = nodes.find((n) => n.id === edge.target)
+          const pairing = source && SOURCE_PAIRINGS[source.type!]
+          if (!pairing) continue
+          if (target?.type === pairing.widget) {
+            if (removeIds.has(edge.source)) removeIds.add(edge.target)
+            if (removeIds.has(edge.target)) removeIds.add(edge.source)
+          } else if (pairing.secondary && target?.type === pairing.secondary) {
+            if (removeIds.has(edge.source)) removeIds.add(edge.target)
+          }
+        }
+      }
+      const finalChanges =
+        removeIds.size === 0
+          ? effectiveChanges
+          : [
+              ...effectiveChanges,
+              ...[...removeIds]
+                .filter((rid) => !effectiveChanges.some((c) => c.type === 'remove' && c.id === rid))
+                .map((rid) => ({ type: 'remove' as const, id: rid }))
+            ]
+      setNodes((nds) => applyNodeChanges(finalChanges, nds))
+      // Clean up every edge touching a cascaded node too — React Flow's own
+      // built-in cascade only covers edges of the node(s) the user actually
+      // asked to delete, not ones added synthetically just above.
+      if (removeIds.size > 0) {
+        setEdges((eds) => eds.filter((e) => !removeIds.has(e.source) && !removeIds.has(e.target)))
+      }
+    },
+    [nodes, edges, locked, commit]
+  )
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      const filtered = changes.filter((c) => {
+        if (c.type !== 'remove') return true
+        if (locked) return false
+        const edge = edges.find((e) => e.id === c.id)
+        return !edge || !isMandatoryWidgetPairEdge(edge, nodes)
+      })
+      if (filtered.some((c) => c.type === 'remove')) commit()
+      setEdges((eds) => applyEdgeChanges(filtered, eds))
+    },
+    [nodes, edges, locked, commit]
+  )
+
+  /**
+   * Blender-style single-value sockets: dropping a new wire onto a socket
+   * that isn't `multi` (see NODE_SOCKETS in components/nodes) bumps
+   * whatever was already plugged into it instead of stacking both — same
+   * behavior Blender uses for single-value inputs. `multi` sockets (Box's
+   * Children, Scene's Content) accept any number of wires unchanged. The
+   * process sequence-flow socket (event-in) isn't in NODE_SOCKETS but is
+   * conceptually single too — a step has exactly one predecessor.
+   */
+  const onConnect = useCallback(
+    (params: Connection) => {
+      if (!beginMutation()) return
+      setEdges((eds) => {
+        const targetNode = nodes.find((n) => n.id === params.target)
+        const socket = targetNode ? NODE_SOCKETS[targetNode.type!]?.find((s) => s.id === params.targetHandle) : undefined
+        const multi = params.targetHandle !== 'event-in' && Boolean(socket?.multi)
+        const base = multi ? eds : eds.filter((e) => !(e.target === params.target && e.targetHandle === params.targetHandle))
+        return addEdge(params, base)
+      })
+    },
+    [nodes, beginMutation]
+  )
+
+  /**
+   * Keeps the Event socket (sequence flow, id "event-in" — see BaseNode's
+   * sequenceIn) strictly for connecting one process step to the next: only
+   * a Start/Task/Wait/End can feed it. Every other socket is validated
+   * against NODE_SOCKETS' accepts list for the target node's type/socket —
+   * the same list BaseNode itself reads to render each socket, so a process
+   * node's output (never in any accepts list) naturally can't land on a
+   * plain parameter socket either, without needing a separate check. For a
+   * source node with its own NODE_OUTPUTS (Text/Image/Box), the SPECIFIC
+   * output socket used also has to list the target socket in its `feeds` —
+   * e.g. dragging from Box's "As Target" dot can only land on a Task's
+   * Target socket, not Scene's Content, even though a plain Box is
+   * otherwise allowed there via the "Content" output.
+   */
+  const isValidConnection = useCallback(
+    (connection: Connection | Edge) => {
+      const sourceNode = nodes.find((n) => n.id === connection.source)
+      const targetNode = nodes.find((n) => n.id === connection.target)
+      if (!sourceNode || !targetNode) return false
+      if (connection.targetHandle === 'event-in') return PROCESS_TYPES.has(sourceNode.type!)
+      // A mandatory widget's (see SOURCE_PAIRINGS above) own `source` socket
+      // is locked to whichever Source it was auto-paired with the moment it
+      // was created (see addNode/isMandatoryWidgetPairEdge above) once that
+      // pairing exists — reject dropping a NEW wire onto an already-paired
+      // one, which would otherwise silently replace (and so break) the
+      // pairing since it's a single-value socket. Still connectable if
+      // somehow unpaired (hand-edited/imported JSON) rather than
+      // permanently dead. The secondary node's (Roulette Entrants / Random
+      // Result) own `source` socket has no such lock — it's a normal,
+      // freely rewireable node.
+      if (Object.values(SOURCE_PAIRINGS).some((p) => p.widget === targetNode.type) && connection.targetHandle === 'source') {
+        const alreadyPaired = edges.some((e) => e.target === targetNode.id && e.targetHandle === 'source')
+        if (alreadyPaired) return false
+      }
+      const socket = NODE_SOCKETS[targetNode.type!]?.find((s) => s.id === connection.targetHandle)
+      if (!socket || !socket.accepts.includes(sourceNode.type!)) return false
+      const outputSockets = NODE_OUTPUTS[sourceNode.type!]
+      if (outputSockets) {
+        const outSocket = outputSockets.find((o) => o.id === connection.sourceHandle)
+        if (!outSocket || !outSocket.feeds.includes(connection.targetHandle!)) return false
+      }
+      // Box, Group, Random Pick, Image, and Video can each nest one another
+      // (see CONTAINER_TYPES' own doc comment) — the one connection shape in
+      // this whole graph that CAN form a cycle (A contains B contains A),
+      // which would recurse forever in BoxView/buildBox (or ImageView/
+      // VideoView and their overlays/custom-builders.js mirrors). Reject a
+      // container→container `children` connection if the target is already
+      // a descendant of the source — i.e. the source already (transitively)
+      // contains the target, so wiring the target to also contain the
+      // source would close the loop.
+      if (CONTAINER_TYPES.has(sourceNode.type!) && CONTAINER_TYPES.has(targetNode.type!) && connection.targetHandle === 'children') {
+        const stack = [sourceNode.id]
+        const seen = new Set<string>()
+        while (stack.length) {
+          const id = stack.pop()!
+          if (id === targetNode.id) return false
+          if (seen.has(id)) continue
+          seen.add(id)
+          for (const e of edges) {
+            if (e.target === id && e.targetHandle === 'children' && CONTAINER_TYPES.has(nodes.find((n) => n.id === e.source)?.type ?? '')) {
+              stack.push(e.source)
+            }
+          }
+        }
+      }
+      return true
+    },
+    [nodes, edges]
+  )
+
+  const onEdgeDoubleClick = useCallback(
+    (_: React.MouseEvent, edge: Edge) => {
+      if (isMandatoryWidgetPairEdge(edge, nodes)) return
+      if (!beginMutation()) return
+      setEdges((eds) => eds.filter((e) => e.id !== edge.id))
+    },
+    [nodes, beginMutation]
+  )
+
+  const addNode = useCallback((type: string, position: { x: number; y: number }): void => {
+    if (!beginMutation()) return
+    const id = `${type}-${Date.now()}`
+    const newNode: Node = {
+      id,
+      type,
+      position,
+      // Spread a fresh copy of NODE_DEFAULTS[type] (rather than the same
+      // object reference) so editing this node's data can never mutate the
+      // shared defaults for every other node of this type.
+      data: { ...(NODE_DEFAULTS[type] ?? {}) },
+      zIndex: type === 'frame' ? FRAME_Z_INDEX : undefined
+    }
+    if (type === 'rouletteSource') {
+      // A Roulette node is useless without something to actually show its
+      // live round — see ROULETTE_OUTPUTS' own doc comment in components/
+      // nodes/constants.ts. Auto-pairs it with a Roulette Widget (the wheel)
+      // AND a Roulette Entrants list the moment it's placed instead of
+      // leaving the user to find + wire either by hand; NODE_PALETTE
+      // (sceneBuilderConstants.ts) deliberately doesn't offer either on its
+      // own — this is the only way either ever comes to exist. The Widget
+      // pairing is mandatory in BOTH directions: onNodesChange/onEdgesChange
+      // below refuse to let either half, or the edge connecting them, be
+      // removed alone. The Entrants pairing only cascades ONE way (deleting
+      // the Roulette takes the Entrants list with it) — Entrants otherwise
+      // behaves like any other ordinary content node, freely deletable or
+      // rewireable on its own.
+      const widgetId = `rouletteWidget-${Date.now()}`
+      const widgetNode: Node = {
+        id: widgetId,
+        type: 'rouletteWidget',
+        position: { x: position.x + 240, y: position.y },
+        data: {}
+      }
+      const entrantsId = `rouletteEntrants-${Date.now()}`
+      const entrantsNode: Node = {
+        id: entrantsId,
+        type: 'rouletteEntrants',
+        position: { x: position.x + 240, y: position.y + 160 },
+        data: { ...(NODE_DEFAULTS.rouletteEntrants ?? {}) }
+      }
+      const widgetEdge: Edge = {
+        id: `e-${id}-${widgetId}-source`,
+        source: id,
+        sourceHandle: 'content',
+        target: widgetId,
+        targetHandle: 'source'
+      }
+      const entrantsEdge: Edge = {
+        id: `e-${id}-${entrantsId}-source`,
+        source: id,
+        sourceHandle: 'content',
+        target: entrantsId,
+        targetHandle: 'source'
+      }
+      setNodes((nds) => [...nds, newNode, widgetNode, entrantsNode])
+      setEdges((eds) => [...eds, widgetEdge, entrantsEdge])
+      return
+    }
+    if (type === 'randomSource') {
+      // Same reasoning as the rouletteSource block above — a Random node is
+      // useless without something to actually show its roll (see
+      // RANDOM_OUTPUTS' own doc comment in components/nodes/constants.ts).
+      // Auto-pairs it with a Random Widget (the rolling numbers) the moment
+      // it's placed; NODE_PALETTE deliberately doesn't offer that on its
+      // own. No secondary node (unlike rouletteSource's own Entrants) — a
+      // Text node's {number}/{numbers}/{hash}/{seed} placeholders come from
+      // wiring this Random's own Content output straight into that Text's
+      // Content socket by hand (see TEXT_SOCKETS' own doc comment).
+      const widgetId = `randomWidget-${Date.now()}`
+      const widgetNode: Node = {
+        id: widgetId,
+        type: 'randomWidget',
+        position: { x: position.x + 240, y: position.y },
+        data: {}
+      }
+      const widgetEdge: Edge = {
+        id: `e-${id}-${widgetId}-source`,
+        source: id,
+        sourceHandle: 'content',
+        target: widgetId,
+        targetHandle: 'source'
+      }
+      setNodes((nds) => [...nds, newNode, widgetNode])
+      setEdges((eds) => [...eds, widgetEdge])
+      return
+    }
+    setNodes((nds) => [...nds, newNode])
+  }, [beginMutation])
+
+  // Drag-and-drop from the Add Node palette — see the palette buttons'
+  // draggable/onDragStart in AddNodePalette and the canvas wrapper's
+  // onDrop/onDragOver below. The palette button's own type is passed via
+  // dataTransfer rather than closed over, since the drop handler is bound
+  // once on the canvas wrapper, not per palette entry.
+  const onPaletteDragStart = (event: React.DragEvent, type: string): void => {
+    event.dataTransfer.setData('application/reactflow', type)
+    event.dataTransfer.effectAllowed = 'move'
+  }
+
+  const onCanvasDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+  }, [])
+
+  const onCanvasDrop = useCallback((event: React.DragEvent) => {
+    event.preventDefault()
+    const type = event.dataTransfer.getData('application/reactflow')
+    if (!type || !reactFlowInstanceRef.current) return
+    const position = reactFlowInstanceRef.current.screenToFlowPosition({
+      x: event.clientX,
+      y: event.clientY
+    })
+    addNode(type, position)
+  }, [addNode])
+
+  return {
+    nodes,
+    setNodes,
+    edges,
+    setEdges,
+    reactFlowInstanceRef,
+    handlePrettify,
+    importGraph,
+    onNodeDragStart,
+    onNodeDragStop,
+    onNodesChange,
+    onEdgesChange,
+    onConnect,
+    isValidConnection,
+    onEdgeDoubleClick,
+    addNode,
+    onPaletteDragStart,
+    onCanvasDragOver,
+    onCanvasDrop
+  }
+}

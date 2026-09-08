@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <!-- Applies the persisted theme before first paint — see the file for why it's external, not inline. -->
+    <script src="theme-init.js"></script>
+    <!--
+      No CSP meta tag here on purpose: the policy needs frame-src to include
+      whatever host/port the overlay server is currently bound to (user-editable
+      in Settings), which a build-time meta tag can't express. The main process
+      sets the Content-Security-Policy response header dynamically instead —
+      see the session.webRequest.onHeadersReceived handler in src/main/index.ts.
+    -->
+    <title>OBScure</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

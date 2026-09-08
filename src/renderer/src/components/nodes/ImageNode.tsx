@@ -1,0 +1,113 @@
+import React, { useState } from 'react'
+import { NodeProps, useReactFlow } from '@xyflow/react'
+import { cn } from '@/lib/utils'
+import { Checkbox } from '@/components/ui'
+import { useI18n } from '@/providers/I18nProvider'
+
+import { IMAGE_SOCKETS, IMAGE_OUTPUTS } from './constants'
+import {
+  useSavedNodeData,
+  BaseNode,
+  Field,
+  NumberInput,
+  ColorPicker,
+  NodeSelect,
+  RadiusField,
+  numberInputClass,
+  textInputClass,
+  UploadRow,
+  useHasIncomingEdge,
+  IMAGE_FIT_IDS,
+  IMAGE_FIT_LABELS
+} from './utils'
+
+/** A static image or (left blank) the live now-playing album art — see showAlbumArt. Connect into a Box/Group or straight into Scene. Also a container in its own right (see IMAGE_SOCKETS' `children`) — wire Text/other content into its own Children socket to overlay a caption/badge on top of the image, same as Box. */
+export function ImageNode({ id, data }: NodeProps) {
+  const { updateNodeData } = useReactFlow()
+  const { t } = useI18n()
+  const saved = useSavedNodeData(id)
+  const [uploading, setUploading] = useState(false)
+  const customImageName = (data.customImageName as string) || null
+  const borderEnabled = Boolean(data.borderEnabled)
+  const fit = (data.fit as (typeof IMAGE_FIT_IDS)[number]) || 'cover'
+  // Audio Player's Content output wired into this node's Content socket (see
+  // IMAGE_SOCKETS/AUDIO_PLAYER_OUTPUTS) already decides what's shown, same
+  // priority buildImage in overlays/custom.html gives it — the URL field
+  // goes read-only rather than sitting there editable but silently ignored.
+  const contentConnected = useHasIncomingEdge(id, 'imageContent')
+
+  const upload = async (): Promise<void> => {
+    setUploading(true)
+    try {
+      const result = await window.obscure.uploadCustomImage(customImageName)
+      if (result) updateNodeData(id, { customImageName: result.fileName })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const removeCustom = async (): Promise<void> => {
+    if (!customImageName) return
+    await window.obscure.removeCustomImage(customImageName)
+    updateNodeData(id, { customImageName: null })
+  }
+
+  return (
+    <BaseNode
+      id={id}
+      data={data}
+      title="Image"
+      labelable
+      category="content"
+      sockets={IMAGE_SOCKETS}
+      outputSockets={IMAGE_OUTPUTS}
+      help={t.sceneBuilder.tooltip.nodes.image}
+    >
+      <div className="flex flex-col gap-1 text-xs">
+        <label>Image URL</label>
+        <input
+          type="text"
+          placeholder={contentConnected ? 'Provided by Content connection' : customImageName ? 'Uploaded file in use' : 'Leave empty for album art'}
+          disabled={contentConnected || Boolean(customImageName)}
+          value={(data.src as string) || ''}
+          onChange={(e) => updateNodeData(id, { src: e.target.value })}
+          className={cn(textInputClass, (contentConnected || customImageName) && 'opacity-50')}
+        />
+      </div>
+      {/* Uploaded file takes priority over the URL above (see ImageView in
+          SceneBuilderPage.tsx / buildImage in overlays/custom.html) —
+          copied into the app's own writable custom-images directory, so it
+          keeps working from any machine without depending on an external
+          URL staying online. Persists there until Remove, independent of
+          this node/scene. */}
+      <UploadRow uploading={uploading} hasCustom={Boolean(customImageName)} onUpload={() => void upload()} onRemove={() => void removeCustom()} label={customImageName ? 'Replace' : 'Upload'} />
+      <Field label="Fit">
+        <NodeSelect
+          value={fit}
+          options={IMAGE_FIT_IDS}
+          onChange={(next) => updateNodeData(id, { fit: next })}
+          renderOption={(opt) => IMAGE_FIT_LABELS[opt]}
+        />
+      </Field>
+      <RadiusField id={id} data={data} saved={saved} fallback={8} />
+      <Field label="Border">
+        <Checkbox checked={borderEnabled} onCheckedChange={(checked) => updateNodeData(id, { borderEnabled: !!checked })} className="nodrag" />
+      </Field>
+      {borderEnabled && (
+        <>
+          <Field label="Border width">
+            <NumberInput value={data.borderWidth as number} onChange={(v) => updateNodeData(id, { borderWidth: v })} min={0} fallback={2} savedValue={saved.borderWidth as number} className={numberInputClass} />
+          </Field>
+          <Field label="Border color">
+            <ColorPicker
+              value={(data.borderColor as string) || '#ffffff'}
+              onChange={(val) => updateNodeData(id, { borderColor: val })}
+              gradientMeta={data.borderColorGradientMeta as string}
+              onGradientMetaChange={(meta) => updateNodeData(id, { borderColorGradientMeta: meta })}
+            />
+          </Field>
+        </>
+      )}
+    </BaseNode>
+  )
+}

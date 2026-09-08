@@ -1,0 +1,377 @@
+import { Node } from "@xyflow/react";
+import { lastOfType } from "./graph";
+import { backgroundLayer, gradientStopColors, isGradientColor } from "@/lib/gradient";
+
+/** `#rrggbb` + an opacity percent -> `rgba(...)` — for the Shadow node's color+opacity fields, which (unlike Text/Box's own plain colors) need an alpha channel a hex string alone can't carry. */
+export function hexToRgba(hex: string, opacityPercent: number): string {
+  const clean = (hex || '#000000').replace('#', '')
+  const r = parseInt(clean.slice(0, 2), 16) || 0
+  const g = parseInt(clean.slice(2, 4), 16) || 0
+  const b = parseInt(clean.slice(4, 6), 16) || 0
+  return `rgba(${r}, ${g}, ${b}, ${opacityPercent / 100})`
+}
+
+
+/**
+ * A Shadow modifier's color+opacity+offset+blur as a `filter` value.
+ * `filter: drop-shadow()` (unlike `box-shadow`) has no gradient equivalent —
+ * a gradient color stacks one drop-shadow per stop instead (same offset/blur
+ * on all of them), which reads as a soft multi-color glow rather than a
+ * literal gradient-shaded shadow, the closest CSS gets to the real thing.
+ * Mirrors shadowFilter in overlays/custom.html.
+ */
+export function shadowFilter(color: string, opacityPercent: number, offsetX: number, offsetY: number, blur: number): string {
+  const colors = isGradientColor(color) ? gradientStopColors(color) : [color]
+  return colors.map((c) => `drop-shadow(${offsetX}px ${offsetY}px ${blur}px ${hexToRgba(c, opacityPercent)})`).join(' ')
+}
+
+
+/**
+ * Position/Size/Transform/Opacity/Shadow/Hide/Overflow/Spacing modifier
+ * nodes wired into a target, expressed as inline CSS — mirrors
+ * applyModifierStyle in overlays/custom-style.js. Hide: a manual on/off
+ * switch (display: none unless its own Hidden checkbox is off) — see
+ * HideNode's own doc comment in components/nodes/index.tsx for how this
+ * differs from a Task's show/hide.
+ */
+export function modifierStyle(mods: Node[], baseMods?: Node[]): React.CSSProperties {
+  const style: React.CSSProperties = {}
+
+  // Resolved BEFORE Position below on purpose: a wired Spacing sets
+  // marginTop/marginLeft as plain longhand (not the `margin` shorthand,
+  // which would make the two impossible to combine) so Position's own
+  // center-anchor trick (marginLeft/marginTop repurposed to offset a 50%-
+  // anchored element — see its own block below) can ADD its own offset on
+  // top instead of clobbering Spacing's margin outright. No such collision
+  // for paddingTop/Right/Bottom/Left or marginRight/Bottom — nothing else
+  // here touches those.
+  const spacing = lastOfType(mods, 'spacing')
+  if (spacing) {
+    // Per-side fields (SpacingNode's expand-to-4-sides toggle) win when
+    // present; a scene saved before per-side support existed only ever has
+    // paddingX/paddingY/marginX/marginY, so those still resolve every side
+    // (X -> left/right, Y -> top/bottom) and render identically to before.
+    const paddingX = (spacing.data.paddingX as number) ?? 0
+    const paddingY = (spacing.data.paddingY as number) ?? 0
+    const marginX = (spacing.data.marginX as number) ?? 0
+    const marginY = (spacing.data.marginY as number) ?? 0
+    const paddingTop = (spacing.data.paddingTop as number) ?? paddingY
+    const paddingRight = (spacing.data.paddingRight as number) ?? paddingX
+    const paddingBottom = (spacing.data.paddingBottom as number) ?? paddingY
+    const paddingLeft = (spacing.data.paddingLeft as number) ?? paddingX
+    const marginTop = (spacing.data.marginTop as number) ?? marginY
+    const marginRight = (spacing.data.marginRight as number) ?? marginX
+    const marginBottom = (spacing.data.marginBottom as number) ?? marginY
+    const marginLeft = (spacing.data.marginLeft as number) ?? marginX
+    style.padding = `${paddingTop}px ${paddingRight}px ${paddingBottom}px ${paddingLeft}px`
+    style.marginTop = marginTop
+    style.marginBottom = marginBottom
+    style.marginLeft = marginLeft
+    style.marginRight = marginRight
+  }
+
+  const size = lastOfType(mods, 'size')
+  const baseSize = baseMods && lastOfType(baseMods, 'size')
+  if (size || baseSize) {
+    const targetSize = size || baseSize
+    if (targetSize?.data.width != null) style.width = targetSize.data.width as number
+    if (targetSize?.data.height != null) style.height = targetSize.data.height as number
+  }
+
+  const overflow = lastOfType(mods, 'overflow')
+  const baseOverflow = baseMods && lastOfType(baseMods, 'overflow')
+  if (overflow || baseOverflow) {
+    const targetOverflow = overflow || baseOverflow
+    if (targetOverflow?.data.overflowX) style.overflowX = targetOverflow.data.overflowX as React.CSSProperties['overflowX']
+    if (targetOverflow?.data.overflowY) style.overflowY = targetOverflow.data.overflowY as React.CSSProperties['overflowY']
+    // Auto-scroll's whole illusion depends on the scrolling axis actually
+    // clipping (see AutoScrollTrack's own doc comment) — a track sliding
+    // around inside an axis left 'visible' just shows BOTH duplicated
+    // copies fully unfolded with no windowing at all, which reads as
+    // "doesn't scroll through properly, jumps around" (the exact bug this
+    // was built to prevent — it's easy to flip Auto-scroll on without also
+    // remembering to set that SAME axis's own Clip X/Y checkbox).  Force it
+    // here rather than trusting the separate checkbox to already agree.
+    if (targetOverflow?.data.autoScroll) {
+      const scrollDirection = (targetOverflow.data.scrollDirection as string) || 'up'
+      if (scrollDirection === 'left' || scrollDirection === 'right') {
+        if (style.overflowX === 'visible' || style.overflowX == null) style.overflowX = 'hidden'
+      } else {
+        if (style.overflowY === 'visible' || style.overflowY == null) style.overflowY = 'hidden'
+      }
+    }
+  }
+
+  let transformStr = ''
+
+  const transform = lastOfType(mods, 'transform')
+  const baseTransform = baseMods && lastOfType(baseMods, 'transform')
+  if (transform || baseTransform) {
+    const bsx = (baseTransform?.data.scaleX as number) ?? 1
+    const bsy = (baseTransform?.data.scaleY as number) ?? 1
+    const brot = (baseTransform?.data.rotation as number) ?? 0
+    if (transform) {
+      const tsx = (transform.data.scaleX as number) ?? 1
+      const tsy = (transform.data.scaleY as number) ?? 1
+      const trot = (transform.data.rotation as number) ?? 0
+      transformStr += `scale(${bsx * tsx}, ${bsy * tsy}) rotate(${brot + trot}deg) `
+    } else {
+      transformStr += `scale(${bsx}, ${bsy}) rotate(${brot}deg) `
+    }
+  }
+
+  const position = lastOfType(mods, 'position')
+  const basePosition = baseMods && lastOfType(baseMods, 'position')
+  if (position || basePosition) {
+    const bx = (basePosition?.data.x as number) ?? 0
+    const by = (basePosition?.data.y as number) ?? 0
+    let x = bx
+    let y = by
+    if (position) {
+      if (position.data.x != null || basePosition) x = bx + ((position.data.x as number) ?? 0)
+      if (position.data.y != null || basePosition) y = by + ((position.data.y as number) ?? 0)
+    }
+
+    const targetPos = position || basePosition
+    const mode = (targetPos?.data.mode as string) || 'absolute'
+    const anchor = (targetPos?.data.anchor as string) || 'top-left'
+
+    if (mode === 'absolute') {
+      style.position = 'absolute'
+      if (anchor.includes('top')) style.top = y
+      if (anchor.includes('bottom')) style.bottom = y
+      if (anchor.includes('left')) style.left = x
+      if (anchor.includes('right')) style.right = x
+
+      // += (not =): a wired Spacing may have already set marginLeft/marginTop
+      // above — this ADDS the center-anchor offset onto that rather than
+      // replacing it, so the two combine instead of Spacing's own margin
+      // silently vanishing the moment Position picks a center-ish anchor.
+      if (anchor === 'center' || anchor === 'top-center' || anchor === 'bottom-center') {
+        style.left = '50%'
+        style.marginLeft = ((style.marginLeft as number) ?? 0) + x
+        transformStr += 'translateX(-50%) '
+      }
+      if (anchor === 'center' || anchor === 'center-left' || anchor === 'center-right') {
+        style.top = '50%'
+        style.marginTop = ((style.marginTop as number) ?? 0) + y
+        transformStr += 'translateY(-50%) '
+      }
+    } else if (mode === 'relative') {
+      transformStr += `translate(${x}px, ${y}px) `
+    }
+  }
+
+  if (transformStr) {
+    style.transform = transformStr.trim()
+  }
+
+  const opacity = lastOfType(mods, 'opacity')
+  const baseOpacity = baseMods && lastOfType(baseMods, 'opacity')
+  if (opacity || baseOpacity) {
+    const bOp = (baseOpacity?.data.value as number) ?? 100
+    if (opacity) {
+      const tOp = (opacity.data.value as number) ?? 100
+      style.opacity = (bOp / 100) * (tOp / 100)
+    } else {
+      style.opacity = bOp / 100
+    }
+  }
+
+  const shadow = lastOfType(mods, 'shadow')
+  if (shadow) {
+    style.filter = shadowFilter(
+      (shadow.data.color as string) || '#000000',
+      (shadow.data.opacity as number) ?? 60,
+      (shadow.data.offsetX as number) ?? 0,
+      (shadow.data.offsetY as number) ?? 2,
+      (shadow.data.blur as number) ?? 6
+    )
+  } else if (baseMods) {
+    const baseShadow = lastOfType(baseMods, 'shadow')
+    if (baseShadow) {
+      style.filter = shadowFilter(
+        (baseShadow.data.color as string) || '#000000',
+        (baseShadow.data.opacity as number) ?? 60,
+        (baseShadow.data.offsetX as number) ?? 0,
+        (baseShadow.data.offsetY as number) ?? 2,
+        (baseShadow.data.blur as number) ?? 6
+      )
+    }
+  }
+
+  const hide = lastOfType(mods, 'hide')
+  const baseHide = baseMods && lastOfType(baseMods, 'hide')
+  if (hide) {
+    if (hide.data.hidden !== false) style.display = 'none'
+  } else if (baseHide) {
+    if (baseHide.data.hidden !== false) style.display = 'none'
+  }
+
+  return style
+}
+
+
+/**
+ * A node's own border fields (borderEnabled/borderWidth/borderColor — same
+ * shape as BoxNode's) plus its fill, as `background`/`border` — combined
+ * into one because a gradient border needs `background` itself (there's no
+ * `border-color: <gradient>`): two layers, the fill clipped to padding-box
+ * (on top) and the border color clipped to border-box (below, showing only
+ * in the ring the top layer doesn't cover) with the real `border` made
+ * transparent. This is the classic gradient-border-with-radius trick — unlike
+ * `border-image`, it respects border-radius/clip-path (see boxShapeStyle)
+ * with no separate wrapper element. A solid border needs none of that, same
+ * output as the old borderStyle. Shared by BoxView/ImageView/VideoView —
+ * mirrors applyBorder in overlays/custom.html.
+ */
+export function borderBoxStyle(node: Node, fill: string): { background: string; border?: string } {
+  if (!node.data.borderEnabled) return { background: fill }
+  const width = (node.data.borderWidth as number) ?? 2
+  const color = (node.data.borderColor as string) || '#ffffff'
+  if (!isGradientColor(color)) return { background: fill, border: `${width}px solid ${color}` }
+  return {
+    background: `${backgroundLayer(fill, 'padding-box')}, ${backgroundLayer(color, 'border-box')}`,
+    border: `${width}px solid transparent`
+  }
+}
+
+
+/** A Text/etc. node's own color field as `color` (solid) or a `background-clip: text` gradient — `color` itself has no gradient equivalent. Mirrors applyTextColor in overlays/custom.html. */
+export function textColorStyle(value: string): React.CSSProperties {
+  if (!isGradientColor(value)) return { color: value }
+  return {
+    backgroundImage: value,
+    WebkitBackgroundClip: 'text',
+    backgroundClip: 'text',
+    color: 'transparent',
+    WebkitTextFillColor: 'transparent'
+  } as React.CSSProperties
+}
+
+
+/**
+ * A Text outline's width+color as `-webkit-text-stroke` — `{}` unless the node's own Outline
+ * checkbox is on; every pre-existing Text node has no outline fields at all, so this must never
+ * apply a default width/color unless `enabled` is explicitly true. Mirrors applyTextOutline in
+ * overlays/custom-style.js.
+ */
+export function textOutlineStyle(enabled: boolean, width: number, color: string): React.CSSProperties {
+  if (!enabled) return {}
+  return { WebkitTextStroke: `${width}px ${color}` } as React.CSSProperties
+}
+
+/**
+ * A Text glow's color+opacity+blur+type as a `text-shadow` value, or `{}` when off. 'outer' stacks a
+ * tight + wide layer for a diffuse halo that radiates outward from each glyph (the standard neon-text
+ * technique); 'inner' uses a single layer at a THIRD of the blur so it hugs each glyph's own edge
+ * instead of spreading broadly outward. True inner glow — masked so it never bleeds past a glyph's
+ * own edge — isn't achievable with plain CSS text-shadow (nothing in CSS clips a blur to per-glyph
+ * shape), so this is the closest practical approximation rather than the real thing. A gradient color
+ * stacks one shadow per stop, the same approximation shadowFilter already makes for the Shadow
+ * modifier. Mirrors applyTextGlow in overlays/custom-style.js.
+ */
+export function textGlowStyle(enabled: boolean, type: string, color: string, opacityPercent: number, blur: number): React.CSSProperties {
+  if (!enabled) return {}
+  const colors = isGradientColor(color) ? gradientStopColors(color) : [color]
+  if (type === 'inner') {
+    const innerBlur = Math.max(1, Math.round(blur / 3))
+    return { textShadow: colors.map((c) => `0 0 ${innerBlur}px ${hexToRgba(c, opacityPercent)}`).join(', ') }
+  }
+  const layers = [
+    ...colors.map((c) => `0 0 ${blur}px ${hexToRgba(c, opacityPercent)}`),
+    ...colors.map((c) => `0 0 ${blur * 2}px ${hexToRgba(c, Math.round(opacityPercent * 0.6))}`)
+  ]
+  return { textShadow: layers.join(', ') }
+}
+
+/** Ordering modifier node wired into a target (Box or Scene), expressed as a tailwind flex-direction class. */
+export function orderingClass(mods: Node[]): string {
+  const ordering = mods.find((m) => m.type === 'ordering')
+  if (!ordering) return 'flex-col'
+
+  const layout = (ordering.data.layout as string) || 'vertical'
+  const direction = (ordering.data.direction as string) || 'direct'
+
+  if (layout === 'horizontal') {
+    return direction === 'revert' ? 'flex-row-reverse' : 'flex-row'
+  } else {
+    return direction === 'revert' ? 'flex-col-reverse' : 'flex-col'
+  }
+}
+
+
+/** Spacing (px) between a Box/Scene's children, from the same Ordering modifier orderingClass reads — mirrors orderingGap in overlays/custom.html. 8px (the old hardcoded CSS value) when no Ordering node is wired, so every scene predating this field keeps its exact old spacing. */
+export function orderingGap(mods: Node[]): number {
+  const ordering = mods.find((m) => m.type === 'ordering')
+  return (ordering?.data.gap as number) ?? 8
+}
+
+
+/** Which axis is the CROSS axis for a Box/Scene's children, from the same Ordering modifier orderingClass reads — 'vertical' for a horizontal/row layout, 'horizontal' for the default vertical/column one. Mirrors crossAxisFor in overlays/custom.html; see TextView's own doc comment for what this is used for. */
+export function crossAxisFor(mods: Node[]): 'horizontal' | 'vertical' {
+  const ordering = mods.find((m) => m.type === 'ordering')
+  const layout = (ordering?.data.layout as string) || 'vertical'
+  return layout === 'horizontal' ? 'vertical' : 'horizontal'
+}
+
+
+/**
+ * A Random Widget's own Ordering wire (see RANDOM_WIDGET_SOCKETS in
+ * components/nodes/constants.ts) resolved into a raw flex direction/gap —
+ * unlike orderingClass/orderingGap above (Tailwind classes, for Box/Scene's
+ * own children), this widget uses inline styles throughout, and its
+ * un-wired DEFAULT is a row (numbers side by side, wrapping if there's not
+ * enough width) rather than Box/Scene's own column default — a roll result
+ * reads far more naturally left-to-right than stacked, and this widget
+ * never had any prior scene depending on a column default to preserve.
+ * Mirrors randomWidgetOrdering in overlays/custom.html.
+ */
+export function randomWidgetOrdering(mods: Node[]): { flexDirection: 'row' | 'row-reverse' | 'column' | 'column-reverse'; gap: number } {
+  const ordering = mods.find((m) => m.type === 'ordering')
+  if (!ordering) return { flexDirection: 'row', gap: 12 }
+  const layout = (ordering.data.layout as string) || 'vertical'
+  const direction = (ordering.data.direction as string) || 'direct'
+  const flexDirection = layout === 'horizontal' ? (direction === 'revert' ? 'row-reverse' : 'row') : direction === 'revert' ? 'column-reverse' : 'column'
+  return { flexDirection, gap: (ordering.data.gap as number) ?? 8 }
+}
+
+
+/**
+ * A `borderRadius` field's 4 corners — same expand-to-independent-values
+ * shape as Spacing's `spacingSides` (see SpacingNode.tsx's own doc comment):
+ * a per-corner override (`borderRadiusTopLeft`/etc., set via each Radius
+ * field's own expand toggle — RadiusField in components/nodes/utils) wins
+ * when present, and every corner without one falls back to the single
+ * `borderRadius` value a scene saved before per-corner support existed
+ * already has, so it keeps rendering identically until edited. `fallback`
+ * is the node type's own default (Box 10, Image/Video 8, Progress 14).
+ */
+export function radiusCorners(
+  data: Record<string, unknown>,
+  fallback: number
+): { topLeft: number; topRight: number; bottomRight: number; bottomLeft: number } {
+  const base = (data.borderRadius as number) ?? fallback
+  return {
+    topLeft: (data.borderRadiusTopLeft as number) ?? base,
+    topRight: (data.borderRadiusTopRight as number) ?? base,
+    bottomRight: (data.borderRadiusBottomRight as number) ?? base,
+    bottomLeft: (data.borderRadiusBottomLeft as number) ?? base
+  }
+}
+
+/** `radiusCorners` as a CSS `border-radius` shorthand value (top-left top-right bottom-right bottom-left). */
+export function radiusCss(data: Record<string, unknown>, fallback: number): string {
+  const c = radiusCorners(data, fallback)
+  return `${c.topLeft}px ${c.topRight}px ${c.bottomRight}px ${c.bottomLeft}px`
+}
+
+/** A Box's corner treatment (see BOX_SHAPE_IDS' own doc comment in components/nodes/index.tsx) as borderRadius/clipPath — mirrors boxShapeStyle in overlays/custom.html. */
+export function boxShapeStyle(node: Node): { borderRadius: string; clipPath?: string } {
+  const shape = (node.data.shape as string) || 'rectangle'
+  if (shape === 'circle') return { borderRadius: '50%' }
+  if (shape === 'pill') return { borderRadius: '9999px' }
+  if (shape === 'hexagon') return { borderRadius: '0px', clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)' }
+  if (shape === 'diamond') return { borderRadius: '0px', clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }
+  return { borderRadius: radiusCss(node.data, 10) }
+}

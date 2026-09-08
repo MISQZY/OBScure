@@ -1,0 +1,173 @@
+import { net, shell } from "electron";
+import { BaseIntegration } from "./types";
+import { OAUTH_CALLBACK_PORT, waitForRedirect } from "../oauth/callbackServer";
+import { generateState } from "../oauth/pkce";
+import { logError } from "../logger";
+
+const REDIRECT_PORT = OAUTH_CALLBACK_PORT;
+const REDIRECT_PATH = "/callback/youtube";
+const REDIRECT_URI = `http://127.0.0.1:${REDIRECT_PORT}${REDIRECT_PATH}`;
+const SCOPES = "https://www.googleapis.com/auth/youtube.readonly";
+
+async function fetchYoutube(
+  url: string,
+  init?: RequestInit,
+): Promise<Response> {
+  try {
+    return await net.fetch(url, init);
+  } catch (error) {
+    const cause =
+      error instanceof Error && error.cause instanceof Error
+        ? error.cause.message
+        : String(error);
+    throw new Error(`Failed to reach YouTube: ${cause}`);
+  }
+}
+
+interface GoogleTokenResponse {
+  access_token: string;
+  refresh_token?: string;
+  expires_in: number;
+}
+
+export class YoutubeIntegration extends BaseIntegration {
+  private accessToken: string | null = null;
+  private accessTokenExpiresAt = 0;
+
+  async start(): Promise<void> {
+    const clientId = this.credentials.getClientId("youtube.clientId");
+    const clientSecret = this.credentials.getClientId("youtube.clientSecret");
+    const refreshToken = this.credentials.getSecret("youtube.refreshToken");
+    if (!clientId || !clientSecret || !refreshToken) {
+      this.setStatus("disconnected");
+      return;
+    }
+
+    try {
+      await this.refreshAccessToken(clientId, clientSecret, refreshToken);
+      this.setStatus("connected");
+    } catch (error) {
+      logError("youtube", "failed to refresh access token on startup", error);
+      this.setStatus("error");
+    }
+  }
+
+  stop(): void {}
+
+  async connect(): Promise<void> {
+    const clientId = this.credentials.getClientId("youtube.clientId");
+    const clientSecret = this.credentials.getClientId("youtube.clientSecret");
+    if (!clientId || !clientSecret) {
+      throw new Error("Set a Client ID and Client Secret first");
+    }
+
+    this.setStatus("connecting");
+    const state = generateState();
+
+    const authorizeUrl = new URL(
+      "https://accounts.google.com/o/oauth2/v2/auth",
+    );
+    authorizeUrl.searchParams.set("client_id", clientId);
+    authorizeUrl.searchParams.set("redirect_uri", REDIRECT_URI);
+    authorizeUrl.searchParams.set("response_type", "code");
+    authorizeUrl.searchParams.set("scope", SCOPES);
+    authorizeUrl.searchParams.set("access_type", "offline");
+    authorizeUrl.searchParams.set("prompt", "consent");
+    authorizeUrl.searchParams.set("state", state);
+
+    const redirectPromise = waitForRedirect({
+      port: REDIRECT_PORT,
+      path: REDIRECT_PATH,
+    });
+    await shell.openExternal(authorizeUrl.toString());
+
+    let params: URLSearchParams;
+    try {
+      params = await redirectPromise;
+    } catch (error) {
+      this.setStatus("error");
+      throw error;
+    }
+
+    if (params.get("state") !== state) {
+      this.setStatus("error");
+      throw new Error("OAuth state mismatch — the request may have been tampered with");
+    }
+    const authError = params.get("error");
+    if (authError) {
+      this.setStatus("error");
+      throw new Error(`Google rejected the authorization: ${authError}`);
+    }
+    const code = params.get("code");
+    if (!code) {
+      this.setStatus("error");
+      throw new Error("Google didn't return an authorization code");
+    }
+
+    const tokenResponse = await fetchYoutube(
+      "https://oauth2.googleapis.com/token",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: REDIRECT_URI,
+          client_id: clientId,
+          client_secret: clientSecret,
+        }),
+      },
+    );
+
+    if (!tokenResponse.ok) {
+      this.setStatus("error");
+      throw new Error(`Google rejected the token exchange (${tokenResponse.status})`);
+    }
+
+    const tokens = (await tokenResponse.json()) as GoogleTokenResponse;
+    if (!tokens.refresh_token) {
+      this.setStatus("error");
+      throw new Error(
+        "Google didn't issue a refresh token — revoke the app's access in your Google account and try again",
+      );
+    }
+
+    this.accessToken = tokens.access_token;
+    this.accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000;
+    this.credentials.setSecret("youtube.refreshToken", tokens.refresh_token);
+    this.setStatus("connected");
+  }
+
+  disconnect(): void {
+    this.credentials.deleteSecret("youtube.refreshToken");
+    this.accessToken = null;
+    this.accessTokenExpiresAt = 0;
+    this.setStatus("disconnected");
+    this.stop();
+  }
+
+  private async refreshAccessToken(
+    clientId: string,
+    clientSecret: string,
+    refreshToken: string,
+  ): Promise<void> {
+    const response = await fetchYoutube("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        client_id: clientId,
+        client_secret: clientSecret,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to refresh the Google token (${response.status})`);
+    }
+
+    const tokens = (await response.json()) as GoogleTokenResponse;
+    this.accessToken = tokens.access_token;
+    this.accessTokenExpiresAt = Date.now() + tokens.expires_in * 1000;
+  }
+}
