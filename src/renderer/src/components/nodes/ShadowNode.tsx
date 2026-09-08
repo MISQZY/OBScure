@@ -20,7 +20,12 @@ export function ShadowNode({ id, data }: NodeProps) {
   return (
     <BaseNode id={id} data={data} title="Shadow" category="style">
       <Field label="Color">
-        <ColorPicker value={(data.color as string) || '#000000'} onChange={(val) => updateNodeData(id, { color: val })} />
+        <ColorPicker
+          value={(data.color as string) || '#000000'}
+          onChange={(val) => updateNodeData(id, { color: val })}
+          gradientMeta={data.colorGradientMeta as string}
+          onGradientMetaChange={(meta) => updateNodeData(id, { colorGradientMeta: meta })}
+        />
       </Field>
       <Field label="Opacity">
         <Slider min={0} max={100} step={1} value={[(data.opacity as number) ?? 60]} onValueChange={([next]) => updateNodeData(id, { opacity: next })} className="nodrag w-24" />

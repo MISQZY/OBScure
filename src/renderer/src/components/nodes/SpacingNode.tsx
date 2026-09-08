@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
 import { Maximize } from 'lucide-react'
 
@@ -59,6 +59,20 @@ function SpacingGroup({
   const { updateNodeData } = useReactFlow()
   const expanded = Boolean(data[`${prefix}Expanded`])
   const sides = spacingSides(data, prefix)
+  const sidesInSync = sides.top === sides.right && sides.top === sides.bottom && sides.top === sides.left
+
+  // A scene saved before per-side fields existed only ever has the legacy
+  // `paddingX`/`paddingY` (or margin) pair, which spacingSides falls back to
+  // per axis — so an asymmetric X/Y (e.g. paddingX=16, paddingY=8) surfaces
+  // here as sides that already disagree the very first time this node is
+  // shown. Force it open in that case rather than showing the misleading
+  // "one value" collapsed field, whose own onChange (setAll, below) would
+  // otherwise silently overwrite the hidden, differing side on the user's
+  // very next touch with no warning.
+  useEffect(() => {
+    if (!expanded && !sidesInSync) updateNodeData(id, { [`${prefix}Expanded`]: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // The main field is a "set all" shortcut, not its own stored value — it
   // always writes all 4 sides at once, so diverging them via the per-side

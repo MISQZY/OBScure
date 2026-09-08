@@ -34,15 +34,25 @@ export function ProgressNode({ id, data }: NodeProps) {
         <NodeSelect value={orientation} options={PROGRESS_ORIENTATIONS} onChange={(next) => updateNodeData(id, { orientation: next })} />
       </Field>
       <Field label="Bar color">
-        <ColorPicker value={(data.barColor as string) || '#8b5cf6'} onChange={(val) => updateNodeData(id, { barColor: val })} />
+        <ColorPicker
+          value={(data.barColor as string) || '#8b5cf6'}
+          onChange={(val) => updateNodeData(id, { barColor: val })}
+          gradientMeta={data.barColorGradientMeta as string}
+          onGradientMetaChange={(meta) => updateNodeData(id, { barColorGradientMeta: meta })}
+        />
       </Field>
       <Field label="Track color">
-        <ColorPicker value={(data.trackColor as string) || '#3f3f46'} onChange={(val) => updateNodeData(id, { trackColor: val })} />
+        <ColorPicker
+          value={(data.trackColor as string) || '#3f3f46'}
+          onChange={(val) => updateNodeData(id, { trackColor: val })}
+          gradientMeta={data.trackColorGradientMeta as string}
+          onGradientMetaChange={(meta) => updateNodeData(id, { trackColorGradientMeta: meta })}
+        />
       </Field>
       <Field label="Thickness">
         <NumberInput value={data.thickness as number} onChange={(v) => updateNodeData(id, { thickness: v })} min={2} fallback={28} savedValue={saved.thickness as number} className={numberInputClass} />
       </Field>
-      <RadiusField id={id} data={data} fallback={14} />
+      <RadiusField id={id} data={data} saved={saved} fallback={14} />
     </BaseNode>
   )
 }

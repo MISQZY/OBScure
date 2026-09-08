@@ -89,7 +89,7 @@ export function ImageNode({ id, data }: NodeProps) {
           renderOption={(opt) => IMAGE_FIT_LABELS[opt]}
         />
       </Field>
-      <RadiusField id={id} data={data} fallback={8} />
+      <RadiusField id={id} data={data} saved={saved} fallback={8} />
       <Field label="Border">
         <Checkbox checked={borderEnabled} onCheckedChange={(checked) => updateNodeData(id, { borderEnabled: !!checked })} className="nodrag" />
       </Field>
@@ -99,7 +99,12 @@ export function ImageNode({ id, data }: NodeProps) {
             <NumberInput value={data.borderWidth as number} onChange={(v) => updateNodeData(id, { borderWidth: v })} min={0} fallback={2} savedValue={saved.borderWidth as number} className={numberInputClass} />
           </Field>
           <Field label="Border color">
-            <ColorPicker value={(data.borderColor as string) || '#ffffff'} onChange={(val) => updateNodeData(id, { borderColor: val })} />
+            <ColorPicker
+              value={(data.borderColor as string) || '#ffffff'}
+              onChange={(val) => updateNodeData(id, { borderColor: val })}
+              gradientMeta={data.borderColorGradientMeta as string}
+              onGradientMetaChange={(meta) => updateNodeData(id, { borderColorGradientMeta: meta })}
+            />
           </Field>
         </>
       )}

@@ -72,7 +72,12 @@ export function TextNode({ id, data }: NodeProps) {
         </div>
       </div>
       <Field label="Color">
-        <ColorPicker value={data.color as string || '#ffffff'} onChange={(val) => updateNodeData(id, { color: val })} />
+        <ColorPicker
+          value={(data.color as string) || '#ffffff'}
+          onChange={(val) => updateNodeData(id, { color: val })}
+          gradientMeta={data.colorGradientMeta as string}
+          onGradientMetaChange={(meta) => updateNodeData(id, { colorGradientMeta: meta })}
+        />
       </Field>
       <Field label="Font">
         <NodeSelect
@@ -171,7 +176,12 @@ export function TextNode({ id, data }: NodeProps) {
             />
           </Field>
           <Field label="Outline color">
-            <ColorPicker value={(data.outlineColor as string) || '#000000'} onChange={(val) => updateNodeData(id, { outlineColor: val })} />
+            <ColorPicker
+              value={(data.outlineColor as string) || '#000000'}
+              onChange={(val) => updateNodeData(id, { outlineColor: val })}
+              gradientMeta={data.outlineColorGradientMeta as string}
+              onGradientMetaChange={(meta) => updateNodeData(id, { outlineColorGradientMeta: meta })}
+            />
           </Field>
         </>
       )}
@@ -189,7 +199,12 @@ export function TextNode({ id, data }: NodeProps) {
             />
           </Field>
           <Field label="Glow color">
-            <ColorPicker value={(data.glowColor as string) || '#ffffff'} onChange={(val) => updateNodeData(id, { glowColor: val })} />
+            <ColorPicker
+              value={(data.glowColor as string) || '#ffffff'}
+              onChange={(val) => updateNodeData(id, { glowColor: val })}
+              gradientMeta={data.glowColorGradientMeta as string}
+              onGradientMetaChange={(meta) => updateNodeData(id, { glowColorGradientMeta: meta })}
+            />
           </Field>
           <Field label="Glow opacity">
             <Slider

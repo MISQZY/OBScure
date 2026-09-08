@@ -1,6 +1,6 @@
 import { HexColorPicker, HexColorInput } from 'react-colorful'
 import { cn } from '@/lib/utils'
-import { buildGradient, defaultGradientValue, isGradientColor, parseGradient } from '@/lib/gradient'
+import { defaultGradientValue, isGradientColor, parseGradient, readGradientMeta, writeGradientMeta } from '@/lib/gradient'
 import { NodePopover } from './NodePopover'
 import { GradientEditor } from './GradientEditor'
 
@@ -16,6 +16,13 @@ import { GradientEditor } from './GradientEditor'
  * sceneUtils/style.ts, since none of those CSS properties take a gradient
  * directly).
  *
+ * `gradientMeta`/`onGradientMetaChange` are optional — wiring them to a
+ * `<field>GradientMeta` sidecar (see GradientMeta's own doc comment in
+ * lib/gradient.ts) lets the handle positions the user actually left survive
+ * a close/reopen exactly, instead of parseGradient's best-effort
+ * reconstruction from the raw CSS. Omitting them just means every reopen
+ * falls back to that reconstruction, same as before this existed.
+ *
  * `allowGradient` (default true) hides the Solid/Gradient toggle for a field
  * whose consumer has no way to render a gradient at all — e.g.
  * BackgroundAnimationNode's color feeds a CSS `color-mix()`/custom-property
@@ -25,22 +32,29 @@ import { GradientEditor } from './GradientEditor'
 export function ColorPicker({
   value,
   onChange,
+  gradientMeta,
+  onGradientMetaChange,
   allowGradient = true
 }: {
   value: string
   onChange: (v: string) => void
+  gradientMeta?: string
+  onGradientMetaChange?: (meta: string) => void
   allowGradient?: boolean
 }) {
-  const gradient = allowGradient && isGradientColor(value) ? parseGradient(value) : null
+  const gradient = allowGradient && isGradientColor(value) ? (readGradientMeta(gradientMeta, value) ?? parseGradient(value)) : null
   const isGradient = gradient != null
 
   const setSolid = (): void => {
     if (!isGradient) return
     onChange(gradient.stops[0]?.color || '#ffffff')
+    onGradientMetaChange?.('')
   }
   const setGradient = (): void => {
     if (isGradient) return
-    onChange(buildGradient(defaultGradientValue(value)))
+    const { css, meta } = writeGradientMeta(defaultGradientValue(value))
+    onChange(css)
+    onGradientMetaChange?.(meta)
   }
 
   return (
@@ -84,7 +98,14 @@ export function ColorPicker({
           </div>
         )}
         {isGradient ? (
-          <GradientEditor value={gradient} onChange={(g) => onChange(buildGradient(g))} />
+          <GradientEditor
+            value={gradient}
+            onChange={(g) => {
+              const { css, meta } = writeGradientMeta(g)
+              onChange(css)
+              onGradientMetaChange?.(meta)
+            }}
+          />
         ) : (
           <>
             <HexColorPicker color={value} onChange={onChange} />

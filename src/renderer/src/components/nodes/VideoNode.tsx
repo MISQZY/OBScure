@@ -46,7 +46,7 @@ export function VideoNode({ id, data }: NodeProps) {
           className={textInputClass}
         />
       </div>
-      <RadiusField id={id} data={data} fallback={8} />
+      <RadiusField id={id} data={data} saved={saved} fallback={8} />
       <Field label="Loop">
         <Checkbox checked={loop} onCheckedChange={(checked) => updateNodeData(id, { loop: !!checked })} className="nodrag" />
       </Field>
@@ -62,7 +62,12 @@ export function VideoNode({ id, data }: NodeProps) {
             <NumberInput value={data.borderWidth as number} onChange={(v) => updateNodeData(id, { borderWidth: v })} min={0} fallback={2} savedValue={saved.borderWidth as number} className={numberInputClass} />
           </Field>
           <Field label="Border color">
-            <ColorPicker value={(data.borderColor as string) || '#ffffff'} onChange={(val) => updateNodeData(id, { borderColor: val })} />
+            <ColorPicker
+              value={(data.borderColor as string) || '#ffffff'}
+              onChange={(val) => updateNodeData(id, { borderColor: val })}
+              gradientMeta={data.borderColorGradientMeta as string}
+              onGradientMetaChange={(meta) => updateNodeData(id, { borderColorGradientMeta: meta })}
+            />
           </Field>
         </>
       )}

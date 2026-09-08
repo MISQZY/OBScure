@@ -273,6 +273,46 @@ export function gradientStopColors(value: string): string[] {
   return parseGradient(value)?.stops.map((s) => s.color) ?? []
 }
 
+/**
+ * A plain CSS gradient string is a lossy round-trip: parseLinearInner/
+ * parseRadialInner (above) can only ever RECONSTRUCT start/end/center/edge
+ * from the raw stop percentages and rx/ry, so a handle position that isn't
+ * recoverable that way (a radial edge dragged off its rx/ry quadrant, a
+ * linear start/end left implicit after its boundary stop was moved or
+ * removed) silently drifts the next time the field is reopened, even though
+ * the rendered gradient itself is pixel-identical either way.
+ *
+ * Every field that can hold a gradient stores this alongside the CSS string
+ * in a sibling `<field>GradientMeta` key purely so ColorPicker/GradientEditor
+ * can skip that reconstruction and restore the exact points the user left —
+ * nothing outside the editor ever reads it, so it's fine for it to go stale
+ * or missing (an old scene, a value set by something other than the gradient
+ * editor): `readGradientMeta` only trusts it when `css` still matches the
+ * field's current value, and every caller falls back to `parseGradient`
+ * otherwise.
+ */
+export interface GradientMeta {
+  css: string
+  value: GradientValue
+}
+
+/** Recovers the exact `GradientValue` that produced `css` from a `<field>GradientMeta` sidecar, or null if it's absent, malformed, or stale (see GradientMeta's own doc comment) — the caller should fall back to `parseGradient(css)` in that case. */
+export function readGradientMeta(meta: string | null | undefined, css: string): GradientValue | null {
+  if (!meta) return null
+  try {
+    const parsed = JSON.parse(meta) as Partial<GradientMeta>
+    return parsed.css === css && parsed.value ? parsed.value : null
+  } catch {
+    return null
+  }
+}
+
+/** Builds a gradient's CSS string together with the `<field>GradientMeta` sidecar that lets a later `readGradientMeta` restore it exactly — write both together to the field and its `GradientMeta` sibling whenever the gradient changes. */
+export function writeGradientMeta(value: GradientValue): { css: string; meta: string } {
+  const css = buildGradient(value)
+  return { css, meta: JSON.stringify({ css, value } satisfies GradientMeta) }
+}
+
 /** A solid or gradient color value as one `background` layer, always as a `background-image` (never `background-color`) — needed because the `background` shorthand only allows a plain color in its LAST comma-separated layer, and the border-gradient trick (borderBoxStyle in sceneUtils/style.ts) needs the fill as a non-last layer. A solid color becomes a flat 2-stop gradient of itself. */
 export function backgroundLayer(value: string, box: 'padding-box' | 'border-box'): string {
   const image = isGradientColor(value) ? value : `linear-gradient(${value}, ${value})`

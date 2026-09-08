@@ -20,12 +20,17 @@ export function BoxNode({ id, data }: NodeProps) {
   return (
     <BaseNode id={id} data={data} title="Shape" labelable category="content" sockets={BOX_SOCKETS} outputSockets={BOX_OUTPUTS}>
       <Field label="Background">
-        <ColorPicker value={(data.background as string) || '#18181b'} onChange={(val) => updateNodeData(id, { background: val })} />
+        <ColorPicker
+          value={(data.background as string) || '#18181b'}
+          onChange={(val) => updateNodeData(id, { background: val })}
+          gradientMeta={data.backgroundGradientMeta as string}
+          onGradientMetaChange={(meta) => updateNodeData(id, { backgroundGradientMeta: meta })}
+        />
       </Field>
       <Field label="Shape">
         <NodeSelect value={shape} options={BOX_SHAPE_IDS} onChange={(next) => updateNodeData(id, { shape: next })} />
       </Field>
-      {shape === 'rectangle' && <RadiusField id={id} data={data} fallback={10} />}
+      {shape === 'rectangle' && <RadiusField id={id} data={data} saved={saved} fallback={10} />}
       {(shape === 'hexagon' || shape === 'diamond') && (
         <p className="text-[11px] text-muted-foreground leading-snug w-40">Border follows the original rectangle, not the clipped outline.</p>
       )}
@@ -42,7 +47,12 @@ export function BoxNode({ id, data }: NodeProps) {
             <NumberInput value={data.borderWidth as number} onChange={(v) => updateNodeData(id, { borderWidth: v })} min={0} fallback={2} savedValue={saved.borderWidth as number} className={numberInputClass} />
           </Field>
           <Field label="Border color">
-            <ColorPicker value={(data.borderColor as string) || '#ffffff'} onChange={(val) => updateNodeData(id, { borderColor: val })} />
+            <ColorPicker
+              value={(data.borderColor as string) || '#ffffff'}
+              onChange={(val) => updateNodeData(id, { borderColor: val })}
+              gradientMeta={data.borderColorGradientMeta as string}
+              onGradientMetaChange={(meta) => updateNodeData(id, { borderColorGradientMeta: meta })}
+            />
           </Field>
         </>
       )}

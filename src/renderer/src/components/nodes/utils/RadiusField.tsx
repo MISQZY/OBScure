@@ -21,12 +21,15 @@ import { numberInputClass } from './constants'
 export function RadiusField({
   id,
   data,
+  saved,
   label = 'Radius',
   min = 0,
   fallback
 }: {
   id: string
   data: Record<string, unknown>
+  /** Last-Saved node data (see useSavedNodeData) — threaded through to each NumberInput's `savedValue` so clearing a field and blurring restores what was saved instead of snapping to the generic `fallback`, same as every other numeric field. */
+  saved?: Record<string, unknown>
   label?: string
   min?: number
   /** This node type's own default when nothing's ever been set (Box 10, Image/Video 8, Progress 14) — matches radiusCorners' own `fallback` param. */
@@ -39,6 +42,12 @@ export function RadiusField({
   const topRight = (data.borderRadiusTopRight as number) ?? base
   const bottomLeft = (data.borderRadiusBottomLeft as number) ?? base
   const bottomRight = (data.borderRadiusBottomRight as number) ?? base
+
+  const savedBase = saved?.borderRadius as number | undefined
+  const savedTopLeft = (saved?.borderRadiusTopLeft as number | undefined) ?? savedBase
+  const savedTopRight = (saved?.borderRadiusTopRight as number | undefined) ?? savedBase
+  const savedBottomLeft = (saved?.borderRadiusBottomLeft as number | undefined) ?? savedBase
+  const savedBottomRight = (saved?.borderRadiusBottomRight as number | undefined) ?? savedBase
 
   // The main field is a "set all" shortcut, not its own stored value — it
   // always writes all 4 corners (and the legacy `borderRadius` field, so a
@@ -60,7 +69,7 @@ export function RadiusField({
     <>
       <Field label={label}>
         <div className="flex items-center gap-1">
-          <NumberInput value={topLeft} onChange={setAll} min={min} fallback={fallback} className={numberInputClass} />
+          <NumberInput value={topLeft} onChange={setAll} min={min} fallback={fallback} savedValue={savedTopLeft} className={numberInputClass} />
           <button
             type="button"
             onClick={() => updateNodeData(id, { borderRadiusExpanded: !expanded })}
@@ -74,16 +83,16 @@ export function RadiusField({
       {expanded && (
         <div className="grid grid-cols-2 gap-x-2 gap-y-1 pl-2">
           <Field label="Top-Left">
-            <NumberInput value={topLeft} onChange={(v) => updateNodeData(id, { borderRadiusTopLeft: v ?? fallback })} min={min} fallback={fallback} className={numberInputClass} />
+            <NumberInput value={topLeft} onChange={(v) => updateNodeData(id, { borderRadiusTopLeft: v ?? fallback })} min={min} fallback={fallback} savedValue={savedTopLeft} className={numberInputClass} />
           </Field>
           <Field label="Top-Right">
-            <NumberInput value={topRight} onChange={(v) => updateNodeData(id, { borderRadiusTopRight: v ?? fallback })} min={min} fallback={fallback} className={numberInputClass} />
+            <NumberInput value={topRight} onChange={(v) => updateNodeData(id, { borderRadiusTopRight: v ?? fallback })} min={min} fallback={fallback} savedValue={savedTopRight} className={numberInputClass} />
           </Field>
           <Field label="Bottom-Left">
-            <NumberInput value={bottomLeft} onChange={(v) => updateNodeData(id, { borderRadiusBottomLeft: v ?? fallback })} min={min} fallback={fallback} className={numberInputClass} />
+            <NumberInput value={bottomLeft} onChange={(v) => updateNodeData(id, { borderRadiusBottomLeft: v ?? fallback })} min={min} fallback={fallback} savedValue={savedBottomLeft} className={numberInputClass} />
           </Field>
           <Field label="Bottom-Right">
-            <NumberInput value={bottomRight} onChange={(v) => updateNodeData(id, { borderRadiusBottomRight: v ?? fallback })} min={min} fallback={fallback} className={numberInputClass} />
+            <NumberInput value={bottomRight} onChange={(v) => updateNodeData(id, { borderRadiusBottomRight: v ?? fallback })} min={min} fallback={fallback} savedValue={savedBottomRight} className={numberInputClass} />
           </Field>
         </div>
       )}
