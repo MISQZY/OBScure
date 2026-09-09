@@ -19,13 +19,16 @@ import { WindowsMediaIntegration } from "./integrations/windowsMedia";
 import { TwitchIntegration } from "./integrations/twitch";
 import { YoutubeIntegration } from "./integrations/youtube";
 import { StreamerBotIntegration } from "./integrations/streamerbot";
-import { QueueEngine, RandomEngine, RouletteEngine } from "./eventsEngine";
+import { RandomEngine, RouletteEngine } from "./eventsEngine";
+import { ActionQueueEngine } from "./actionQueueEngine";
 import { EventLog } from "./eventLog";
 import { registerOverlayHandlers } from "./ipc/overlayHandlers";
 import { registerEventLogHandlers } from "./ipc/eventLogHandlers";
 import { registerMediaHandlers } from "./ipc/mediaHandlers";
 import { registerSettingsHandlers } from "./ipc/settingsHandlers";
 import { registerEventsHandlers } from "./ipc/eventsHandlers";
+import { registerActionsHandlers } from "./ipc/actionsHandlers";
+import { registerCommandsHandlers } from "./ipc/commandsHandlers";
 import { registerProfileHandlers } from "./ipc/profileHandlers";
 import { registerIntegrationsHandlers } from "./ipc/integrationsHandlers";
 import { initUpdater } from "./updater";
@@ -34,14 +37,20 @@ import { initLogger, logError, logInfo, logWarn } from "./logger";
 import type { GlobalVariable, NowPlayingPayload } from "../shared/types";
 import type { CustomLocalePack } from "../shared/customConfig";
 import {
+  DEFAULT_ACTION_QUEUES,
+  DEFAULT_COMMANDS,
   DEFAULT_EVENTS_CONFIGS,
   matchesChatCommand,
-  normalizeQueueConfig,
+  normalizeActionConfigs,
+  normalizeActionQueueConfigs,
+  normalizeCommandDefs,
   normalizeRandomConfig,
   normalizeRouletteConfig,
-  type CommandEntryMode,
+  type ActionConfig,
+  type ActionQueueConfig,
+  type CommandDef,
+  type CommandEntryType,
   type EventTarget,
-  type QueueConfig,
   type RandomConfig,
   type RouletteConfig,
 } from "../shared/eventsConfig";
@@ -85,10 +94,12 @@ const DEFAULT_OVERLAY_PORT = 47890;
 const EVENTS_CONFIG_SETTING_KEYS: Record<EventTarget, string> = {
   random: "events.random.config",
   roulette: "events.roulette.config",
-  queue: "events.queue.config",
 };
 
 const CANVAS_CONFIG_SETTING_KEY = "canvas.config";
+const ACTIONS_SETTING_KEY = "actions.list";
+const ACTION_QUEUES_SETTING_KEY = "actionQueues.list";
+const COMMANDS_SETTING_KEY = "commands.list";
 
 const overlaysDir = app.isPackaged
   ? join(process.resourcesPath, "overlays")
@@ -133,12 +144,19 @@ function getStoredRouletteConfig(): RouletteConfig {
   );
 }
 
-function getStoredQueueConfig(): QueueConfig {
-  return normalizeQueueConfig(
-    config.getSetting(
-      EVENTS_CONFIG_SETTING_KEYS.queue,
-      DEFAULT_EVENTS_CONFIGS.queue,
-    ),
+function getStoredActions(): ActionConfig[] {
+  return normalizeActionConfigs(config.getSetting(ACTIONS_SETTING_KEY, []));
+}
+
+function getStoredActionQueues(): ActionQueueConfig[] {
+  return normalizeActionQueueConfigs(
+    config.getSetting(ACTION_QUEUES_SETTING_KEY, DEFAULT_ACTION_QUEUES),
+  );
+}
+
+function getStoredCommands(): CommandDef[] {
+  return normalizeCommandDefs(
+    config.getSetting(COMMANDS_SETTING_KEY, DEFAULT_COMMANDS),
   );
 }
 
@@ -182,26 +200,37 @@ let integrations = {
 
 const randomEngine = new RandomEngine(eventBus);
 const rouletteEngine = new RouletteEngine(eventBus);
-const queueEngine = new QueueEngine(eventBus);
+const actionQueueEngine = new ActionQueueEngine(eventBus, overlayServer);
+actionQueueEngine.setQueues(getStoredActionQueues());
 const eventLog = new EventLog(eventBus, (entry) => {
   mainWindow?.webContents.send("eventLog:entry", entry);
 });
 
+/** A viewer is eligible if `entryTypes` is empty (no restriction) or they belong to any one of the selected groups (OR, not AND — picking both Followers and Subscribers widens eligibility rather than narrowing it). */
 async function isEligibleForCommand(
-  mode: CommandEntryMode,
+  entryTypes: CommandEntryType[],
   userId: string,
 ): Promise<boolean> {
-  if (mode === "all") return true;
+  if (entryTypes.length === 0) return true;
   if (!userId) return false;
-  return mode === "followers"
-    ? integrations.twitch.isFollower(userId)
-    : integrations.twitch.isSubscriber(userId);
+  const results = await Promise.all(
+    entryTypes.map((type) =>
+      type === "followers"
+        ? integrations.twitch.isFollower(userId)
+        : integrations.twitch.isSubscriber(userId),
+    ),
+  );
+  return results.some(Boolean);
 }
 
 eventBus.on("chat-message", (payload) => {
-  const rouletteCfg = getStoredRouletteConfig();
-  if (matchesChatCommand(payload.text, rouletteCfg.command)) {
-    void isEligibleForCommand(rouletteCfg.command.entryMode, payload.userId)
+  const commands = getStoredCommands();
+  const findCommand = (id: string | null): CommandDef | null =>
+    id ? (commands.find((c) => c.id === id) ?? null) : null;
+
+  const rouletteCommand = findCommand(getStoredRouletteConfig().commandId);
+  if (rouletteCommand && matchesChatCommand(payload.text, rouletteCommand)) {
+    void isEligibleForCommand(rouletteCommand.entryTypes, payload.userId)
       .then((eligible) => {
         if (eligible) rouletteEngine.addEntrant(payload.user, "chat");
       })
@@ -210,14 +239,15 @@ eventBus.on("chat-message", (payload) => {
       });
   }
 
-  const queueCfg = getStoredQueueConfig();
-  if (matchesChatCommand(payload.text, queueCfg.command)) {
-    void isEligibleForCommand(queueCfg.command.entryMode, payload.userId)
+  for (const action of getStoredActions()) {
+    const command = findCommand(action.commandId);
+    if (!command || !matchesChatCommand(payload.text, command)) continue;
+    void isEligibleForCommand(command.entryTypes, payload.userId)
       .then((eligible) => {
-        if (eligible) queueEngine.addEntry(payload.user, "chat");
+        if (eligible) actionQueueEngine.enqueue(action);
       })
       .catch((error) => {
-        logError("main", "queue eligibility check failed for chat entry", error);
+        logError("main", "action eligibility check failed for chat entry", error);
       });
   }
 });
@@ -225,7 +255,10 @@ eventBus.on("chat-message", (payload) => {
 eventBus.on("points-redemption", (payload) => {
   const cfg = getStoredRouletteConfig();
   if (!cfg.pointsRewardId || payload.rewardId !== cfg.pointsRewardId) return;
-  void isEligibleForCommand(cfg.command.entryMode, payload.userId)
+  const rouletteCommand = cfg.commandId
+    ? getStoredCommands().find((c) => c.id === cfg.commandId)
+    : undefined;
+  void isEligibleForCommand(rouletteCommand?.entryTypes ?? [], payload.userId)
     .then((eligible) => {
       if (eligible) rouletteEngine.addEntrant(payload.user, "points");
     })
@@ -238,28 +271,26 @@ eventBus.on("roulette-state", (state) => {
   mainWindow?.webContents.send("roulette:state", state);
 });
 
-eventBus.on("queue-state", (state) => {
-  mainWindow?.webContents.send("queue:state", state);
+eventBus.on("action-queues-state", (state) => {
+  mainWindow?.webContents.send("actionQueues:state", state);
 });
 
 eventBus.on("streamerbot-trigger", (payload) => {
-  const cfg = getStoredQueueConfig();
-  if (!cfg.streamerbotEnabled) return;
-  if (cfg.streamerbotTriggerType === "command") {
-    if (payload.kind !== "command") return;
-    const commandName = cfg.streamerbotCommandName.trim().toLowerCase();
-    if (!commandName || (payload.command ?? "").toLowerCase() !== commandName) {
-      return;
+  for (const action of getStoredActions()) {
+    if (!action.streamerbotEnabled) continue;
+    if (action.streamerbotTriggerType === "command") {
+      if (payload.kind !== "command") continue;
+      const commandName = action.streamerbotCommandName.trim().toLowerCase();
+      if (!commandName || (payload.command ?? "").toLowerCase() !== commandName) {
+        continue;
+      }
+      actionQueueEngine.enqueue(action);
+      continue;
     }
-    if (payload.user) queueEngine.addEntry(payload.user, "streamerbot");
-    return;
-  }
-  if (payload.kind !== "customEvent") return;
-  const eventName = cfg.streamerbotEventName.trim();
-  if (!eventName || payload.eventName !== eventName) return;
-  const name = payload.args?.[cfg.streamerbotNameArgKey || "name"];
-  if (typeof name === "string" && name.trim()) {
-    queueEngine.addEntry(name, "streamerbot");
+    if (payload.kind !== "customEvent") continue;
+    const eventName = action.streamerbotEventName.trim();
+    if (!eventName || payload.eventName !== eventName) continue;
+    actionQueueEngine.enqueue(action);
   }
 });
 
@@ -363,6 +394,8 @@ async function reinitializeForActiveProfile(): Promise<void> {
 
   overlayServer.setCustomOverlays(overlayStore.listOverlays());
   overlayServer.setGlobalVariables(getStoredGlobalVariables());
+  actionQueueEngine.reset();
+  actionQueueEngine.setQueues(getStoredActionQueues());
   mainWindow?.webContents.reload();
 }
 
@@ -543,11 +576,24 @@ registerEventsHandlers({
   config: () => config,
   randomEngine,
   rouletteEngine,
-  queueEngine,
   eventsConfigSettingKeys: EVENTS_CONFIG_SETTING_KEYS,
   getStoredRandomConfig,
   getStoredRouletteConfig,
-  getStoredQueueConfig,
+});
+
+registerActionsHandlers({
+  config: () => config,
+  actionQueueEngine,
+  actionsSettingKey: ACTIONS_SETTING_KEY,
+  actionQueuesSettingKey: ACTION_QUEUES_SETTING_KEY,
+  getStoredActions,
+  getStoredActionQueues,
+});
+
+registerCommandsHandlers({
+  config: () => config,
+  commandsSettingKey: COMMANDS_SETTING_KEY,
+  getStoredCommands,
 });
 
 registerProfileHandlers({

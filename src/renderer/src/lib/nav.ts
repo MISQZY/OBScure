@@ -4,7 +4,9 @@ export type NavKey =
   | 'dashboard'
   | 'tools/random'
   | 'tools/roulette'
-  | 'tools/queue'
+  | 'actions/commands'
+  | 'actions'
+  | 'actions/queues'
   | 'data/variables'
   | 'data/event-log'
   | 'integrations/spotify'
@@ -32,7 +34,9 @@ export function getNavBreadcrumbs(t: Dictionary): Record<string, BreadcrumbCrumb
     dashboard: [dashboard],
     'tools/random': [dashboard, { label: t.sidebar.tools }, { label: t.events.random.title }],
     'tools/roulette': [dashboard, { label: t.sidebar.tools }, { label: t.events.roulette.title }],
-    'tools/queue': [dashboard, { label: t.sidebar.tools }, { label: t.events.queue.title }],
+    'actions/commands': [dashboard, { label: t.sidebar.actionsQueues }, { label: t.commands.title }],
+    actions: [dashboard, { label: t.sidebar.actionsQueues }, { label: t.actions.title }],
+    'actions/queues': [dashboard, { label: t.sidebar.actionsQueues }, { label: t.actionQueues.title }],
     'data/variables': [dashboard, { label: t.sidebar.data }, { label: t.variables.title }],
     'data/event-log': [dashboard, { label: t.sidebar.data }, { label: t.eventLog.title }],
     'integrations/spotify': [dashboard, { label: t.sidebar.integrations }, { label: 'Spotify' }],

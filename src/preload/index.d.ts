@@ -1,4 +1,5 @@
 import type {
+  ActionQueueRuntimeState,
   AppUpdaterStatus,
   ConnectResult,
   CustomOverlay,
@@ -10,8 +11,6 @@ import type {
   OverlayAddress,
   OverlayFolder,
   OverlayUrls,
-  QueueEntry,
-  QueueStatePayload,
   RandomStatePayload,
   RouletteStatePayload,
   SettingKey,
@@ -20,7 +19,7 @@ import type {
   TwitchCustomReward,
   WhatsNewPayload
 } from '../shared/types'
-import type { EventsConfigs, EventTarget } from '../shared/eventsConfig'
+import type { ActionConfig, CommandDef, EventsConfigs, EventTarget } from '../shared/eventsConfig'
 import type { CanvasConfig } from '../shared/canvasConfig'
 import type { AvatarColor, Profile } from '../shared/profiles'
 import type { CustomLocalePack, CustomThemePack } from '../shared/customConfig'
@@ -92,15 +91,21 @@ export interface ObscureApi {
   getWhatsNew: () => Promise<WhatsNewPayload | null>
   getStreamerBotGlobals: () => Promise<StreamerBotGlobalVariable[]>
   onStreamerBotGlobalsUpdate: (callback: (variables: StreamerBotGlobalVariable[]) => void) => () => void
-  openQueue: () => Promise<QueueStatePayload>
-  closeQueue: () => Promise<QueueStatePayload>
-  addQueueEntry: (name: string) => Promise<QueueStatePayload>
-  removeQueueEntry: (id: string) => Promise<QueueStatePayload>
-  popQueueNext: () => Promise<{ state: QueueStatePayload; popped: QueueEntry | null }>
-  clearQueue: () => Promise<QueueStatePayload>
-  reorderQueue: (ids: string[]) => Promise<QueueStatePayload>
-  getQueueState: () => Promise<QueueStatePayload>
-  onQueueState: (callback: (state: QueueStatePayload) => void) => () => void
+  getActions: () => Promise<ActionConfig[]>
+  saveAction: (action: ActionConfig) => Promise<ActionConfig[]>
+  deleteAction: (id: string) => Promise<ActionConfig[]>
+  runAction: (id: string) => Promise<void>
+  getCommands: () => Promise<CommandDef[]>
+  saveCommand: (command: CommandDef) => Promise<CommandDef[]>
+  deleteCommand: (id: string) => Promise<CommandDef[]>
+  getActionQueuesState: () => Promise<ActionQueueRuntimeState[]>
+  createActionQueue: (name: string) => Promise<ActionQueueRuntimeState[]>
+  renameActionQueue: (id: string, name: string) => Promise<ActionQueueRuntimeState[]>
+  removeActionQueue: (id: string) => Promise<ActionQueueRuntimeState[]>
+  setActionQueuePaused: (id: string, paused: boolean) => Promise<ActionQueueRuntimeState[]>
+  setActionQueueBlocking: (id: string, blocking: boolean) => Promise<ActionQueueRuntimeState[]>
+  resetActionQueueCompleted: (id: string) => Promise<ActionQueueRuntimeState[]>
+  onActionQueuesState: (callback: (state: ActionQueueRuntimeState[]) => void) => () => void
   getEventLog: () => Promise<EventLogEntry[]>
   clearEventLog: () => Promise<void>
   onEventLogEntry: (callback: (entry: EventLogEntry) => void) => () => void

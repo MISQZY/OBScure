@@ -148,40 +148,44 @@ export interface StreamerBotGlobalVariable {
 }
 
 /**
- * A normalized Streamer.bot push-event relevant to the Queue integration —
+ * A normalized Streamer.bot push-event relevant to the Action integration —
  * either a Command.Triggered (chat command run through Streamer.bot's own
  * command system) or a Custom.Event (raised by a Streamer.bot Action's
  * "Raise Event" sub-action). Emitted by StreamerBotIntegration regardless of
- * whether anything is listening for it; matched against the active
- * QueueConfig in main/index.ts, same separation as TwitchIntegration's own
+ * whether anything is listening for it; matched against every stored
+ * ActionConfig in main/index.ts, same separation as TwitchIntegration's own
  * chat-message/points-redemption events being matched against
  * RouletteConfig there instead of inside the integration itself.
  */
 export interface StreamerBotTriggerPayload {
   kind: 'command' | 'customEvent'
-  /** Command.Triggered's own `command` field (the trigger phrase, e.g. "!queue"); null for a customEvent trigger. */
+  /** Command.Triggered's own `command` field (the trigger phrase, e.g. "!action"); null for a customEvent trigger. */
   command: string | null
   /** Custom.Event's own `eventName` field; null for a command trigger. */
   eventName: string | null
   /** Custom.Event's own `args` object; null for a command trigger or when the action raised no args. */
   args: Record<string, unknown> | null
-  /** Resolved display name for a command trigger (Command.Triggered's user.display/user.name) — null for a customEvent trigger, where the entrant name (if any) instead lives inside `args`. */
+  /** Resolved display name for a command trigger (Command.Triggered's user.display/user.name) — null for a customEvent trigger. */
   user: string | null
 }
 
-export type QueueEntrySource = 'manual' | 'chat' | 'streamerbot'
 
-export interface QueueEntry {
+/**
+ * One ActionQueueConfig (see shared/eventsConfig.ts) merged with its live
+ * pendingCount/completedCount — what QueuesPage actually renders, same shape
+ * as Streamer.bot's own Queues table. Broadcast on every enqueue/start/
+ * complete/pause/blocking-toggle by ActionQueueEngine — see its own doc
+ * comment (src/main/actionQueueEngine.ts).
+ */
+export interface ActionQueueRuntimeState {
   id: string
   name: string
-  source: QueueEntrySource
-  addedAt: number
-}
-
-/** A simple ordered viewer queue (sign-up line) — no timer/phase, unlike Roulette: entries just sit in order until popped or removed. See eventsConfig.ts's own QueueConfig for the settings that feed it. */
-export interface QueueStatePayload {
-  isOpen: boolean
-  entries: QueueEntry[]
+  paused: boolean
+  blocking: boolean
+  /** Runs enqueued but not yet finished (including whichever one a Blocking queue currently has running). */
+  pendingCount: number
+  /** Runs finished since launch/profile switch — never persisted, never decremented except via an explicit reset. */
+  completedCount: number
 }
 
 export interface AppEvents {
@@ -201,10 +205,10 @@ export interface AppEvents {
   'twitch-stats': TwitchChannelStats | null
   /** Broadcast on every periodic GetGlobals poll while Streamer.bot is connected (see StreamerBotIntegration's own polling/OverlayServer.setStreamerBotGlobals), and as an empty array on disconnect/profile switch — feeds a scope='streamerbot' Variable node, same live pattern as 'twitch-stats'. */
   'streamerbot-globals': StreamerBotGlobalVariable[]
-  /** Raised on every Command.Triggered/Custom.Event push from Streamer.bot, regardless of whether the Queue feature (or anything else) is listening — see StreamerBotTriggerPayload's own doc comment. */
+  /** Raised on every Command.Triggered/Custom.Event push from Streamer.bot, regardless of whether the Actions feature (or anything else) is listening — see StreamerBotTriggerPayload's own doc comment. */
   'streamerbot-trigger': StreamerBotTriggerPayload
-  /** Broadcast on every Queue open/close/add/remove/pop/clear/reorder — see QueueEngine. */
-  'queue-state': QueueStatePayload
+  /** Broadcast on every Action enqueue/start/complete and every queue create/rename/delete/pause/blocking-toggle — see ActionQueueEngine. */
+  'action-queues-state': ActionQueueRuntimeState[]
 }
 
 /**

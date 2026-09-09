@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type {
+  ActionQueueRuntimeState,
   AppUpdaterStatus,
   ConnectResult,
   CustomOverlay,
@@ -11,8 +12,6 @@ import type {
   OverlayAddress,
   OverlayFolder,
   OverlayUrls,
-  QueueEntry,
-  QueueStatePayload,
   RandomStatePayload,
   RouletteStatePayload,
   SettingKey,
@@ -21,7 +20,7 @@ import type {
   TwitchCustomReward,
   WhatsNewPayload
 } from '../shared/types'
-import type { EventsConfigs, EventTarget } from '../shared/eventsConfig'
+import type { ActionConfig, CommandDef, EventsConfigs, EventTarget } from '../shared/eventsConfig'
 import type { CanvasConfig } from '../shared/canvasConfig'
 import type { AvatarColor, Profile } from '../shared/profiles'
 import type { CustomLocalePack, CustomThemePack } from '../shared/customConfig'
@@ -140,19 +139,30 @@ const api = {
     ipcRenderer.on('streamerbot-globals:update', listener)
     return () => ipcRenderer.off('streamerbot-globals:update', listener)
   },
-  openQueue: (): Promise<QueueStatePayload> => ipcRenderer.invoke('events:queue:open'),
-  closeQueue: (): Promise<QueueStatePayload> => ipcRenderer.invoke('events:queue:close'),
-  addQueueEntry: (name: string): Promise<QueueStatePayload> => ipcRenderer.invoke('events:queue:addEntry', name),
-  removeQueueEntry: (id: string): Promise<QueueStatePayload> => ipcRenderer.invoke('events:queue:removeEntry', id),
-  popQueueNext: (): Promise<{ state: QueueStatePayload; popped: QueueEntry | null }> =>
-    ipcRenderer.invoke('events:queue:popNext'),
-  clearQueue: (): Promise<QueueStatePayload> => ipcRenderer.invoke('events:queue:clear'),
-  reorderQueue: (ids: string[]): Promise<QueueStatePayload> => ipcRenderer.invoke('events:queue:reorder', ids),
-  getQueueState: (): Promise<QueueStatePayload> => ipcRenderer.invoke('events:queue:getState'),
-  onQueueState: (callback: (state: QueueStatePayload) => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, state: QueueStatePayload): void => callback(state)
-    ipcRenderer.on('queue:state', listener)
-    return () => ipcRenderer.off('queue:state', listener)
+  getActions: (): Promise<ActionConfig[]> => ipcRenderer.invoke('actions:getAll'),
+  saveAction: (action: ActionConfig): Promise<ActionConfig[]> => ipcRenderer.invoke('actions:save', action),
+  deleteAction: (id: string): Promise<ActionConfig[]> => ipcRenderer.invoke('actions:delete', id),
+  runAction: (id: string): Promise<void> => ipcRenderer.invoke('actions:run', id),
+  getCommands: (): Promise<CommandDef[]> => ipcRenderer.invoke('commands:getAll'),
+  saveCommand: (command: CommandDef): Promise<CommandDef[]> => ipcRenderer.invoke('commands:save', command),
+  deleteCommand: (id: string): Promise<CommandDef[]> => ipcRenderer.invoke('commands:delete', id),
+  getActionQueuesState: (): Promise<ActionQueueRuntimeState[]> => ipcRenderer.invoke('actionQueues:getState'),
+  createActionQueue: (name: string): Promise<ActionQueueRuntimeState[]> =>
+    ipcRenderer.invoke('actionQueues:create', name),
+  renameActionQueue: (id: string, name: string): Promise<ActionQueueRuntimeState[]> =>
+    ipcRenderer.invoke('actionQueues:rename', id, name),
+  removeActionQueue: (id: string): Promise<ActionQueueRuntimeState[]> =>
+    ipcRenderer.invoke('actionQueues:remove', id),
+  setActionQueuePaused: (id: string, paused: boolean): Promise<ActionQueueRuntimeState[]> =>
+    ipcRenderer.invoke('actionQueues:setPaused', id, paused),
+  setActionQueueBlocking: (id: string, blocking: boolean): Promise<ActionQueueRuntimeState[]> =>
+    ipcRenderer.invoke('actionQueues:setBlocking', id, blocking),
+  resetActionQueueCompleted: (id: string): Promise<ActionQueueRuntimeState[]> =>
+    ipcRenderer.invoke('actionQueues:resetCompleted', id),
+  onActionQueuesState: (callback: (state: ActionQueueRuntimeState[]) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, state: ActionQueueRuntimeState[]): void => callback(state)
+    ipcRenderer.on('actionQueues:state', listener)
+    return () => ipcRenderer.off('actionQueues:state', listener)
   },
   getEventLog: (): Promise<EventLogEntry[]> => ipcRenderer.invoke('eventLog:getEntries'),
   clearEventLog: (): Promise<void> => ipcRenderer.invoke('eventLog:clear'),

@@ -5,6 +5,10 @@ import type { EventLogEntry } from '@shared/types'
 
 const MAX_ENTRIES = 300
 
+// Module-level so pause state survives navigating away from and back to this
+// page — it should only reset to paused on app startup, not on every mount.
+let pausedState = true
+
 function formatTime(timestamp: number): string {
   const date = new Date(timestamp)
   const pad = (n: number): string => String(n).padStart(2, '0')
@@ -27,16 +31,30 @@ function previewPayload(payload: unknown): string {
  * AppEvents keys are tapped and why) — the same role Streamer.bot's own
  * Events panel plays for ITS event sources. Newest entry lands at the top
  * (no autoscroll to manage), Pause freezes the visible list without
- * unsubscribing (so nothing is silently missed, just not shown yet), and a
- * row expands in place to its full pretty-printed payload on click.
+ * unsubscribing (so nothing is silently missed, just not shown yet — Resume
+ * catches the list back up), and a row expands in place to its full
+ * pretty-printed payload on click. Starts paused on app launch: getEventLog's
+ * own initial fetch already backfills whatever's in the ring buffer, so
+ * opening this page for the first time shouldn't also start silently
+ * scrolling that list out from under whoever's reading it. The paused flag
+ * lives at module scope so it persists across navigating away and back —
+ * only an app restart resets it to paused.
  */
 export function EventLogPage() {
   const { t } = useI18n()
   const [entries, setEntries] = useState<EventLogEntry[]>([])
-  const [paused, setPaused] = useState(false)
+  const [paused, setPausedState] = useState(pausedState)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const pausedRef = useRef(paused)
   pausedRef.current = paused
+
+  const setPaused = (value: boolean | ((p: boolean) => boolean)): void => {
+    setPausedState((prev) => {
+      const next = typeof value === 'function' ? value(prev) : value
+      pausedState = next
+      return next
+    })
+  }
 
   useEffect(() => {
     window.obscure.getEventLog().then((initial) => setEntries([...initial].reverse()))

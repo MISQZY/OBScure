@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState, type ComponentType } from 'react'
 import { CustomOverlaysProvider } from '@/providers/CustomOverlaysProvider'
 import { GlobalVariablesProvider } from '@/providers/GlobalVariablesProvider'
+import { CommandsProvider } from '@/providers/CommandsProvider'
 import { TwitchStatsProvider } from '@/providers/TwitchStatsProvider'
 import { StreamerBotVariablesProvider } from '@/providers/StreamerBotVariablesProvider'
 import { AppSidebar } from '@/components/layout/AppSidebar'
@@ -30,7 +31,9 @@ import { StreamerBotPage } from '@/pages/integrations/StreamerBotPage'
 import { SceneBuilderPage } from '@/pages/overlays/SceneBuilderPage'
 import { RandomToolPage } from '@/pages/tools/RandomToolPage'
 import { RouletteToolPage } from '@/pages/tools/RouletteToolPage'
-import { QueueToolPage } from '@/pages/tools/QueueToolPage'
+import { CommandsPage } from '@/pages/actions/CommandsPage'
+import { ActionsPage } from '@/pages/actions/ActionsPage'
+import { QueuesPage } from '@/pages/actions/QueuesPage'
 import { VariablesPage } from '@/pages/data/VariablesPage'
 import { EventLogPage } from '@/pages/data/EventLogPage'
 import { SettingsPage } from '@/pages/SettingsPage'
@@ -43,7 +46,9 @@ import { TourProvider, useTour } from '@/providers/TourProvider'
 const PAGES: Partial<Record<NavKey, ComponentType>> = {
   'tools/random': RandomToolPage,
   'tools/roulette': RouletteToolPage,
-  'tools/queue': QueueToolPage,
+  'actions/commands': CommandsPage,
+  actions: ActionsPage,
+  'actions/queues': QueuesPage,
   'data/variables': VariablesPage,
   'data/event-log': EventLogPage,
   'integrations/spotify': SpotifyPage,
@@ -135,16 +140,18 @@ function App() {
           <TourProvider>
             <CustomOverlaysProvider>
               <GlobalVariablesProvider>
-                <TwitchStatsProvider>
-                  <StreamerBotVariablesProvider>
-                    <div className="flex h-screen flex-col overflow-hidden">
-                      <TitleBar />
-                      <div className="min-h-0 flex-1">
-                        <AppShell />
+                <CommandsProvider>
+                  <TwitchStatsProvider>
+                    <StreamerBotVariablesProvider>
+                      <div className="flex h-screen flex-col overflow-hidden">
+                        <TitleBar />
+                        <div className="min-h-0 flex-1">
+                          <AppShell />
+                        </div>
                       </div>
-                    </div>
-                  </StreamerBotVariablesProvider>
-                </TwitchStatsProvider>
+                    </StreamerBotVariablesProvider>
+                  </TwitchStatsProvider>
+                </CommandsProvider>
               </GlobalVariablesProvider>
             </CustomOverlaysProvider>
           </TourProvider>

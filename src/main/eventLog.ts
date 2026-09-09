@@ -21,7 +21,7 @@ const LOGGED_EVENTS: (keyof AppEvents)[] = [
   "points-redemption",
   "random-state",
   "roulette-state",
-  "queue-state",
+  "action-queues-state",
   "custom-overlay-trigger",
   "integration-status",
   "streamerbot-trigger",

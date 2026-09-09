@@ -140,6 +140,12 @@ export class OverlayServer {
     this.broadcast("custom-overlay-trigger", { urlKey: overlay.urlKey });
   }
 
+  /** Replays a scene already known to this server (see setCustomOverlays) without re-sending its config — used by ActionQueueEngine to fire an Action's own scene, where the scene itself hasn't changed, only that it should play again. A no-op if `urlKey` isn't a real scene (e.g. the scene it pointed to was since deleted). */
+  triggerCustomOverlay(urlKey: string): void {
+    if (!this.customOverlays.has(urlKey)) return;
+    this.broadcast("custom-overlay-trigger", { urlKey });
+  }
+
   async start(): Promise<void> {
     this.server = createServer((req, res) => {
       void this.handleRequest(req, res);

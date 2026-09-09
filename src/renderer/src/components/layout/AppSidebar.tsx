@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { ChevronRight, Database, Download, Folder, FolderPlus, LayoutDashboard, Layers, Plug, Settings, Trash2, Wrench, Plus } from 'lucide-react'
+import { ChevronRight, Database, Download, Folder, FolderPlus, LayoutDashboard, Layers, Plug, Settings, Trash2, Wrench, Plus, Zap } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -47,12 +47,14 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
   const { t } = useI18n()
   const eventLabelsByKey = eventLabels(t)
   const [toolsOpen, setToolsOpen] = usePersistedOpen('sidebar-tools')
+  const [actionsOpen, setActionsOpen] = usePersistedOpen('sidebar-actions')
   const [dataOpen, setDataOpen] = usePersistedOpen('sidebar-data')
   const [integrationsOpen, setIntegrationsOpen] = usePersistedOpen('sidebar-integrations')
   const [overlaysOpen, setOverlaysOpen] = usePersistedOpen('sidebar-overlays')
   const { overlays, saveOverlay, folders, saveFolder, deleteFolder, moveOverlayToFolder } = useCustomOverlays()
 
   const isToolsActive = active.startsWith('tools/')
+  const isActionsActive = active === 'actions/commands' || active === 'actions' || active === 'actions/queues'
   const isDataActive = active.startsWith('data/')
   const isIntegrationsActive = active.startsWith('integrations/')
 
@@ -453,6 +455,56 @@ export function AppSidebar({ active, onNavigate }: AppSidebarProps) {
                         </SidebarMenuSubItem>
                       )
                     })}
+                  </SidebarMenuSub>
+                )}
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={isActionsActive && !actionsOpen}
+                  tooltip={t.sidebar.actionsQueues}
+                  onClick={() => setActionsOpen(!actionsOpen)}
+                >
+                  <Zap />
+                  <span>{t.sidebar.actionsQueues}</span>
+                  <ChevronRight className={cn('ml-auto transition-transform', actionsOpen && 'rotate-90')} />
+                </SidebarMenuButton>
+
+                {actionsOpen && (
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton
+                        isActive={active === 'actions/commands'}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          onNavigate('actions/commands')
+                        }}
+                      >
+                        <span>{t.commands.title}</span>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton
+                        isActive={active === 'actions'}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          onNavigate('actions')
+                        }}
+                      >
+                        <span>{t.actions.title}</span>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton
+                        isActive={active === 'actions/queues'}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          onNavigate('actions/queues')
+                        }}
+                      >
+                        <span>{t.actionQueues.title}</span>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
                   </SidebarMenuSub>
                 )}
               </SidebarMenuItem>

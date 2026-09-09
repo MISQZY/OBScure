@@ -1,21 +1,8 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
-import {
-  Button,
-  Checkbox,
-  Input,
-  Label,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui'
+import { Button, Checkbox, Input, Label, Popover, PopoverContent, PopoverTrigger } from '@/components/ui'
 import { useI18n } from '@/providers/I18nProvider'
-import { commandTriggerWords, type CommandConfig, type CommandEntryMode } from '@shared/eventsConfig'
+import { commandTriggerWords, type CommandConfig } from '@shared/eventsConfig'
 
 interface ChatCommandFieldProps {
   id: string
@@ -27,13 +14,15 @@ interface ChatCommandFieldProps {
 }
 
 /**
- * A chat command edited as its own popover instead of a single free-text
- * field — CommandConfig bundles three genuinely separate settings (which
- * words trigger it, whether they carry a shared prefix, who's allowed to
- * use it), so this opens them together behind one button rather than
- * spreading three controls across the page. The trigger button itself shows
- * the resolved trigger words live (e.g. "!рулетка, !roulette") so the
- * current config is readable without opening the popover.
+ * A chat command's trigger phrase edited as its own popover instead of a
+ * single free-text field — aliases and the shared prefix are two genuinely
+ * separate settings, so this opens them together behind one button rather
+ * than spreading two controls across the page. Who's allowed to use the
+ * command is a separate permission, not part of the trigger phrase itself —
+ * see CommandEntryTypesField on CommandsPage, rendered next to this as its
+ * own visible control rather than folded into this popover. The trigger
+ * button itself shows the resolved trigger words live (e.g. "!рулетка,
+ * !roulette") so the current config is readable without opening the popover.
  */
 export function ChatCommandField({ id, label, aliasPlaceholder, hint, value, onChange }: ChatCommandFieldProps) {
   const { t } = useI18n()
@@ -126,20 +115,6 @@ export function ChatCommandField({ id, label, aliasPlaceholder, hint, value, onC
                 aria-label={t.common.prefixLabel}
               />
             )}
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={`${id}-entry-mode`}>{t.chatCommand.entryModeLabel}</Label>
-            <Select value={value.entryMode} onValueChange={(next) => onChange({ ...value, entryMode: next as CommandEntryMode })}>
-              <SelectTrigger id={`${id}-entry-mode`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t.chatCommand.entryModeAll}</SelectItem>
-                <SelectItem value="followers">{t.chatCommand.entryModeFollowers}</SelectItem>
-                <SelectItem value="subscribers">{t.chatCommand.entryModeSubscribers}</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </PopoverContent>
       </Popover>

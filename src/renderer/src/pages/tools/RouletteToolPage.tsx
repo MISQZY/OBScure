@@ -15,12 +15,18 @@ import {
   ScrollArea
 } from '@/components/ui'
 import { CopyableValue } from '@/components/CopyableValue'
-import { ChatCommandField } from '@/components/ChatCommandField'
+import { CommandSelectField } from '@/components/CommandSelectField'
 import { usePageVisible } from '@/hooks/use-page-visible'
+import { useCommands } from '@/providers/CommandsProvider'
 import { useI18n } from '@/providers/I18nProvider'
 import { DurationInput } from '@/components/DurationInput'
 import { RouletteWheel, wheelSectorColor, WHEEL_EXTRA_SPINS } from './RouletteWheel'
-import { DEFAULT_ROULETTE_CONFIG, MAX_ROULETTE_DURATION_SECONDS, MIN_ROULETTE_DURATION_SECONDS, type RouletteConfig } from '@shared/eventsConfig'
+import {
+  DEFAULT_ROULETTE_CONFIG,
+  MAX_ROULETTE_DURATION_SECONDS,
+  MIN_ROULETTE_DURATION_SECONDS,
+  type RouletteConfig
+} from '@shared/eventsConfig'
 import type { RouletteStatePayload, TwitchCustomReward } from '@shared/types'
 
 const IDLE_STATE: RouletteStatePayload = { phase: 'idle', entrants: [], endsAt: null, winner: null, hash: null, seed: null }
@@ -44,6 +50,7 @@ export function RouletteToolPage() {
   const [saved, setSaved] = useState(false)
   const [state, setState] = useState<RouletteStatePayload>(IDLE_STATE)
   const [rewards, setRewards] = useState<TwitchCustomReward[]>([])
+  const { commands } = useCommands()
   const [manualName, setManualName] = useState('')
   const [now, setNow] = useState(() => Date.now())
   const [wheelRotation, setWheelRotation] = useState(0)
@@ -124,6 +131,7 @@ export function RouletteToolPage() {
     setState(await window.obscure.removeRouletteEntrant(id))
   }
 
+  const selectedCommand = commands.find((c) => c.id === config.commandId) ?? null
   const secondsLeft = state.endsAt ? Math.max(0, Math.ceil((state.endsAt - now) / 1000)) : 0
   const totalWeight = state.entrants.reduce((sum, entrant) => sum + entrant.weight, 0)
 
@@ -151,13 +159,12 @@ export function RouletteToolPage() {
       <div className="flex flex-col gap-6 min-[1440px]:flex-row min-[1440px]:items-start">
         <div className="flex flex-col gap-4 min-[1440px]:w-96 min-[1440px]:shrink-0">
           <div className="flex flex-wrap gap-4">
-            <ChatCommandField
+            <CommandSelectField
               id="roulette-command"
               label={t.events.roulette.commandLabel}
-              aliasPlaceholder={t.events.roulette.commandPlaceholder}
-              hint={t.events.roulette.commandHint}
-              value={config.command}
-              onChange={(value) => setConfig((c) => ({ ...c, command: value }))}
+              commands={commands}
+              value={config.commandId}
+              onChange={(commandId) => setConfig((c) => ({ ...c, commandId }))}
             />
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="roulette-duration">{t.events.roulette.durationLabel}</Label>
@@ -194,8 +201,7 @@ export function RouletteToolPage() {
           </div>
           <p className="text-xs text-muted-foreground">
             {t.events.roulette.pointsRewardHint} {t.events.roulette.pointsStackHint}{' '}
-            {config.command.entryMode === 'followers' && t.events.roulette.entryModeHintFollowers}
-            {config.command.entryMode === 'subscribers' && t.events.roulette.entryModeHintSubscribers}
+            {selectedCommand && selectedCommand.entryTypes.length > 0 && t.events.roulette.entryModeHint}
           </p>
 
           <div className="flex flex-wrap items-center gap-3">
