@@ -138,19 +138,7 @@ function appendContainerChildren(wrap, node, edges, map, animate, vars, registry
   const children =
     depth >= MAX_BOX_DEPTH
       ? []
-      : incomingNodes.filter(
-          (n) =>
-            n.type === 'text' ||
-            n.type === 'image' ||
-            n.type === 'video' ||
-            n.type === 'progress' ||
-            n.type === 'equalizer' ||
-            n.type === 'box' ||
-            n.type === 'group' ||
-            n.type === 'randomPick' ||
-            n.type === 'rouletteWidget' ||
-            n.type === 'randomWidget'
-        )
+      : incomingNodes.filter((n) => CONTENT_TYPES.has(n.type))
   if (children.length === 0) return
   const layer = document.createElement('div')
   layer.style.position = 'absolute'
@@ -509,19 +497,7 @@ function buildBox(node, edges, map, animate, vars, registry, depth = 0) {
   const children =
     depth >= MAX_BOX_DEPTH
       ? []
-      : incomingNodes.filter(
-          (n) =>
-            n.type === 'text' ||
-            n.type === 'image' ||
-            n.type === 'video' ||
-            n.type === 'progress' ||
-            n.type === 'equalizer' ||
-            n.type === 'box' ||
-            n.type === 'group' ||
-            n.type === 'randomPick' ||
-            n.type === 'rouletteWidget' ||
-            n.type === 'randomWidget'
-        )
+      : incomingNodes.filter((n) => CONTENT_TYPES.has(n.type))
   const childCrossAxis = crossAxisFor(incomingNodes)
   const d = node.data || {}
   const container = document.createElement('div')

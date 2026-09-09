@@ -209,13 +209,19 @@ function buildProcessSchedule(nodes, edges, vars) {
   return { schedule, totalMs: atMs }
 }
 
-// Same content types buildBox's own `children` filter (and Scene's own
-// top-level `renderable` filter) accept — what a Random Pick node's
-// variants can be drawn from. Kept as its own list (mirroring
-// CONTENT_TYPES in pages/overlays/sceneUtils/graph.ts) rather than
-// reusing one of the several near-identical inline filters already in
-// this file, since none of THOSE are shared constants either.
-const RANDOM_PICK_VARIANT_TYPES = new Set(['text', 'image', 'video', 'progress', 'equalizer', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'])
+// Every node type that counts as placeable "content": what a container's own
+// `children` socket accepts, what Scene's own top-level `renderable` filter
+// accepts, and what a Random Pick node's variants can be drawn from — all
+// three used to repeat this same 9-member OR-chain/Set by hand (custom-
+// builders.js's buildBox/appendContainerChildren, and every renderable
+// filter in custom-render.js) which is exactly the kind of "forgot to add
+// the new node type to one of the copies" risk a new content node type (like
+// Equalizer) runs into. One shared Set here, referenced everywhere else in
+// this file's own load order (custom-graph.js loads before custom-builders.js/
+// custom-render.js, so both can already read this as a plain global) —
+// mirrors CONTENT_TYPES in pages/overlays/sceneUtils/graph.ts, which the
+// React-side editor already consolidated the same way.
+const CONTENT_TYPES = new Set(['text', 'image', 'video', 'progress', 'equalizer', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'])
 
 // Nesting can go as deep as the graph wants (see BOX_SOCKETS' own doc
 // comment in components/nodes/index.tsx) — this cap is only a safety
@@ -237,7 +243,7 @@ const MAX_BOX_DEPTH = 12
  * pages/overlays/sceneUtils/graph.ts.
  */
 function pickRandomVariant(node, edges, map) {
-  const variants = incoming(node.id, edges, map).filter((n) => RANDOM_PICK_VARIANT_TYPES.has(n.type))
+  const variants = incoming(node.id, edges, map).filter((n) => CONTENT_TYPES.has(n.type))
   if (variants.length === 0) return null
   const customChance = !!(node.data && node.data.customChance)
   const weights = customChance && node.data.weights ? node.data.weights : null

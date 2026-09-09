@@ -159,19 +159,7 @@ function renderStatic(overlay, animate) {
   applyBackgroundFx(bgFxNode, animate, backgroundFxLabel(bgFxNode, edges, map))
   sceneEl.style.flexDirection = orderingFlexDirection(members)
   sceneEl.style.gap = `${orderingGap(members)}px`
-  const renderable = members.filter(
-    (n) =>
-      n.type === 'box' ||
-      n.type === 'group' ||
-      n.type === 'text' ||
-      n.type === 'image' ||
-      n.type === 'video' ||
-      n.type === 'progress' ||
-      n.type === 'equalizer' ||
-      n.type === 'randomPick' ||
-      n.type === 'rouletteWidget' ||
-      n.type === 'randomWidget'
-  )
+  const renderable = members.filter((n) => CONTENT_TYPES.has(n.type))
   const crossAxis = crossAxisFor(members)
 
   for (const n of renderable) {
@@ -205,19 +193,7 @@ function showTriggeredContent(overlay, vars, durationMs) {
   applyBackgroundFx(bgFxNode, true, backgroundFxLabel(bgFxNode, edges, map, vars))
   sceneEl.style.flexDirection = orderingFlexDirection(members)
   sceneEl.style.gap = `${orderingGap(members)}px`
-  const renderable = members.filter(
-    (n) =>
-      n.type === 'box' ||
-      n.type === 'group' ||
-      n.type === 'text' ||
-      n.type === 'image' ||
-      n.type === 'video' ||
-      n.type === 'progress' ||
-      n.type === 'equalizer' ||
-      n.type === 'randomPick' ||
-      n.type === 'rouletteWidget' ||
-      n.type === 'randomWidget'
-  )
+  const renderable = members.filter((n) => CONTENT_TYPES.has(n.type))
   const crossAxis = crossAxisFor(members)
   for (const n of renderable) {
     const el = n.type === 'box' || n.type === 'group' ? buildBox(n, edges, map, true, vars) : buildContent(n, edges, map, true, vars, undefined, 0, crossAxis)
@@ -265,19 +241,7 @@ function showProcessContent(overlay, vars, schedule, totalMs) {
   const members = scene ? incoming(scene.id, edges, map) : []
   sceneEl.style.flexDirection = orderingFlexDirection(members)
   sceneEl.style.gap = `${orderingGap(members)}px`
-  const renderable = members.filter(
-    (n) =>
-      n.type === 'box' ||
-      n.type === 'group' ||
-      n.type === 'text' ||
-      n.type === 'image' ||
-      n.type === 'video' ||
-      n.type === 'progress' ||
-      n.type === 'equalizer' ||
-      n.type === 'randomPick' ||
-      n.type === 'rouletteWidget' ||
-      n.type === 'randomWidget'
-  )
+  const renderable = members.filter((n) => CONTENT_TYPES.has(n.type))
   const crossAxis = crossAxisFor(members)
   const registry = {}
   // animate=true: a component with no Task ever targeting it should
@@ -411,19 +375,7 @@ function showAudioContent(overlay, vars, animate) {
   applyBackgroundFx(bgFxNode, animate, backgroundFxLabel(bgFxNode, edges, map, vars))
   sceneEl.style.flexDirection = orderingFlexDirection(members)
   sceneEl.style.gap = `${orderingGap(members)}px`
-  const renderable = members.filter(
-    (n) =>
-      n.type === 'box' ||
-      n.type === 'group' ||
-      n.type === 'text' ||
-      n.type === 'image' ||
-      n.type === 'video' ||
-      n.type === 'progress' ||
-      n.type === 'equalizer' ||
-      n.type === 'randomPick' ||
-      n.type === 'rouletteWidget' ||
-      n.type === 'randomWidget'
-  )
+  const renderable = members.filter((n) => CONTENT_TYPES.has(n.type))
   const crossAxis = crossAxisFor(members)
   for (const n of renderable) {
     const el = n.type === 'box' || n.type === 'group' ? buildBox(n, edges, map, animate, vars) : buildContent(n, edges, map, animate, vars, undefined, 0, crossAxis)
