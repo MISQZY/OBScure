@@ -41,6 +41,12 @@ export function ConditionNode({ id, data }: NodeProps) {
   const savedOperator = data.operator as ConditionOperator
   const operator = operators.includes(savedOperator) ? savedOperator : operators[0]
   const value = (data.value as string) ?? ''
+  // Same "one corrected variable, reused everywhere" fix as EventNode's own
+  // `platform` — the Value picker below must never display a platform
+  // selected that isn't what's actually saved in `data.value`, or the
+  // condition silently evaluates against a blank string forever (see
+  // evaluateCondition in sceneUtils/graph.ts, which reads data.value raw).
+  const sourceValue = (ALERT_PLATFORMS as readonly string[]).includes(value) ? (value as AlertPlatform) : ALERT_PLATFORMS[0]
 
   return (
     <BaseNode
@@ -58,7 +64,11 @@ export function ConditionNode({ id, data }: NodeProps) {
           options={CONDITION_FIELDS}
           onChange={(next) => {
             const nextOperators = next === 'amount' ? NUMERIC_CONDITION_OPERATORS : STRING_CONDITION_OPERATORS
-            updateNodeData(id, { field: next, operator: nextOperators[0], value: '' })
+            // Source needs a valid platform saved right away (see
+            // `sourceValue` above) — an empty string would leave the Value
+            // picker showing a platform pre-selected that was never
+            // actually persisted.
+            updateNodeData(id, { field: next, operator: nextOperators[0], value: next === 'source' ? ALERT_PLATFORMS[0] : '' })
           }}
           renderOption={(opt) => CONDITION_FIELD_LABELS[opt]}
         />
@@ -69,7 +79,7 @@ export function ConditionNode({ id, data }: NodeProps) {
       <Field label="Value">
         {isSource ? (
           <NodeSelect
-            value={(ALERT_PLATFORMS as readonly string[]).includes(value) ? (value as AlertPlatform) : ALERT_PLATFORMS[0]}
+            value={sourceValue}
             options={ALERT_PLATFORMS}
             onChange={(next) => updateNodeData(id, { value: next })}
             renderOption={(opt) => ALERT_PLATFORM_LABELS[opt]}
