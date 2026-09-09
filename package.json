@@ -27,7 +27,6 @@
     "font-list": "^2.1.0",
     "react-colorful": "^5.8.0",
     "react-grid-layout": "^1.5.4",
-    "ts-morph": "^28.0.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
