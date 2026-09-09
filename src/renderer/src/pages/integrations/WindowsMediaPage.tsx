@@ -1,6 +1,7 @@
 import { IntegrationPageLayout } from '@/components/layout/IntegrationPageLayout'
 import { SettingToggleField } from '@/components/SettingToggleField'
 import { useIntegrationStatus } from '@/hooks/use-integration-status'
+import { INTEGRATIONS_META } from '@/lib/integrations-meta'
 import { useI18n } from '@/providers/I18nProvider'
 
 export function WindowsMediaPage() {
@@ -10,6 +11,7 @@ export function WindowsMediaPage() {
   return (
     <IntegrationPageLayout
       title={t.integrations.windowsMedia.title}
+      icon={INTEGRATIONS_META.windowsMedia.icon}
       status={status}
       description={t.integrations.windowsMedia.description}
     >

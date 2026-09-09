@@ -2,6 +2,7 @@ import { ConnectButton } from '@/components/ConnectButton'
 import { IntegrationPageLayout } from '@/components/layout/IntegrationPageLayout'
 import { SettingTextField } from '@/components/SettingTextField'
 import { useIntegrationStatus } from '@/hooks/use-integration-status'
+import { INTEGRATIONS_META } from '@/lib/integrations-meta'
 import { useI18n } from '@/providers/I18nProvider'
 
 export function StreamerBotPage() {
@@ -9,7 +10,12 @@ export function StreamerBotPage() {
   const [status, refresh] = useIntegrationStatus('streamerbot')
 
   return (
-    <IntegrationPageLayout title="Streamer.bot" status={status} description={t.integrations.streamerbot.description}>
+    <IntegrationPageLayout
+      title="Streamer.bot"
+      icon={INTEGRATIONS_META.streamerbot.icon}
+      status={status}
+      description={t.integrations.streamerbot.description}
+    >
       <p className="text-xs text-muted-foreground">{t.integrations.streamerbot.setupNote}</p>
       <SettingTextField
         settingKey="streamerbot.host"

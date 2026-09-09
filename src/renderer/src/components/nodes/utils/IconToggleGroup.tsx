@@ -8,7 +8,10 @@ import {
   AlignVerticalJustifyEnd,
   type LucideIcon
 } from 'lucide-react'
+import type { ComponentType, SVGProps } from 'react'
 import { cn } from '@/lib/utils'
+
+type ToggleIcon = LucideIcon | ComponentType<SVGProps<SVGSVGElement>>
 
 export const TEXT_ALIGN_BUTTONS = [
   { id: 'left', Icon: AlignLeft, title: 'Left' },
@@ -30,7 +33,7 @@ export function IconToggleGroup<T extends string>({
   onChange
 }: {
   value: T
-  options: readonly { id: T; Icon: LucideIcon; title: string }[]
+  options: readonly { id: T; Icon: ToggleIcon; title: string }[]
   onChange: (next: T) => void
 }) {
   return (

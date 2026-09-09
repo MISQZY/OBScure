@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
-import { Mic, Clapperboard, type LucideIcon } from 'lucide-react'
+import { Mic, type LucideIcon } from 'lucide-react'
+import type { ComponentType, SVGProps } from 'react'
+import { ObsIcon } from '@/components/BrandIcon'
 import { cn } from '@/lib/utils'
 
 import { useI18n } from '@/providers/I18nProvider'
@@ -12,9 +14,13 @@ interface AudioDeviceOption {
   label: string
 }
 
-const SOURCE_KIND_BUTTONS: readonly { id: 'device' | 'obs'; Icon: LucideIcon; title: string }[] = [
+const SOURCE_KIND_BUTTONS: readonly {
+  id: 'device' | 'obs'
+  Icon: LucideIcon | ComponentType<SVGProps<SVGSVGElement>>
+  title: string
+}[] = [
   { id: 'device', Icon: Mic, title: 'Microphone/device' },
-  { id: 'obs', Icon: Clapperboard, title: 'OBS audio source' }
+  { id: 'obs', Icon: ObsIcon, title: 'OBS audio source' }
 ] as const
 
 /** Windows device labels are often "<short name> - <long driver/description text>" — only the part before the first "-" is worth showing in the node's own tight layout. Falls back to the full label when there's no "-" at all, or when trimming would leave nothing. */

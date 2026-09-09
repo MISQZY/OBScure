@@ -3,6 +3,7 @@ import { IntegrationPageLayout } from '@/components/layout/IntegrationPageLayout
 import { SettingTextField } from '@/components/SettingTextField'
 import { SetupSteps } from '@/components/SetupSteps'
 import { useIntegrationStatus } from '@/hooks/use-integration-status'
+import { INTEGRATIONS_META } from '@/lib/integrations-meta'
 import { useI18n } from '@/providers/I18nProvider'
 
 export function YoutubePage() {
@@ -10,7 +11,12 @@ export function YoutubePage() {
   const [status, refresh] = useIntegrationStatus('youtube')
 
   return (
-    <IntegrationPageLayout title="YouTube" status={status} description={t.integrations.youtube.description}>
+    <IntegrationPageLayout
+      title="YouTube"
+      icon={INTEGRATIONS_META.youtube.icon}
+      status={status}
+      description={t.integrations.youtube.description}
+    >
       <SetupSteps steps={t.integrations.youtube.setupSteps} />
       <SettingTextField
         settingKey="youtube.clientId"

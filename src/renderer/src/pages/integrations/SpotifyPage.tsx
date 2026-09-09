@@ -3,6 +3,7 @@ import { IntegrationPageLayout } from '@/components/layout/IntegrationPageLayout
 import { SettingTextField } from '@/components/SettingTextField'
 import { SetupSteps } from '@/components/SetupSteps'
 import { useIntegrationStatus } from '@/hooks/use-integration-status'
+import { INTEGRATIONS_META } from '@/lib/integrations-meta'
 import { useI18n } from '@/providers/I18nProvider'
 
 export function SpotifyPage() {
@@ -10,7 +11,12 @@ export function SpotifyPage() {
   const [status, refresh] = useIntegrationStatus('spotify')
 
   return (
-    <IntegrationPageLayout title="Spotify" status={status} description={t.integrations.spotify.description}>
+    <IntegrationPageLayout
+      title="Spotify"
+      icon={INTEGRATIONS_META.spotify.icon}
+      status={status}
+      description={t.integrations.spotify.description}
+    >
       <SetupSteps steps={t.integrations.spotify.setupSteps} />
       <SettingTextField
         settingKey="spotify.clientId"
