@@ -25,6 +25,7 @@ const LOGGED_EVENTS: (keyof AppEvents)[] = [
   "custom-overlay-trigger",
   "integration-status",
   "streamerbot-trigger",
+  "command-triggered",
 ];
 
 /**

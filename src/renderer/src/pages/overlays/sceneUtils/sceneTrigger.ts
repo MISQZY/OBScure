@@ -2,29 +2,30 @@ import { Node, Edge } from "@xyflow/react";
 import { buildNodeMap, incoming } from "./graph";
 
 /**
- * Whether Scene is wired to an Event node — if so, the scene is hidden
- * until a matching alert fires (for real: a live event; in the editor:
- * Play/Test simulating one), shows for `durationMs`, then hides again. See
- * EventNode/TimerNode's own doc comments in components/nodes/index.tsx,
- * and isEventTrigger — the same logic mirrored in overlays/custom.html.
+ * Whether Scene is wired to an Event node — if so, the scene is hidden until
+ * a matching alert OR chat command fires (for real: a live event/
+ * 'command-triggered' broadcast; in the editor: Play/Test simulating one),
+ * shows for `durationMs`, then hides again. An Event node contributes to
+ * `alertTypes` when its own kind is 'alert' (data.alertType), or to
+ * `commandIds` when its kind is 'command' (data.commandId) — see
+ * EventNode/TimerNode's own doc comments in components/nodes/index.tsx, and
+ * isEventTrigger — the same logic mirrored in overlays/custom.html.
  */
-export function sceneTrigger(nodes: Node[], edges: Edge[]): { active: boolean; alertTypes: string[]; durationMs: number } {
+export function sceneTrigger(
+  nodes: Node[],
+  edges: Edge[]
+): { active: boolean; alertTypes: string[]; commandIds: string[]; durationMs: number } {
   const scene = nodes.find((n) => n.type === 'scene')
-  if (!scene) return { active: false, alertTypes: [], durationMs: 6000 }
+  if (!scene) return { active: false, alertTypes: [], commandIds: [], durationMs: 6000 }
   const map = buildNodeMap(nodes)
   const members = incoming(scene.id, edges, map)
-  const alertTypes = [
-    ...new Set(
-      members
-        .filter((n) => n.type === 'event')
-        .map((n) => n.data.alertType as string)
-        .filter(Boolean)
-    )
-  ]
-  if (alertTypes.length === 0) return { active: false, alertTypes, durationMs: 6000 }
+  const eventNodes = members.filter((n) => n.type === 'event')
+  const alertTypes = [...new Set(eventNodes.map((n) => n.data.alertType as string).filter(Boolean))]
+  const commandIds = [...new Set(eventNodes.map((n) => n.data.commandId as string).filter(Boolean))]
+  if (alertTypes.length === 0 && commandIds.length === 0) return { active: false, alertTypes, commandIds, durationMs: 6000 }
   const timer = members.find((n) => n.type === 'timer')
   const durationMs = (timer?.data.delay as number) || 6000
-  return { active: true, alertTypes, durationMs }
+  return { active: true, alertTypes, commandIds, durationMs }
 }
 
 

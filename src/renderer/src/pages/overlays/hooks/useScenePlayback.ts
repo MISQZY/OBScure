@@ -11,6 +11,7 @@ import {
   processExitBufferMs,
   maxExitDurationMs,
   SAMPLE_ALERT_VARS,
+  SAMPLE_COMMAND_VARS,
   SAMPLE_AUDIO_VARS,
   SAMPLE_ROULETTE_VARS
 } from '../sceneUtils'
@@ -157,26 +158,29 @@ export function useScenePlayback({
       // purely by Roulette (proc.rouletteArmed) gets round-shaped sample
       // vars, or a Task's own {title}/{artist}/{entrants}/{winner}
       // placeholders would just preview as literal text. alertTypes wins
-      // over audio, which wins over roulette, when more than one is wired
-      // to the same Start.
+      // over commandIds, which wins over audio, which wins over roulette,
+      // when more than one is wired to the same Start.
       const alertTypes = proc.active ? proc.alertTypes : trigger!.alertTypes
+      const commandIds = proc.active ? proc.commandIds : (trigger?.commandIds ?? [])
       const audioArmed = proc.active ? proc.audioArmed : audioTrigger
       const nextEventVars =
         alertTypes.length > 0
           ? { type: alertTypes[0], ...SAMPLE_ALERT_VARS }
-          : audioArmed
-            ? { ...SAMPLE_AUDIO_VARS, source: 'spotify', isPlaying: true }
-            : { ...SAMPLE_ROULETTE_VARS }
+          : commandIds.length > 0
+            ? { ...SAMPLE_COMMAND_VARS }
+            : audioArmed
+              ? { ...SAMPLE_AUDIO_VARS, source: 'spotify', isPlaying: true }
+              : { ...SAMPLE_ROULETTE_VARS }
       setEventVars(nextEventVars)
       setEventPhase('showing')
       if (proc.active) {
         // Condition nodes (see evaluateCondition in sceneUtils/graph.ts)
-        // only ever have real {user}/{amount}/{message}/{source} vars to
-        // branch on when the process is armed by an Event — audio/roulette-
-        // armed sample vars don't carry that shape, so every Condition just
-        // falls to Else during THOSE previews, same as the real overlay
-        // would with no matching alert.
-        const built = buildProcessSchedule(nodes, edges, alertTypes.length > 0 ? nextEventVars : null)
+        // only ever have real vars to branch on when the process is armed by
+        // an Event (alert OR command) — audio/roulette-armed sample vars
+        // don't carry that shape, so every Condition just falls to Else
+        // during THOSE previews, same as the real overlay would with no
+        // matching alert/command.
+        const built = buildProcessSchedule(nodes, edges, alertTypes.length > 0 || commandIds.length > 0 ? nextEventVars : null)
         const totalMs = built?.totalMs ?? 0
         // See processExitBufferMs's own doc comment: without the buffer,
         // whichever Task(s) fire at exactly totalMs get cut off before

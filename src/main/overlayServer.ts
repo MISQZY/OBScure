@@ -94,6 +94,7 @@ export class OverlayServer {
     this.latestGlobalVariables = options.initialGlobalVariables ?? [];
 
     this.eventBus.on("alert", (payload) => this.broadcast("alert", payload));
+    this.eventBus.on("command-triggered", (payload) => this.broadcast("command-triggered", payload));
     this.eventBus.on("roulette-state", (payload) => {
       this.latestRouletteState = payload;
       this.broadcast("roulette-state", payload);

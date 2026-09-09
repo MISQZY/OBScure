@@ -1,6 +1,7 @@
 import { Node, Edge } from "@xyflow/react";
 import { cn } from "@/lib/utils";
 import type { OverlayUrls } from "@shared/types";
+import { useCommands } from "@/providers/CommandsProvider";
 import { useI18n } from "@/providers/I18nProvider";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { buildNodeMap, incoming, orderingClass, orderingGap, crossAxisFor, ScheduledTask } from "../sceneUtils";
@@ -19,6 +20,7 @@ export interface PreviewEventState {
   hiding: boolean
   vars: Record<string, unknown> | null
   alertTypes: string[]
+  commandIds: string[]
 }
 
 
@@ -57,6 +59,7 @@ export function ScenePreview({
   urls: OverlayUrls | null
 }) {
   const { t } = useI18n()
+  const { commands } = useCommands()
   const map = buildNodeMap(nodes)
   const scene = nodes.find((n) => n.type === 'scene')
 
@@ -95,12 +98,19 @@ export function ScenePreview({
   }
 
   if (eventState.active && !eventState.visible) {
+    // alertTypes/commandIds are both empty when armed purely by Audio
+    // Player/Roulette (no Event — see processTrigger's audioArmed/
+    // rouletteArmed), neither of which has a "type" to name — describe the
+    // trigger instead of joining an empty list into a bare "Waiting for  —".
+    const waitingLabel =
+      eventState.alertTypes.length > 0
+        ? eventState.alertTypes.join(' / ')
+        : eventState.commandIds.length > 0
+          ? eventState.commandIds.map((id) => commands.find((c) => c.id === id)?.name || id).join(' / ')
+          : t.sceneBuilder.preview.waitingForFallback
     return (
       <span className="text-white/40 text-xs text-center px-4">
-        {/* alertTypes is empty when armed purely by Audio Player/Roulette (no Event — see processTrigger's audioArmed/rouletteArmed), neither of which has a "type" to name — describe the trigger instead of joining an empty list into a bare "Waiting for  —". */}
-        {interpolate(t.sceneBuilder.preview.waitingForTypes, {
-          types: eventState.alertTypes.length > 0 ? eventState.alertTypes.join(' / ') : t.sceneBuilder.preview.waitingForFallback
-        })}
+        {interpolate(t.sceneBuilder.preview.waitingForTypes, { types: waitingLabel })}
       </span>
     )
   }

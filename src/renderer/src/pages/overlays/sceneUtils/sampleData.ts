@@ -1,6 +1,16 @@
 /** Sample vars used to simulate a real alert from Play/Test — see sceneTrigger and handlePlay. */
 export const SAMPLE_ALERT_VARS = { user: 'Viewer', amount: 25, message: 'Sample message', source: 'twitch' }
 
+/**
+ * Sample vars used to simulate a real 'command-triggered' broadcast from
+ * Play/Test — see sceneTrigger/processTrigger's own `commandIds` and
+ * handlePlay. Only `user` — a chat command carries nothing shaped like
+ * SAMPLE_ALERT_VARS' own amount/message/source (see CommandTriggeredPayload
+ * in shared/types.ts), so a Condition node checking any of those three
+ * always falls to Else during this preview, same as the real overlay would.
+ */
+export const SAMPLE_COMMAND_VARS = { user: 'Viewer' }
+
 
 /**
  * Sample now-playing vars for previewing an Audio Player's Content/Event

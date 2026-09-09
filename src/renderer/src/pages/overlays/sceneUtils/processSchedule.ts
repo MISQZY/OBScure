@@ -295,35 +295,40 @@ export function processExitBufferMs(schedule: ScheduledTask[], totalMs: number):
 
 /**
  * Whether Scene's process is armed — either by a DataSource(alert) wired
- * into its Start node (`alertTypes`, matched against a real alert), by an
- * Audio Player wired into Start (`audioArmed` — a track-change trigger
- * instead of a type match), by a Roulette node wired into Start
- * (`rouletteArmed` — fires the moment a round starts collecting), or by a
- * Random node wired into Start (`randomArmed` — fires the moment a roll is
- * committed). All four are only meaningful in the real overlay since the
- * editor has no live now-playing/roulette/random feed to react to — see
- * processTrigger in overlays/custom.html. Any one alone makes `active` true.
+ * into its Start node (`alertTypes`, matched against a real alert), by a
+ * DataSource(command) wired into Start (`commandIds`, matched against a real
+ * 'command-triggered' broadcast — see CommandTriggeredPayload in
+ * shared/types.ts), by an Audio Player wired into Start (`audioArmed` — a
+ * track-change trigger instead of a type match), by a Roulette node wired
+ * into Start (`rouletteArmed` — fires the moment a round starts collecting),
+ * or by a Random node wired into Start (`randomArmed` — fires the moment a
+ * roll is committed). audioArmed/rouletteArmed/randomArmed are only
+ * meaningful in the real overlay since the editor has no live now-playing/
+ * roulette/random feed to react to — see processTrigger in
+ * overlays/custom.html. Any one alone makes `active` true.
  */
 export function processTrigger(
   nodes: Node[],
   edges: Edge[]
-): { active: boolean; alertTypes: string[]; audioArmed: boolean; rouletteArmed: boolean; randomArmed: boolean } {
+): { active: boolean; alertTypes: string[]; commandIds: string[]; audioArmed: boolean; rouletteArmed: boolean; randomArmed: boolean } {
   const start = nodes.find((n) => n.type === 'start')
-  if (!start) return { active: false, alertTypes: [], audioArmed: false, rouletteArmed: false, randomArmed: false }
+  if (!start) return { active: false, alertTypes: [], commandIds: [], audioArmed: false, rouletteArmed: false, randomArmed: false }
   const map = buildNodeMap(nodes)
   const members = incoming(start.id, edges, map)
-  const alertTypes = [
-    ...new Set(
-      members
-        .filter((n) => n.type === 'event')
-        .map((n) => n.data.alertType as string)
-        .filter(Boolean)
-    )
-  ]
+  const eventNodes = members.filter((n) => n.type === 'event')
+  const alertTypes = [...new Set(eventNodes.map((n) => n.data.alertType as string).filter(Boolean))]
+  const commandIds = [...new Set(eventNodes.map((n) => n.data.commandId as string).filter(Boolean))]
   const audioArmed = members.some((n) => n.type === 'audioPlayer')
   const rouletteArmed = members.some((n) => n.type === 'rouletteSource')
   const randomArmed = members.some((n) => n.type === 'randomSource')
-  return { active: alertTypes.length > 0 || audioArmed || rouletteArmed || randomArmed, alertTypes, audioArmed, rouletteArmed, randomArmed }
+  return {
+    active: alertTypes.length > 0 || commandIds.length > 0 || audioArmed || rouletteArmed || randomArmed,
+    alertTypes,
+    commandIds,
+    audioArmed,
+    rouletteArmed,
+    randomArmed
+  }
 }
 
 

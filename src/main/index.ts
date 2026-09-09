@@ -228,6 +228,22 @@ eventBus.on("chat-message", (payload) => {
   const findCommand = (id: string | null): CommandDef | null =>
     id ? (commands.find((c) => c.id === id) ?? null) : null;
 
+  // Broadcast for EVERY registered command a match hits, independent of
+  // whether Roulette/an Action also happens to reference it — this is what
+  // a Scene's own Event(kind: 'command') node reacts to (see
+  // CommandTriggeredPayload's own doc comment), same "registered once, used
+  // anywhere" model the Commands page exists for.
+  for (const command of commands) {
+    if (!matchesChatCommand(payload.text, command)) continue;
+    void isEligibleForCommand(command.entryTypes, payload.userId)
+      .then((eligible) => {
+        if (eligible) eventBus.emit("command-triggered", { commandId: command.id, user: payload.user });
+      })
+      .catch((error) => {
+        logError("main", "command eligibility check failed for chat entry", error);
+      });
+  }
+
   const rouletteCommand = findCommand(getStoredRouletteConfig().commandId);
   if (rouletteCommand && matchesChatCommand(payload.text, rouletteCommand)) {
     void isEligibleForCommand(rouletteCommand.entryTypes, payload.userId)

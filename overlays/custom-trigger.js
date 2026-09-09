@@ -37,28 +37,27 @@ function applyBackgroundFx(node, animate, label) {
 }
 
 /**
- * Whether Scene is wired to a DataSource(alert) node — if so, the
- * scene is hidden until a matching alert fires (for real, or Test
- * simulating one), shows for durationMs, then hides again. Mirrors
- * sceneTrigger in SceneBuilderPage.tsx.
+ * Whether Scene is wired to a DataSource(alert/command) node — if so, the
+ * scene is hidden until a matching alert OR chat command fires (for real, or
+ * Test simulating one), shows for durationMs, then hides again. An Event
+ * node contributes to `alertTypes` when its own kind is 'alert', or to
+ * `commandIds` when its kind is 'command'. Mirrors sceneTrigger in
+ * pages/overlays/sceneUtils/sceneTrigger.ts.
  */
 function isEventTrigger(overlay) {
   const nodes = overlay?.nodes || []
   const edges = overlay?.edges || []
   const map = nodeMap(nodes)
   const scene = nodes.find((n) => n.type === 'scene')
-  if (!scene) return { active: false, alertTypes: new Set(), durationMs: 6000 }
+  if (!scene) return { active: false, alertTypes: new Set(), commandIds: new Set(), durationMs: 6000 }
   const members = incoming(scene.id, edges, map)
-  const alertTypes = new Set(
-    members
-      .filter((n) => n.type === 'event')
-      .map((n) => n.data.alertType)
-      .filter(Boolean)
-  )
-  if (alertTypes.size === 0) return { active: false, alertTypes, durationMs: 6000 }
+  const eventNodes = members.filter((n) => n.type === 'event')
+  const alertTypes = new Set(eventNodes.map((n) => n.data.alertType).filter(Boolean))
+  const commandIds = new Set(eventNodes.map((n) => n.data.commandId).filter(Boolean))
+  if (alertTypes.size === 0 && commandIds.size === 0) return { active: false, alertTypes, commandIds, durationMs: 6000 }
   const timer = members.find((n) => n.type === 'timer')
   const durationMs = (timer && timer.data.delay) || 6000
-  return { active: true, alertTypes, durationMs }
+  return { active: true, alertTypes, commandIds, durationMs }
 }
 
 /**
@@ -86,9 +85,11 @@ function isAudioTrigger(overlay) {
  * Whether Scene's process is armed — either by a DataSource(alert)
  * wired into its Start node (the process equivalent of isEventTrigger
  * above — `alertTypes`, matched against a real 'alert' broadcast in
- * handleAlert), or by an Audio Player wired into Start (`audioArmed`
- * — a DIFFERENT trigger condition: not a type match, just "the track
- * changed", checked in the 'now-playing' WS handler below). Either
+ * handleAlert), by a DataSource(command) wired into Start (`commandIds`,
+ * matched against a real 'command-triggered' broadcast in
+ * handleCommandTriggered), or by an Audio Player wired into Start
+ * (`audioArmed` — a DIFFERENT trigger condition: not a type match, just
+ * "the track changed", checked in the 'now-playing' WS handler below). Any
  * one alone is enough to make `active` true — see render()'s own
  * `proc.active` branch, which needs to know the scene starts hidden
  * regardless of WHICH kind of trigger is armed.
@@ -98,14 +99,11 @@ function processTrigger(overlay) {
   const edges = overlay?.edges || []
   const map = nodeMap(nodes)
   const start = nodes.find((n) => n.type === 'start')
-  if (!start) return { active: false, alertTypes: new Set(), audioArmed: false, rouletteArmed: false, randomArmed: false }
+  if (!start) return { active: false, alertTypes: new Set(), commandIds: new Set(), audioArmed: false, rouletteArmed: false, randomArmed: false }
   const members = incoming(start.id, edges, map)
-  const alertTypes = new Set(
-    members
-      .filter((n) => n.type === 'event')
-      .map((n) => n.data.alertType)
-      .filter(Boolean)
-  )
+  const eventNodes = members.filter((n) => n.type === 'event')
+  const alertTypes = new Set(eventNodes.map((n) => n.data.alertType).filter(Boolean))
+  const commandIds = new Set(eventNodes.map((n) => n.data.commandId).filter(Boolean))
   const audioArmed = members.some((n) => n.type === 'audioPlayer')
   // A round starting collecting (see the 'roulette-state' WS handler
   // below) arms this the same way a track change arms audioArmed —
@@ -114,7 +112,14 @@ function processTrigger(overlay) {
   // A roll committing (see the 'random-state' WS handler below) arms
   // this the same way — "a roll just started", not a type match.
   const randomArmed = members.some((n) => n.type === 'randomSource')
-  return { active: alertTypes.size > 0 || audioArmed || rouletteArmed || randomArmed, alertTypes, audioArmed, rouletteArmed, randomArmed }
+  return {
+    active: alertTypes.size > 0 || commandIds.size > 0 || audioArmed || rouletteArmed || randomArmed,
+    alertTypes,
+    commandIds,
+    audioArmed,
+    rouletteArmed,
+    randomArmed
+  }
 }
 
 // Plays one Sound node's configured preset/custom file — mirrors the

@@ -169,6 +169,19 @@ export interface StreamerBotTriggerPayload {
   user: string | null
 }
 
+/**
+ * Raised whenever a chat message matches ANY registered CommandDef (see
+ * shared/eventsConfig.ts) and the sender is eligible per its own entryTypes
+ * — regardless of whether Roulette or an Action also happens to reference
+ * that same command. Consumed by a Scene's own Event node (kind: 'command'
+ * — see EventNode.tsx), the scene-graph equivalent of an 'alert': matched
+ * against `commandId` in overlays/custom.html's handleCommandTriggered,
+ * mirroring how a real 'alert' is matched against `type` in handleAlert.
+ */
+export interface CommandTriggeredPayload {
+  commandId: string
+  user: string
+}
 
 /**
  * One ActionQueueConfig (see shared/eventsConfig.ts) merged with its live
@@ -209,6 +222,8 @@ export interface AppEvents {
   'streamerbot-trigger': StreamerBotTriggerPayload
   /** Broadcast on every Action enqueue/start/complete and every queue create/rename/delete/pause/blocking-toggle — see ActionQueueEngine. */
   'action-queues-state': ActionQueueRuntimeState[]
+  /** Raised on every eligible chat-command match against the Commands registry — see CommandTriggeredPayload's own doc comment. */
+  'command-triggered': CommandTriggeredPayload
 }
 
 /**

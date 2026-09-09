@@ -2,13 +2,19 @@ import React from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
 import { ALERT_PLATFORMS, ALERT_TYPES_BY_PLATFORM, type AlertType } from '@shared/types'
 import { useIntegrationsStatus } from '@/hooks/use-integration-status'
+import { useCommands } from '@/providers/CommandsProvider'
 
-import { BaseNode, Field, NodeSelect, textInputClass, EVENT_KINDS, ALERT_PLATFORM_LABELS, inferAlertPlatform } from './utils'
+import { BaseNode, Field, NodeSelect, EVENT_KINDS, ALERT_PLATFORM_LABELS, inferAlertPlatform } from './utils'
+
+const NONE_COMMAND = '__none__'
 
 export function EventNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
   const kind = (data.kind as string) || 'alert'
   const statusMap = useIntegrationsStatus()
+  const { commands } = useCommands()
+  const commandId = (data.commandId as string) || ''
+  const selectedCommand = commands.find((c) => c.id === commandId)
   // Only a connected integration can actually deliver an alert, so Type only
   // ever offers platforms with status 'connected' (see IntegrationStatus in
   // main/integrations/types.ts) — an unconnected platform doesn't appear as
@@ -28,17 +34,19 @@ export function EventNode({ id, data }: NodeProps) {
         />
       </Field>
       {kind === 'command' ? (
-        <div className="flex flex-col gap-1 text-xs">
-          <label>Command</label>
-          <input
-            type="text"
-            placeholder="roulette"
-            value={(data.command as string) || ''}
-            onChange={(e) => updateNodeData(id, { command: e.target.value })}
-            className={textInputClass}
-          />
-          <p className="text-[11px] text-amber-500 leading-snug w-40">SOON — not wired into a live trigger yet.</p>
-        </div>
+        <>
+          <Field label="Command">
+            <NodeSelect
+              value={selectedCommand ? commandId : NONE_COMMAND}
+              options={[NONE_COMMAND, ...commands.map((c) => c.id)]}
+              onChange={(next) => updateNodeData(id, { commandId: next === NONE_COMMAND ? null : next })}
+              renderOption={(opt) => (opt === NONE_COMMAND ? 'Select...' : (commands.find((c) => c.id === opt)?.name ?? opt))}
+            />
+          </Field>
+          {commands.length === 0 && (
+            <p className="text-[11px] text-amber-500 leading-snug w-40">No commands registered yet — add one on the Команды page.</p>
+          )}
+        </>
       ) : !platform ? (
         <p className="text-[11px] text-amber-500 leading-snug w-40">No connected Twitch/YouTube integration — connect one to pick an alert type.</p>
       ) : (

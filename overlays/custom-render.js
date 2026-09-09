@@ -399,11 +399,53 @@ function handleAlert(payload) {
   alertActive = false
 }
 
-/** Called once the currently-showing alert has fully torn itself down — plays the next queued one, if any (re-validated against the current graph via handleAlert, in case a Save changed what matches while it was waiting). */
+/**
+ * Entry point for every REAL 'command-triggered' broadcast — the chat-
+ * command equivalent of handleAlert, matched against `commandId` instead of
+ * `type` (see CommandTriggeredPayload in shared/types.ts). Shares
+ * alertActive/alertQueue/processNextAlert with handleAlert so an alert and a
+ * command firing close together don't clobber each other mid-animation —
+ * queued entries are tagged `__command` so processNextAlert knows which of
+ * the two to re-dispatch through.
+ */
+function handleCommandTriggered(payload) {
+  const proc = processTrigger(latestOverlay)
+  const matchesProcess = proc.active && proc.commandIds.has(payload.commandId)
+  const trigger = isEventTrigger(latestOverlay)
+  const matchesTrigger = !matchesProcess && trigger.active && trigger.commandIds.has(payload.commandId)
+  if (!matchesProcess && !matchesTrigger) return
+
+  if (alertActive) {
+    if (alertQueue.length < MAX_QUEUED_ALERTS) alertQueue.push({ __command: true, ...payload })
+    return
+  }
+
+  alertActive = true
+  // Only `user` — a chat command carries nothing shaped like a real alert's
+  // amount/message/source (see normalizeAlertVars), so a Condition checking
+  // any of those three falls to Else, same as evaluateCondition's own
+  // "field absent" case.
+  const vars = { user: payload.user }
+  if (matchesProcess) {
+    const built = buildProcessSchedule(latestOverlay.nodes || [], latestOverlay.edges || [], vars)
+    if (built) {
+      showProcessContent(latestOverlay, vars, built.schedule, built.totalMs)
+      return
+    }
+  } else {
+    showTriggeredContent(latestOverlay, vars, trigger.durationMs)
+    return
+  }
+  alertActive = false
+}
+
+/** Called once the currently-showing alert/command has fully torn itself down — plays the next queued one, if any (re-validated against the current graph via handleAlert/handleCommandTriggered, in case a Save changed what matches while it was waiting). */
 function processNextAlert() {
   alertActive = false
   if (alertQueue.length === 0) return
-  handleAlert(alertQueue.shift())
+  const next = alertQueue.shift()
+  if (next.__command) handleCommandTriggered(next)
+  else handleAlert(next)
 }
 
 /**
@@ -444,19 +486,22 @@ function render(overlay, animate = true, simulateTest = false) {
       // Now-Playing/round-shaped sample vars instead, mirroring the
       // non-process isAudioTrigger simulateTest branch above (Roulette
       // has no scene-wide equivalent of its own — only this
-      // process-armed case). alertTypes wins over audio, which wins
-      // over roulette, when more than one is wired to the same Start.
-      // Computed BEFORE buildProcessSchedule (not just showProcessContent)
-      // since a Condition node needs these SAME vars to pick Then/Else —
-      // only the alert-shaped case actually carries {user}/{amount}/
-      // {message}/{source}, so a Condition falls to Else for the other two.
+      // process-armed case). alertTypes wins over commandIds, which wins
+      // over audio, which wins over roulette, when more than one is
+      // wired to the same Start. Computed BEFORE buildProcessSchedule
+      // (not just showProcessContent) since a Condition node needs
+      // these SAME vars to pick Then/Else — only the alert/command-
+      // shaped cases carry any real field a Condition could check, so
+      // it falls to Else for audio/roulette.
       const vars =
         proc.alertTypes.size > 0
           ? { type: [...proc.alertTypes][0], user: 'Viewer', amount: 25, message: 'Sample message', source: 'twitch' }
-          : proc.audioArmed
-            ? { source: 'spotify', title: 'Sample Track', artist: 'Sample Artist', albumArt: '', isPlaying: true }
-            : { entrants: 'Alice, Bob, Carla', winner: 'Alice' }
-      const built = buildProcessSchedule(overlay.nodes || [], overlay.edges || [], proc.alertTypes.size > 0 ? vars : null)
+          : proc.commandIds.size > 0
+            ? { user: 'Viewer' }
+            : proc.audioArmed
+              ? { source: 'spotify', title: 'Sample Track', artist: 'Sample Artist', albumArt: '', isPlaying: true }
+              : { entrants: 'Alice, Bob, Carla', winner: 'Alice' }
+      const built = buildProcessSchedule(overlay.nodes || [], overlay.edges || [], proc.alertTypes.size > 0 || proc.commandIds.size > 0 ? vars : null)
       if (built) showProcessContent(overlay, vars, built.schedule, built.totalMs)
       return
     }
@@ -477,7 +522,7 @@ function render(overlay, animate = true, simulateTest = false) {
     // was the "spin animation disappeared" bug: every roulette-state
     // tick after the first ended up here and wiped sceneEl since
     // `hideTimer` is never set by the process path).
-    if ((proc.rouletteArmed || proc.randomArmed) && !proc.audioArmed && proc.alertTypes.size === 0) {
+    if ((proc.rouletteArmed || proc.randomArmed) && !proc.audioArmed && proc.alertTypes.size === 0 && proc.commandIds.size === 0) {
       renderStatic(overlay, animate)
       return
     }
@@ -512,16 +557,19 @@ function render(overlay, animate = true, simulateTest = false) {
 
   missingEl.style.display = 'none'
   if (simulateTest) {
-    const sampleType = [...trigger.alertTypes][0] || 'subscription'
-    showTriggeredContent(
-      overlay,
-      { type: sampleType, user: 'Viewer', amount: 25, message: 'Sample message', source: 'twitch' },
-      trigger.durationMs
-    )
+    // alertTypes wins over commandIds when a scene mixes alert- and
+    // command-kind Event nodes (same priority order as the process
+    // branch above).
+    const vars =
+      trigger.alertTypes.size > 0
+        ? { type: [...trigger.alertTypes][0], user: 'Viewer', amount: 25, message: 'Sample message', source: 'twitch' }
+        : { user: 'Viewer' }
+    showTriggeredContent(overlay, vars, trigger.durationMs)
     return
   }
-  // Idle: sit hidden and wait for a real alert (see the 'alert' branch
-  // below). Don't interrupt one that's already showing (hideTimer set).
+  // Idle: sit hidden and wait for a real alert/command (see the
+  // 'alert'/'command-triggered' branches below). Don't interrupt one
+  // that's already showing (hideTimer set).
   if (!hideTimer) {
     sceneEl.style.display = 'none'
     sceneEl.innerHTML = ''
@@ -608,6 +656,8 @@ if (!key) {
         render(latestOverlay, true, true)
       } else if (type === 'alert') {
         handleAlert(payload)
+      } else if (type === 'command-triggered') {
+        handleCommandTriggered(payload)
       } else if (type === 'now-playing') {
         const audioTriggered = isAudioTrigger(latestOverlay)
         // Computed BEFORE latestNowPlaying is overwritten below —

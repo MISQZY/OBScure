@@ -149,7 +149,8 @@ export function SceneBuilderPage({
     visible: eventPhase !== 'idle',
     hiding: eventPhase === 'hiding',
     vars: eventActive ? eventVars : null,
-    alertTypes: proc.active ? proc.alertTypes : (trigger?.alertTypes ?? [])
+    alertTypes: proc.active ? proc.alertTypes : (trigger?.alertTypes ?? []),
+    commandIds: proc.active ? proc.commandIds : (trigger?.commandIds ?? [])
   }
   // Walking the Start->End chain (up to MAX_PROCESS_STEPS) is the most
   // expensive piece of the above — same reasoning, memoized against the same
