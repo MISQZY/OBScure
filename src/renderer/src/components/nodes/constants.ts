@@ -707,10 +707,12 @@ export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
   // scope 'local' (default): name/value both live here, this node's own
   // placeholder token. scope 'global': name/value instead come from
   // whichever GlobalVariable `globalId` points at (registered on the
-  // "Данные → Переменные" page). scope 'platform': value instead comes live
-  // from whichever connected platform `platform` names, whichever field
-  // `platformStat` picks — see VariableNode's own doc comment.
-  variable: { scope: 'local', name: '', type: 'float', value: 0, globalId: null, platform: 'twitch', platformStat: 'followers', streamerbotName: '' },
+  // "Данные → Переменные" page). scope 'integration': value instead comes
+  // live from whichever connected integration `integration` names — a
+  // platform's numeric stat (whichever field `platformStat` picks) or a
+  // Streamer.bot global variable (`streamerbotName`) — see VariableNode's
+  // own doc comment.
+  variable: { scope: 'local', name: '', type: 'float', value: 0, globalId: null, integration: 'twitch', platformStat: 'followers', streamerbotName: '' },
   backgroundAnimation: { type: 'none', color: '#18181b', speed: 1, repeat: false },
   sound: { soundId: 'none', volume: 1 },
   event: { kind: 'alert', platform: 'twitch', alertType: ALERT_TYPES_BY_PLATFORM.twitch[0] },

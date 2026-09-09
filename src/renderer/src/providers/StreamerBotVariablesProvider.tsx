@@ -9,10 +9,11 @@ const StreamerBotVariablesContext = createContext<StreamerBotGlobalVariable[]>([
  * pollGlobals/AppEvents' 'streamerbot-globals' doc comment) — the
  * editor-preview equivalent of the 'streamerbot-globals' WS broadcast an
  * actual OBS Browser Source gets over ws://.../ws (see
- * overlays/custom-render.js). Read by a scope='streamerbot' Variable node
- * (VariableNode.tsx) to show a live value, same role TwitchStatsProvider
- * plays for scope='twitch'. Empty until the first push arrives, and again
- * whenever Streamer.bot disconnects.
+ * overlays/custom-render.js). Read by a scope='integration',
+ * integration='streamerbot' Variable node (VariableNode.tsx) to show a live
+ * value, same role TwitchStatsProvider plays for the platform integrations.
+ * Empty until the first push arrives, and again whenever Streamer.bot
+ * disconnects.
  */
 export function StreamerBotVariablesProvider({ children }: { children: ReactNode }) {
   const [variables, setVariables] = useState<StreamerBotGlobalVariable[]>([])

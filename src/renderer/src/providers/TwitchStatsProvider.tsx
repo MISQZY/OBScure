@@ -9,7 +9,7 @@ const TwitchStatsContext = createContext<TwitchChannelStats | null>(null)
  * own pollStats/AppEvents' 'twitch-stats' doc comment) — the editor-preview
  * equivalent of the 'twitch-stats' WS broadcast an actual OBS Browser Source
  * gets over ws://.../ws (see overlays/custom-render.js). Read by a
- * scope='twitch' Variable node (VariableNode.tsx) to show a live value, and
+ * scope='integration' Variable node (VariableNode.tsx) to show a live value, and
  * by variablePlaceholderValue (components/nodes/utils/constants.ts) to
  * resolve it wherever that node is wired in or registers its placeholder.
  * Null until the first push arrives, and again whenever Twitch disconnects —

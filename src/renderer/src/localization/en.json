@@ -519,6 +519,7 @@
       "removeUploaded": "Remove uploaded file",
       "insertPlaceholder": "Insert placeholder",
       "backgroundFxLoop": "Off (default): drops it once — use Play/Test to replay it. On: keeps dropping one at a time for as long as the scene is showing.",
+      "variablePlaceholder": "Set a name to get a {placeholder}.",
       "nodes": {
         "group": "An invisible wrapper with no background, padding, or border — wire in other Content nodes to move or arrange them as one unit.",
         "randomPick": "Shows exactly ONE of its wired Options each time the scene shows — picked fresh on every replay. Equal odds by default; check Custom chance to weight them (0 excludes an option entirely). Carries no size/position of its own — the picked Option keeps its own wiring untouched.",

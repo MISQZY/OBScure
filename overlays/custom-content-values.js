@@ -258,12 +258,14 @@ function variablePlaceholderName(node) {
   return name || null
 }
 
-// A scope='platform' Variable node's own resolved numeric value — mirrors
-// platformStatValue in components/nodes/utils/constants.ts. Only 'twitch'
-// resolves today (a future second source would get its own branch
+// A scope='integration' Variable node's own resolved numeric platform stat
+// — mirrors platformStatValue in components/nodes/utils/constants.ts. Only
+// 'twitch' resolves today (a future second source would get its own branch
 // alongside it); `stats` is `latestTwitchStats` (see custom-state.js) — null
 // until Twitch is connected/the first poll lands, same "0 for an unresolved
-// value" convention as every other not-yet-resolved value here.
+// value" convention as every other not-yet-resolved value here. Not called
+// at all when the node's `integration` is 'streamerbot' (see
+// streamerbotVariableValue below instead).
 function platformStatValue(platform, stat, stats) {
   if (platform !== 'twitch') return 0
   if (!stats) return 0
@@ -272,11 +274,12 @@ function platformStatValue(platform, stat, stats) {
   return stats.followerCount || 0
 }
 
-// A scope='streamerbot' Variable node's own resolved value — mirrors
-// streamerbotVariableValue in components/nodes/utils/constants.ts. `vars` is
-// `latestStreamerBotGlobals` (see custom-state.js) — empty until Streamer.bot
-// is connected/the first GetGlobals poll lands, same "0 for an unresolved
-// value" convention as platformStatValue above.
+// A scope='integration', integration='streamerbot' Variable node's own
+// resolved value — mirrors streamerbotVariableValue in
+// components/nodes/utils/constants.ts. `vars` is `latestStreamerBotGlobals`
+// (see custom-state.js) — empty until Streamer.bot is connected/the first
+// GetGlobals poll lands, same "0 for an unresolved value" convention as
+// platformStatValue above.
 function streamerbotVariableValue(name, vars) {
   const found = vars.find((v) => v.name === name)
   if (!found) return 0
@@ -294,11 +297,12 @@ function variablePlaceholderValue(node) {
     const gv = latestGlobalVariables.find((v) => v.id === d.globalId)
     return gv ? gv.value : 0
   }
-  if (d.scope === 'platform') {
-    return platformStatValue(d.platform || 'twitch', d.platformStat || 'followers', latestTwitchStats)
-  }
-  if (d.scope === 'streamerbot') {
-    return streamerbotVariableValue(d.streamerbotName || '', latestStreamerBotGlobals)
+  if (d.scope === 'integration') {
+    const integration = d.integration || 'twitch'
+    if (integration === 'streamerbot') {
+      return streamerbotVariableValue(d.streamerbotName || '', latestStreamerBotGlobals)
+    }
+    return platformStatValue(integration, d.platformStat || 'followers', latestTwitchStats)
   }
   return coerceVariableValue(d.type || 'float', d.value)
 }
@@ -358,20 +362,21 @@ function hasGlobalVariableDeps(overlay) {
   return nodes.some((n) => n.type === 'variable' && n.data && n.data.scope === 'global')
 }
 
-// Whether ANY node in the graph is a scope=platform Variable node — same
-// gating role as hasGlobalVariableDeps above, for the 'twitch-stats' WS tick
-// instead of 'global-variables'.
+// Whether ANY node in the graph is a scope=integration Variable node reading
+// a platform stat (integration !== 'streamerbot') — same gating role as
+// hasGlobalVariableDeps above, for the 'twitch-stats' WS tick instead of
+// 'global-variables'.
 function hasTwitchStatDeps(overlay) {
   const nodes = (overlay && overlay.nodes) || []
-  return nodes.some((n) => n.type === 'variable' && n.data && n.data.scope === 'platform')
+  return nodes.some((n) => n.type === 'variable' && n.data && n.data.scope === 'integration' && (n.data.integration || 'twitch') !== 'streamerbot')
 }
 
-// Whether ANY node in the graph is a scope=streamerbot Variable node — same
-// gating role as hasTwitchStatDeps above, for the 'streamerbot-globals' WS
-// tick instead of 'twitch-stats'.
+// Whether ANY node in the graph is a scope=integration, integration=
+// 'streamerbot' Variable node — same gating role as hasTwitchStatDeps above,
+// for the 'streamerbot-globals' WS tick instead of 'twitch-stats'.
 function hasStreamerBotVariableDeps(overlay) {
   const nodes = (overlay && overlay.nodes) || []
-  return nodes.some((n) => n.type === 'variable' && n.data && n.data.scope === 'streamerbot')
+  return nodes.some((n) => n.type === 'variable' && n.data && n.data.scope === 'integration' && n.data.integration === 'streamerbot')
 }
 
 // Whether a Random Widget node should currently be rendered at all —

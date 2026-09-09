@@ -97,9 +97,9 @@ export const CONDITION_OPERATOR_LABELS: Record<ConditionOperator, string> = {
 /** Which way an Overflow node's Auto-scroll animates its content — see overflowAutoScroll in overlays/sceneUtils.tsx. 'up'/'down' pick the vertical keyframe, 'left'/'right' the horizontal one; 'down'/'right' just play the same keyframe in reverse. */
 export const SCROLL_DIRECTIONS = ['up', 'down', 'left', 'right'] as const
 
-export const VARIABLE_SCOPES = ['local', 'global', 'platform', 'streamerbot'] as const
+export const VARIABLE_SCOPES = ['local', 'global', 'integration'] as const
 
-/** Every data type a Variable's own value can be pinned to — see VariableDataType's own doc comment in shared/types.ts. Offered only for scope='local'/'global' (scope='platform' is always a live numeric stat, nothing to type). */
+/** Every data type a Variable's own value can be pinned to — see VariableDataType's own doc comment in shared/types.ts. Offered only for scope='local'/'global' (scope='integration' is always a live value read from the connected integration, nothing to type). */
 export const VARIABLE_TYPES: readonly VariableDataType[] = ['string', 'boolean', 'int', 'float']
 export const VARIABLE_TYPE_LABELS: Record<VariableDataType, string> = {
   string: 'String',
@@ -142,11 +142,11 @@ export function coerceVariableValue(type: VariableDataType, raw: unknown): Varia
 }
 
 /**
- * Which platforms currently expose a live stats feed a scope='platform'
- * Variable node can read (see platformStatValue below) — the intersection
- * VariableNode's own Platform picker offers is THIS list ∩ whichever
- * platforms are actually connected right now (useIntegrationsStatus), same
- * "selection among connected platforms" the user sees. Only Twitch has a
+ * Which platforms currently expose a live stats feed a scope='integration'
+ * Variable node can read as a numeric stat (see platformStatValue below) —
+ * part of the intersection VariableNode's own Integration picker offers
+ * (see VARIABLE_INTEGRATION_SOURCES), further narrowed to whichever are
+ * actually connected right now (useIntegrationsStatus). Only Twitch has a
  * feed today (TwitchIntegration's own pollStats/TwitchChannelStats) —
  * YouTube is a valid AlertPlatform elsewhere (EventNode's own alert
  * platform) but has no channel-stats fetch implemented yet (see
@@ -154,6 +154,25 @@ export function coerceVariableValue(type: VariableDataType, raw: unknown): Varia
  * than offered as a picker option that would just always read 0.
  */
 export const PLATFORM_STAT_SOURCES: AlertPlatform[] = ['twitch']
+
+/**
+ * Every integration a scope='integration' Variable node can read a live
+ * value from — the numeric-stat platforms above (PLATFORM_STAT_SOURCES)
+ * plus 'streamerbot', which instead reads a live Streamer.bot global
+ * variable (see streamerbotVariableValue below). Previously these were two
+ * separate scopes ('platform'/'streamerbot'); they're merged into one
+ * Integration picker since both are just "a live value from a connected
+ * integration," picked the same way. The Integration picker offers THIS
+ * list ∩ whichever are actually connected right now (useIntegrationsStatus)
+ * — 'streamerbot' is a valid IntegrationKey there too (see shared/types.ts),
+ * so the same connected-status lookup covers both kinds without a branch.
+ */
+export const VARIABLE_INTEGRATION_SOURCES = [...PLATFORM_STAT_SOURCES, 'streamerbot'] as const
+export type VariableIntegrationSource = AlertPlatform | 'streamerbot'
+export const VARIABLE_INTEGRATION_LABELS: Record<VariableIntegrationSource, string> = {
+  ...ALERT_PLATFORM_LABELS,
+  streamerbot: 'Streamer.bot'
+}
 
 /** Every stat id a platform in PLATFORM_STAT_SOURCES can expose — read through platformStatValue below. Currently all Twitch, so all three; a future second source would only add to this list if its own fields don't already fit. */
 export const PLATFORM_STAT_IDS = ['followers', 'subscribers', 'viewers'] as const
@@ -193,15 +212,17 @@ export function variablePlaceholderName(node: Node, globalVariables: GlobalVaria
 }
 
 /**
- * A scope='platform' Variable node's own resolved numeric value — whichever
- * field of `twitchStats` its own `data.platformStat` picks, for whichever
- * platform `data.platform` names (see PLATFORM_STAT_SOURCES above) — 0 for
- * any platform with no live feed wired in here yet (only 'twitch' resolves
- * today; a future second source would get its own branch alongside it, same
- * as this one), or when the feed hasn't loaded (`twitchStats` null, or a
- * null field on TwitchChannelStats itself — see its own doc comment in
- * shared/types.ts) — same "unwired optional input" convention as every other
- * not-yet-resolved value in this graph. Mirrors platformStatValue in
+ * A scope='integration' Variable node's own resolved numeric platform stat
+ * — whichever field of `twitchStats` its own `data.platformStat` picks, for
+ * whichever platform `data.integration` names (see PLATFORM_STAT_SOURCES
+ * above) — 0 for any platform with no live feed wired in here yet (only
+ * 'twitch' resolves today; a future second source would get its own branch
+ * alongside it, same as this one), or when the feed hasn't loaded
+ * (`twitchStats` null, or a null field on TwitchChannelStats itself — see
+ * its own doc comment in shared/types.ts) — same "unwired optional input"
+ * convention as every other not-yet-resolved value in this graph. Not
+ * called at all when `data.integration === 'streamerbot'` (see
+ * streamerbotVariableValue below instead). Mirrors platformStatValue in
  * overlays/custom-content-values.js.
  */
 export function platformStatValue(platform: string, stat: string, twitchStats: TwitchChannelStats | null): number {
@@ -213,15 +234,16 @@ export function platformStatValue(platform: string, stat: string, twitchStats: T
 }
 
 /**
- * A scope='streamerbot' Variable node's own resolved value — the live
- * Streamer.bot global variable named `data.streamerbotName` (see
- * StreamerBotVariablesProvider), 0 if nothing's picked or the named
- * variable hasn't arrived yet (same "0 for an unresolved value" convention
- * as platformStatValue above). Unlike scope='global' (which stores a
- * `globalId` and looks the name up FROM the registry), this stores the
- * Streamer.bot variable's own name directly — there's no local id to keep
- * in sync with, Streamer.bot's own name IS the identity. Mirrors
- * streamerbotVariableValue in overlays/custom-content-values.js.
+ * A scope='integration', integration='streamerbot' Variable node's own
+ * resolved value — the live Streamer.bot global variable named
+ * `data.streamerbotName` (see StreamerBotVariablesProvider), 0 if nothing's
+ * picked or the named variable hasn't arrived yet (same "0 for an
+ * unresolved value" convention as platformStatValue above). Unlike
+ * scope='global' (which stores a `globalId` and looks the name up FROM the
+ * registry), this stores the Streamer.bot variable's own name directly —
+ * there's no local id to keep in sync with, Streamer.bot's own name IS the
+ * identity. Mirrors streamerbotVariableValue in
+ * overlays/custom-content-values.js.
  */
 export function streamerbotVariableValue(name: string, streamerbotVariables: StreamerBotGlobalVariable[]): VariableValue {
   const found = streamerbotVariables.find((v) => v.name === name)
@@ -232,13 +254,15 @@ export function streamerbotVariableValue(name: string, streamerbotVariables: Str
  * A Variable node's own resolved, correctly-typed value — the referenced
  * GlobalVariable's own `value` once scope=global (0 if nothing's picked, or
  * the picked entry has since been deleted, same "unwired optional input"
- * convention as everywhere else in this graph), a live numeric platform stat
- * once scope=platform (see platformStatValue above), otherwise this node's
- * own `data.value` coerced to its own `data.type` (missing type/value — a
- * scene saved before typed variables existed — defaults to 'float', same as
- * NODE_DEFAULTS.variable, so an old value keeps resolving exactly as it did
- * before). Mirrors variablePlaceholderValue in
- * overlays/custom-content-values.js.
+ * convention as everywhere else in this graph), a live value from whichever
+ * `data.integration` names once scope=integration (a numeric platform stat
+ * via platformStatValue, or a Streamer.bot global variable via
+ * streamerbotVariableValue above, depending on which integration is
+ * selected), otherwise this node's own `data.value` coerced to its own
+ * `data.type` (missing type/value — a scene saved before typed variables
+ * existed — defaults to 'float', same as NODE_DEFAULTS.variable, so an old
+ * value keeps resolving exactly as it did before). Mirrors
+ * variablePlaceholderValue in overlays/custom-content-values.js.
  */
 export function variablePlaceholderValue(
   node: Node,
@@ -250,11 +274,12 @@ export function variablePlaceholderValue(
     const gv = globalVariables.find((v) => v.id === node.data.globalId)
     return gv ? gv.value : 0
   }
-  if (node.data.scope === 'platform') {
-    return platformStatValue((node.data.platform as string) || 'twitch', (node.data.platformStat as string) || 'followers', twitchStats)
-  }
-  if (node.data.scope === 'streamerbot') {
-    return streamerbotVariableValue((node.data.streamerbotName as string) || '', streamerbotVariables)
+  if (node.data.scope === 'integration') {
+    const integration = (node.data.integration as string) || 'twitch'
+    if (integration === 'streamerbot') {
+      return streamerbotVariableValue((node.data.streamerbotName as string) || '', streamerbotVariables)
+    }
+    return platformStatValue(integration, (node.data.platformStat as string) || 'followers', twitchStats)
   }
   return coerceVariableValue((node.data.type as VariableDataType) || 'float', node.data.value)
 }

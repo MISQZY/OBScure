@@ -214,9 +214,9 @@ export interface AppEvents {
   'integration-status': { key: IntegrationKey; status: string }
   /** Full registry, broadcast on every add/edit/delete from the "Данные → Переменные" page — see OverlayServer.setGlobalVariables. Lets an already-open OBS Browser Source pick up a value change instantly, same live pattern as roulette/random state. */
   'global-variables': GlobalVariable[]
-  /** Broadcast on every periodic Twitch stats poll while connected (see TwitchIntegration's own poll/OverlayServer.pushTwitchStats) — feeds a scope='twitch' Variable node's live follower/subscriber/viewer count, same live pattern as global-variables. Null once Twitch disconnects or a profile switch tears the integration down. */
+  /** Broadcast on every periodic Twitch stats poll while connected (see TwitchIntegration's own poll/OverlayServer.pushTwitchStats) — feeds a scope='integration' Variable node's live follower/subscriber/viewer count, same live pattern as global-variables. Null once Twitch disconnects or a profile switch tears the integration down. */
   'twitch-stats': TwitchChannelStats | null
-  /** Broadcast on every periodic GetGlobals poll while Streamer.bot is connected (see StreamerBotIntegration's own polling/OverlayServer.setStreamerBotGlobals), and as an empty array on disconnect/profile switch — feeds a scope='streamerbot' Variable node, same live pattern as 'twitch-stats'. */
+  /** Broadcast on every periodic GetGlobals poll while Streamer.bot is connected (see StreamerBotIntegration's own polling/OverlayServer.setStreamerBotGlobals), and as an empty array on disconnect/profile switch — feeds a scope='integration', integration='streamerbot' Variable node, same live pattern as 'twitch-stats'. */
   'streamerbot-globals': StreamerBotGlobalVariable[]
   /** Raised on every Command.Triggered/Custom.Event push from Streamer.bot, regardless of whether the Actions feature (or anything else) is listening — see StreamerBotTriggerPayload's own doc comment. */
   'streamerbot-trigger': StreamerBotTriggerPayload

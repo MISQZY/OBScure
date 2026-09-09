@@ -1,16 +1,18 @@
 import React from 'react'
 import { NodeProps, useReactFlow } from '@xyflow/react'
-import type { AlertPlatform, VariableDataType } from '@shared/types'
-import { Checkbox } from '@/components/ui'
+import type { VariableDataType } from '@shared/types'
+import { Checkbox, Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui'
 import { useGlobalVariables } from '@/providers/GlobalVariablesProvider'
 import { useTwitchStats } from '@/providers/TwitchStatsProvider'
 import { useStreamerBotVariables } from '@/providers/StreamerBotVariablesProvider'
 import { useIntegrationsStatus } from '@/hooks/use-integration-status'
+import { useI18n } from '@/providers/I18nProvider'
 
 import {
   useSavedNodeData,
   BaseNode,
   Field,
+  Callout,
   NumberInput,
   NodeSelect,
   textInputClass,
@@ -20,12 +22,13 @@ import {
   VARIABLE_TYPES,
   VARIABLE_TYPE_LABELS,
   coerceVariableValue,
-  PLATFORM_STAT_SOURCES,
+  VARIABLE_INTEGRATION_SOURCES,
+  VARIABLE_INTEGRATION_LABELS,
   PLATFORM_STAT_IDS,
   PLATFORM_STAT_LABELS,
-  ALERT_PLATFORM_LABELS,
   platformStatValue,
-  streamerbotVariableValue
+  streamerbotVariableValue,
+  type VariableIntegrationSource
 } from './utils'
 
 const NONE_STREAMERBOT = '__none__'
@@ -70,6 +73,30 @@ function VariableValueField({
   )
 }
 
+/** The "Placeholder" label shared by scope='local'/'integration' name inputs below, with a "?" tooltip explaining what typing a name here actually does — moved out of the node's own body text (see the `placeholder` state's own render below) so a node with no name set yet doesn't need a whole extra line just to explain itself. */
+function PlaceholderLabel() {
+  const { t } = useI18n()
+  return (
+    <div className="flex items-center gap-1">
+      <label>Placeholder</label>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={(e) => e.stopPropagation()}
+            className="nodrag shrink-0 flex items-center justify-center size-3.5 rounded-full border border-muted-foreground/50 text-muted-foreground text-[9px] font-bold leading-none hover:bg-accent hover:text-accent-foreground hover:border-foreground/50 transition-colors cursor-pointer"
+          >
+            ?
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="w-56 text-xs leading-snug whitespace-normal">
+          {t.sceneBuilder.tooltip.variablePlaceholder}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  )
+}
+
 /**
  * A single named, typed value (string/boolean/integer/float — see
  * VariableDataType in shared/types.ts), registering `{name}` as a template
@@ -90,15 +117,15 @@ function VariableValueField({
  * Source too (see OverlayServer.setGlobalVariables). Editing Value here
  * when global writes straight back to that shared entry, same as editing it
  * on the Данные page itself.
- * Scope platform: name lives here (same as local), but the VALUE comes live
- * from whichever CONNECTED platform `platform` names instead — the Platform
- * picker only ever offers PLATFORM_STAT_SOURCES ∩ actually-connected right
- * now (useIntegrationsStatus), same reasoning ImageNode's own Content-wire
- * read-only field uses for "don't offer a control that wouldn't do
- * anything." `platformStat` then picks which field of that platform's own
- * feed (Followers/Subscribers/Viewers) — polled every 60s in the main
- * process and pushed here the same live way scope=global's own entries
- * update (see TwitchStatsProvider/platformStatValue) — read-only, there's
+ * Scope integration: name lives here (same as local), but the VALUE comes
+ * live from whichever CONNECTED integration `integration` names instead —
+ * the Integration picker only ever offers VARIABLE_INTEGRATION_SOURCES ∩
+ * actually-connected right now (useIntegrationsStatus), same reasoning
+ * ImageNode's own Content-wire read-only field uses for "don't offer a
+ * control that wouldn't do anything." Depending on which integration is
+ * picked, either `platformStat` selects a live numeric field (see
+ * platformStatValue) or `streamerbotName` selects a live named variable
+ * (see streamerbotVariableValue) — either way this is read-only, there's
  * nothing to type.
  */
 export function VariableNode({ id, data }: NodeProps) {
@@ -108,21 +135,21 @@ export function VariableNode({ id, data }: NodeProps) {
   const twitchStats = useTwitchStats()
   const streamerbotVariables = useStreamerBotVariables()
   const integrationsStatus = useIntegrationsStatus()
-  const scope =
-    data.scope === 'global'
-      ? 'global'
-      : data.scope === 'platform'
-        ? 'platform'
-        : data.scope === 'streamerbot'
-          ? 'streamerbot'
-          : 'local'
+  const scope = data.scope === 'global' ? 'global' : data.scope === 'integration' ? 'integration' : 'local'
   const type = (data.type as VariableDataType) || 'float'
   const globalId = (data.globalId as string) || ''
   const selected = globalVariables.find((v) => v.id === globalId)
   const selectedType: VariableDataType = selected?.type || 'float'
   const placeholder = scope === 'global' ? (selected ? sanitizePlaceholderName(selected.name) || null : null) : sanitizePlaceholderName((data.name as string) || '') || null
-  const connectedPlatforms = PLATFORM_STAT_SOURCES.filter((p) => integrationsStatus?.[p] === 'connected')
-  const platform = (data.platform as AlertPlatform) || 'twitch'
+  const connectedIntegrations = VARIABLE_INTEGRATION_SOURCES.filter((s) => integrationsStatus?.[s] === 'connected')
+  const savedIntegration = (data.integration as VariableIntegrationSource) || 'twitch'
+  // Falls back to whichever integration IS actually connected when the
+  // saved one isn't (e.g. it defaults to 'twitch' but only Streamer.bot is
+  // connected) — same correction the picker's own displayed value already
+  // made, now applied everywhere else `integration` is read too, so the
+  // Variable/Value fields below never render the wrong integration's
+  // controls while the picker itself shows the right one.
+  const integration = connectedIntegrations.includes(savedIntegration) ? savedIntegration : (connectedIntegrations[0] ?? savedIntegration)
   const platformStat = (data.platformStat as (typeof PLATFORM_STAT_IDS)[number]) || 'followers'
 
   return (
@@ -137,7 +164,7 @@ export function VariableNode({ id, data }: NodeProps) {
       {scope === 'local' && (
         <>
           <div className="flex flex-col gap-1 text-xs">
-            <label>Placeholder</label>
+            <PlaceholderLabel />
             <input
               type="text"
               placeholder="myVar"
@@ -185,76 +212,68 @@ export function VariableNode({ id, data }: NodeProps) {
             </>
           )}
           {globalVariables.length === 0 && (
-            <p className="text-[11px] text-amber-500 leading-snug w-40">No global variables registered yet — add one on the Данные → Переменные page.</p>
+            <Callout>No global variables registered yet — add one on the Данные → Переменные page.</Callout>
           )}
         </>
       )}
-      {scope === 'platform' && (
+      {scope === 'integration' && (
         <>
           <div className="flex flex-col gap-1 text-xs">
-            <label>Placeholder</label>
+            <PlaceholderLabel />
             <input
               type="text"
-              placeholder="followers"
+              placeholder="myVar"
               value={(data.name as string) || ''}
               onChange={(e) => updateNodeData(id, { name: sanitizePlaceholderName(e.target.value) })}
               className={textInputClass}
             />
           </div>
-          {connectedPlatforms.length > 0 && (
-            <Field label="Platform">
+          {connectedIntegrations.length > 0 && (
+            <Field label="Integration">
               <NodeSelect
-                value={connectedPlatforms.includes(platform) ? platform : connectedPlatforms[0]}
-                options={connectedPlatforms}
-                onChange={(next) => updateNodeData(id, { platform: next })}
-                renderOption={(opt) => ALERT_PLATFORM_LABELS[opt]}
+                value={integration}
+                options={connectedIntegrations}
+                onChange={(next) => updateNodeData(id, { integration: next })}
+                renderOption={(opt) => VARIABLE_INTEGRATION_LABELS[opt]}
               />
             </Field>
           )}
-          <Field label="Stat">
-            <NodeSelect value={platformStat} options={PLATFORM_STAT_IDS} onChange={(next) => updateNodeData(id, { platformStat: next })} renderOption={(opt) => PLATFORM_STAT_LABELS[opt]} />
-          </Field>
-          <Field label="Value">
-            <span className="text-xs tabular-nums text-muted-foreground">{platformStatValue(platform, platformStat, twitchStats).toLocaleString()}</span>
-          </Field>
-          {connectedPlatforms.length === 0 && (
-            <p className="text-[11px] text-amber-500 leading-snug w-40">No connected platform provides a live stat yet — connect Twitch on the Integrations page.</p>
+          {connectedIntegrations.length === 0 ? (
+            <Callout>No connected integration provides a live value yet — connect one on the Integrations page.</Callout>
+          ) : integration === 'streamerbot' ? (
+            <>
+              <Field label="Variable">
+                <NodeSelect
+                  value={(data.streamerbotName as string) || NONE_STREAMERBOT}
+                  options={[NONE_STREAMERBOT, ...streamerbotVariables.map((v) => v.name)]}
+                  onChange={(next) => updateNodeData(id, { streamerbotName: next === NONE_STREAMERBOT ? '' : next })}
+                  renderOption={(opt) => (opt === NONE_STREAMERBOT ? 'Select...' : opt)}
+                />
+              </Field>
+              {data.streamerbotName ? (
+                <Field label="Value">
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {String(streamerbotVariableValue(data.streamerbotName as string, streamerbotVariables))}
+                  </span>
+                </Field>
+              ) : null}
+              {streamerbotVariables.length === 0 && (
+                <Callout>No variables seen from this integration yet — make sure it has at least one.</Callout>
+              )}
+            </>
+          ) : (
+            <>
+              <Field label="Variable">
+                <NodeSelect value={platformStat} options={PLATFORM_STAT_IDS} onChange={(next) => updateNodeData(id, { platformStat: next })} renderOption={(opt) => PLATFORM_STAT_LABELS[opt]} />
+              </Field>
+              <Field label="Value">
+                <span className="text-xs tabular-nums text-muted-foreground">{platformStatValue(integration, platformStat, twitchStats).toLocaleString()}</span>
+              </Field>
+            </>
           )}
         </>
       )}
-      {scope === 'streamerbot' && (
-        <>
-          <div className="flex flex-col gap-1 text-xs">
-            <label>Placeholder</label>
-            <input
-              type="text"
-              placeholder="sbVar"
-              value={(data.name as string) || ''}
-              onChange={(e) => updateNodeData(id, { name: sanitizePlaceholderName(e.target.value) })}
-              className={textInputClass}
-            />
-          </div>
-          <Field label="Variable">
-            <NodeSelect
-              value={(data.streamerbotName as string) || NONE_STREAMERBOT}
-              options={[NONE_STREAMERBOT, ...streamerbotVariables.map((v) => v.name)]}
-              onChange={(next) => updateNodeData(id, { streamerbotName: next === NONE_STREAMERBOT ? '' : next })}
-              renderOption={(opt) => (opt === NONE_STREAMERBOT ? 'Select...' : opt)}
-            />
-          </Field>
-          {data.streamerbotName ? (
-            <Field label="Value">
-              <span className="text-xs tabular-nums text-muted-foreground">
-                {String(streamerbotVariableValue(data.streamerbotName as string, streamerbotVariables))}
-              </span>
-            </Field>
-          ) : null}
-          {streamerbotVariables.length === 0 && (
-            <p className="text-[11px] text-amber-500 leading-snug w-40">No Streamer.bot global variables seen yet — connect Streamer.bot on the Integrations page and make sure it has at least one.</p>
-          )}
-        </>
-      )}
-      <p className="text-[11px] text-muted-foreground leading-snug w-40">{placeholder ? `Placeholder: {${placeholder}}` : 'Set a name to get a {placeholder}.'}</p>
+      {placeholder && <p className="text-[11px] text-muted-foreground leading-snug w-40">{`Placeholder: {${placeholder}}`}</p>}
     </BaseNode>
   )
 }

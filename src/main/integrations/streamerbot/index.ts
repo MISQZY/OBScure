@@ -117,7 +117,7 @@ export class StreamerBotIntegration extends BaseIntegration {
     this.startPolling(() => this.pollGlobals(), GLOBALS_POLL_INTERVAL_MS);
   }
 
-  /** Feeds a scope='streamerbot' Variable node's live value — see AppEvents' own 'streamerbot-globals' doc comment and OverlayServer.setStreamerBotGlobals. Streamer.bot's WS API has no push notification for a variable write, so this is polled, same reasoning as TwitchIntegration's own pollStats. */
+  /** Feeds a scope='integration', integration='streamerbot' Variable node's live value — see AppEvents' own 'streamerbot-globals' doc comment and OverlayServer.setStreamerBotGlobals. Streamer.bot's WS API has no push notification for a variable write, so this is polled, same reasoning as TwitchIntegration's own pollStats. */
   private async pollGlobals(): Promise<void> {
     try {
       const response = (await this.socket.sendRequest("GetGlobals", {
