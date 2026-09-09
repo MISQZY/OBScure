@@ -12,6 +12,7 @@ import { logError } from "./logger";
 import type { EventBus } from "./eventBus";
 import type {
   AppEvents,
+  AudioLevelsPayload,
   CustomOverlay,
   GlobalVariable,
   NowPlayingPayload,
@@ -49,6 +50,9 @@ interface OverlayServerOptions extends OverlayAddress {
   customImagesDir: string;
   initialCustomOverlays?: CustomOverlay[];
   initialGlobalVariables?: GlobalVariable[];
+
+  /** Called with the new list every time setCustomOverlays runs (a scene save/delete, or the initial load — see the constructor) — lets main/index.ts keep the audio capture window's own set of open devices in sync with whichever audioSource nodes are actually referenced by a saved scene, without OverlayServer needing to know anything about capture itself. */
+  onCustomOverlaysChanged?: (overlays: CustomOverlay[]) => void;
 }
 
 const OVERLAYS_PREFIX = "/overlays";
@@ -68,8 +72,10 @@ export class OverlayServer {
   private customOverlays: Map<string, CustomOverlay> = new Map();
   private server: Server | null = null;
   private wss: WebSocketServer | null = null;
+  private onCustomOverlaysChanged?: (overlays: CustomOverlay[]) => void;
 
   private latestNowPlaying: NowPlayingPayload | null = null;
+  private latestAudioLevels: Record<string, number[]> = {};
 
   // Snapshot-for-late-joiners pattern — see docs/main-process.md ("Overlay Server").
   private latestRouletteState: RouletteStatePayload | null = null;
@@ -92,6 +98,10 @@ export class OverlayServer {
       ]),
     );
     this.latestGlobalVariables = options.initialGlobalVariables ?? [];
+    this.onCustomOverlaysChanged = options.onCustomOverlaysChanged;
+    if (options.initialCustomOverlays) {
+      this.onCustomOverlaysChanged?.(options.initialCustomOverlays);
+    }
 
     this.eventBus.on("alert", (payload) => this.broadcast("alert", payload));
     this.eventBus.on("command-triggered", (payload) => this.broadcast("command-triggered", payload));
@@ -108,6 +118,12 @@ export class OverlayServer {
   pushNowPlaying(payload: NowPlayingPayload | null): void {
     this.latestNowPlaying = payload;
     this.broadcast("now-playing", payload);
+  }
+
+  /** Called on every frame the audio capture window reports for a device (see main/audioCapture.ts) — updates the late-joiner snapshot a page opened/reloaded mid-stream reads via GET /overlays/config/audio-levels.json, and pushes to any already-open OBS Browser Source over the same live-broadcast pattern pushNowPlaying uses. */
+  pushAudioLevels(deviceId: string, bands: number[]): void {
+    this.latestAudioLevels[deviceId] = bands;
+    this.broadcast("audio-levels", { deviceId, bands } satisfies AudioLevelsPayload);
   }
 
   /** Called on every add/edit/delete from the "Данные → Переменные" page (see registerCustomPackHandlers' own `onSet` in ipc/overlayHandlers.ts) — pushes the full registry to any already-open OBS Browser Source via the same live-broadcast pattern Random/Roulette use, and updates the late-joiner snapshot a page opened/reloaded afterward reads via GET /overlays/config/global-variables.json. */
@@ -133,6 +149,7 @@ export class OverlayServer {
       overlays.map((overlay) => [overlay.urlKey, overlay]),
     );
     this.broadcast("custom-overlay-config", overlays);
+    this.onCustomOverlaysChanged?.(overlays);
   }
 
   testCustomOverlay(overlay: CustomOverlay): void {
@@ -285,6 +302,15 @@ export class OverlayServer {
         "Cache-Control": "no-store",
       });
       res.end(JSON.stringify(this.latestTwitchStats));
+      return;
+    }
+
+    if (pathname === `${OVERLAYS_PREFIX}/config/audio-levels.json`) {
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+      });
+      res.end(JSON.stringify(this.latestAudioLevels));
       return;
     }
 

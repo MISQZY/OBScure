@@ -55,6 +55,7 @@ export function BoxView({
             n.type === 'image' ||
             n.type === 'video' ||
             n.type === 'progress' ||
+            n.type === 'equalizer' ||
             n.type === 'box' ||
             n.type === 'group' ||
             n.type === 'randomPick' ||

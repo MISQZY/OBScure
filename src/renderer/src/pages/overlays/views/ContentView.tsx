@@ -23,6 +23,7 @@ import { TextView } from "./TextView";
 import { ImageView } from "./ImageView";
 import { VideoView } from "./VideoView";
 import { ProgressView } from "./ProgressView";
+import { EqualizerView } from "./EqualizerView";
 import { RouletteWheelView } from "./RouletteWheelView";
 import { RandomWidgetView } from "./RandomWidgetView";
 import { RandomPickView } from "./RandomPickView";
@@ -116,6 +117,7 @@ export function ContentView({
     if (node.type === 'image') return <ImageView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} urls={urls} audioCover={audioCover} edges={edges} map={map} playToken={playToken} vars={vars} schedule={schedule} clockMs={clockMs} depth={depth} />
     if (node.type === 'video') return <VideoView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} urls={urls} edges={edges} map={map} playToken={playToken} vars={vars} schedule={schedule} clockMs={clockMs} depth={depth} />
     if (node.type === 'progress') return <ProgressView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} mods={mods} edges={edges} map={map} />
+    if (node.type === 'equalizer') return <EqualizerView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} />
     if (node.type === 'rouletteWidget') return <RouletteWheelView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} />
     if (node.type === 'randomWidget') return <RandomWidgetView node={node} style={task.style} anim={task.anim} played={true} hiding={task.hiding} mods={mods} />
     return null
@@ -126,6 +128,7 @@ export function ContentView({
   if (node.type === 'image') return <ImageView node={node} style={style} anim={anim} played={played} hiding={hiding} urls={urls} audioCover={audioCover} edges={edges} map={map} playToken={playToken} vars={vars} schedule={schedule} clockMs={clockMs} depth={depth} />
   if (node.type === 'video') return <VideoView node={node} style={style} anim={anim} played={played} hiding={hiding} urls={urls} edges={edges} map={map} playToken={playToken} vars={vars} schedule={schedule} clockMs={clockMs} depth={depth} />
   if (node.type === 'progress') return <ProgressView node={node} style={style} anim={anim} played={played} hiding={hiding} mods={mods} edges={edges} map={map} />
+  if (node.type === 'equalizer') return <EqualizerView node={node} style={style} anim={anim} played={played} hiding={hiding} />
   if (node.type === 'rouletteWidget') return <RouletteWheelView node={node} style={style} anim={anim} played={played} hiding={hiding} />
   if (node.type === 'randomWidget') return <RandomWidgetView node={node} style={style} anim={anim} played={played} hiding={hiding} mods={mods} />
   return null

@@ -4,6 +4,7 @@ import type { WindowsMediaIntegration } from "../integrations/windowsMedia";
 import type { TwitchIntegration } from "../integrations/twitch";
 import type { YoutubeIntegration } from "../integrations/youtube";
 import type { StreamerBotIntegration } from "../integrations/streamerbot";
+import type { ObsIntegration } from "../integrations/obs";
 import type { NowPlayingCache } from "../nowPlayingCache";
 import type {
   ConnectResult,
@@ -21,6 +22,7 @@ interface Integrations {
   twitch: TwitchIntegration;
   youtube: YoutubeIntegration;
   streamerbot: StreamerBotIntegration;
+  obs: ObsIntegration;
 }
 
 interface IntegrationsHandlersDeps {
@@ -36,6 +38,7 @@ const VALID_INTEGRATION_KEYS: ReadonlySet<string> = new Set([
   "twitch",
   "youtube",
   "streamerbot",
+  "obs",
 ] satisfies IntegrationKey[]);
 
 function isIntegrationKey(key: unknown): key is IntegrationKey {
@@ -53,6 +56,7 @@ export function registerIntegrationsHandlers(
     twitch: integrations().twitch.getStatus(),
     youtube: integrations().youtube.getStatus(),
     streamerbot: integrations().streamerbot.getStatus(),
+    obs: integrations().obs.getStatus(),
   }));
 
   ipcMain.handle(
@@ -81,6 +85,11 @@ export function registerIntegrationsHandlers(
     "streamerbot:getGlobals",
     (): StreamerBotGlobalVariable[] =>
       integrations().streamerbot.getGlobalVariables(),
+  );
+
+  ipcMain.handle(
+    "obs:getAudioInputs",
+    (): Promise<string[]> => integrations().obs.getInputList(),
   );
 
   ipcMain.handle("nowPlaying:get", (): NowPlayingPayload | null => {

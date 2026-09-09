@@ -14,6 +14,7 @@ export type NavKey =
   | 'integrations/twitch'
   | 'integrations/youtube'
   | 'integrations/streamerbot'
+  | 'integrations/obs'
   | 'settings'
   | `overlays/custom/${string}`
 
@@ -48,6 +49,7 @@ export function getNavBreadcrumbs(t: Dictionary): Record<string, BreadcrumbCrumb
     'integrations/twitch': [dashboard, { label: t.sidebar.integrations }, { label: 'Twitch' }],
     'integrations/youtube': [dashboard, { label: t.sidebar.integrations }, { label: 'YouTube' }],
     'integrations/streamerbot': [dashboard, { label: t.sidebar.integrations }, { label: 'Streamer.bot' }],
+    'integrations/obs': [dashboard, { label: t.sidebar.integrations }, { label: 'OBS' }],
     settings: [dashboard, { label: t.sidebar.settings }]
   }
 }

@@ -6,7 +6,7 @@ import { borderBoxStyle, radiusCss, Anim, incoming, orderingClass, orderingGap, 
 import { ContentView } from "./ContentView";
 
 /** Node types a Video's own `children` socket accepts — mirrors VIDEO_SOCKETS' `children` in components/nodes/constants.ts. */
-const CHILD_TYPES = new Set(['text', 'image', 'video', 'progress', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'])
+const CHILD_TYPES = new Set(['text', 'image', 'video', 'progress', 'equalizer', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'])
 
 /** Mirrors ImageView — see buildVideo in overlays/custom.html. Autoplays muted/looping in the editor preview too, same defaults as the real overlay. */
 export function VideoView({

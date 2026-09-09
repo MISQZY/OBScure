@@ -134,6 +134,7 @@ const api = {
   },
   getWhatsNew: (): Promise<WhatsNewPayload | null> => ipcRenderer.invoke('whatsNew:get'),
   getStreamerBotGlobals: (): Promise<StreamerBotGlobalVariable[]> => ipcRenderer.invoke('streamerbot:getGlobals'),
+  getObsAudioInputs: (): Promise<string[]> => ipcRenderer.invoke('obs:getAudioInputs'),
   onStreamerBotGlobalsUpdate: (callback: (variables: StreamerBotGlobalVariable[]) => void): (() => void) => {
     const listener = (_event: IpcRendererEvent, variables: StreamerBotGlobalVariable[]): void => callback(variables)
     ipcRenderer.on('streamerbot-globals:update', listener)
@@ -170,6 +171,15 @@ const api = {
     const listener = (_event: IpcRendererEvent, entry: EventLogEntry): void => callback(entry)
     ipcRenderer.on('eventLog:entry', listener)
     return () => ipcRenderer.off('eventLog:entry', listener)
+  },
+  // Audio capture — see main/audioCapture.ts/pages/AudioCaptureRoute.tsx.
+  // Fire-and-forget (`send`, not `invoke`): the capture window reports
+  // levels at ~30fps and neither side needs a reply.
+  reportAudioLevels: (deviceId: string, bands: number[]): void => ipcRenderer.send('audioCapture:levels', { deviceId, bands }),
+  onSetAudioCaptureDevices: (callback: (deviceIds: string[]) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, deviceIds: string[]): void => callback(deviceIds)
+    ipcRenderer.on('audioCapture:setDevices', listener)
+    return () => ipcRenderer.off('audioCapture:setDevices', listener)
   }
 }
 

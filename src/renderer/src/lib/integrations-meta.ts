@@ -1,4 +1,4 @@
-import { Bot, Music, Music2, Radio, Video, type LucideIcon } from 'lucide-react'
+import { Bot, Clapperboard, Music, Music2, Radio, Video, type LucideIcon } from 'lucide-react'
 import type { IntegrationKey } from '@shared/types'
 import type { NavKey } from '@/lib/nav'
 
@@ -16,7 +16,8 @@ export const INTEGRATIONS_META: Record<IntegrationKey, IntegrationMeta> = {
   youtube: { label: 'YouTube', icon: Video, navKey: 'integrations/youtube', group: 'platform' },
   spotify: { label: 'Spotify', icon: Music2, navKey: 'integrations/spotify', group: 'music' },
   windowsMedia: { label: 'Windows Media', icon: Music, navKey: 'integrations/windows-media', group: 'music' },
-  streamerbot: { label: 'Streamer.bot', icon: Bot, navKey: 'integrations/streamerbot', group: 'automation' }
+  streamerbot: { label: 'Streamer.bot', icon: Bot, navKey: 'integrations/streamerbot', group: 'automation' },
+  obs: { label: 'OBS', icon: Clapperboard, navKey: 'integrations/obs', group: 'automation' }
 }
 
 export const INTEGRATION_KEYS = Object.keys(INTEGRATIONS_META) as IntegrationKey[]

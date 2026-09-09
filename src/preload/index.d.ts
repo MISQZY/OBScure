@@ -90,6 +90,7 @@ export interface ObscureApi {
   onUpdaterStatus: (callback: (status: AppUpdaterStatus) => void) => () => void
   getWhatsNew: () => Promise<WhatsNewPayload | null>
   getStreamerBotGlobals: () => Promise<StreamerBotGlobalVariable[]>
+  getObsAudioInputs: () => Promise<string[]>
   onStreamerBotGlobalsUpdate: (callback: (variables: StreamerBotGlobalVariable[]) => void) => () => void
   getActions: () => Promise<ActionConfig[]>
   saveAction: (action: ActionConfig) => Promise<ActionConfig[]>
@@ -109,6 +110,8 @@ export interface ObscureApi {
   getEventLog: () => Promise<EventLogEntry[]>
   clearEventLog: () => Promise<void>
   onEventLogEntry: (callback: (entry: EventLogEntry) => void) => () => void
+  reportAudioLevels: (deviceId: string, bands: number[]) => void
+  onSetAudioCaptureDevices: (callback: (deviceIds: string[]) => void) => () => void
 }
 
 declare global {

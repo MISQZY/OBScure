@@ -144,6 +144,7 @@ function appendContainerChildren(wrap, node, edges, map, animate, vars, registry
             n.type === 'image' ||
             n.type === 'video' ||
             n.type === 'progress' ||
+            n.type === 'equalizer' ||
             n.type === 'box' ||
             n.type === 'group' ||
             n.type === 'randomPick' ||
@@ -335,6 +336,94 @@ function buildProgress(node, edges, map, mods, animate, registry) {
   return wrap
 }
 
+// A bar/wave/dot audio visualizer — mirrors EqualizerNode.tsx/
+// EqualizerView.tsx's own look, but (unlike that decorative editor preview)
+// driven by REAL band levels: the wired Audio Source's own `deviceId` (see
+// AUDIO_SOURCE_OUTPUTS' own doc comment in components/nodes/constants.ts)
+// is resolved once here at build time, and equalizerRegistry (custom-
+// state.js) records this node's own bar elements against it so
+// updateEqualizerBars can patch their height/transform directly on every
+// 'audio-levels' WS tick — see custom-render.js — without a full render()
+// rebuild. All three styles share the same DOM shape (a flex row of
+// `barCount` equal-flex children) and differ only in cross-axis alignment
+// and each bar's own shape/anchor: 'bar' grows up from the bottom, 'wave' is
+// the same growth but vertically centered with pill-rounded bars, 'dot'
+// scales a small circle instead of resizing height. `speed` sets the CSS
+// transition duration each bar's own height/transform change eases over
+// (so successive ~30fps ticks read as smooth motion, not a stepped snap);
+// `intensity` multiplies the raw 0-255 band byte before it's normalized to
+// 0-1 — see applyEqualizerLevels.
+function buildEqualizer(node, edges, map, mods, animate, registry) {
+  const d = node.data || {}
+  const barCount = Math.max(2, Math.min(96, d.barCount ?? 24))
+  const styleType = d.style === 'wave' || d.style === 'dot' ? d.style : 'bar'
+  const intensity = d.intensity ?? 1
+  const speed = d.speed ?? 1
+  const transitionMs = Math.max(20, Math.round(260 / speed))
+
+  const wrap = document.createElement('div')
+  wrap.className = 'equalizer-node'
+  wrap.style.position = 'relative'
+  wrap.style.width = `${d.width ?? 240}px`
+  wrap.style.height = `${d.height ?? 80}px`
+  wrap.style.borderRadius = radiusCss(d, 8)
+  wrap.style.overflow = 'hidden'
+  wrap.style.display = 'flex'
+  wrap.style.flexDirection = 'row'
+  wrap.style.gap = '2px'
+  wrap.style.alignItems = styleType === 'bar' ? 'flex-end' : 'center'
+  wrap.style.flexShrink = '0'
+
+  const color = d.color || '#8b5cf6'
+  const fillImage = isGradientColor(color) ? color : `linear-gradient(${color}, ${color})`
+
+  const barEls = []
+  for (let i = 0; i < barCount; i++) {
+    const bar = document.createElement('div')
+    bar.style.flex = '1'
+    bar.style.minWidth = '0'
+    bar.style.backgroundImage = fillImage
+    if (styleType === 'dot') {
+      bar.style.aspectRatio = '1 / 1'
+      bar.style.borderRadius = '50%'
+      bar.style.transform = 'scale(0.3)'
+      bar.style.transformOrigin = 'center'
+      bar.style.transition = `transform ${transitionMs}ms linear`
+      bar.style.margin = 'auto 0'
+    } else {
+      bar.style.height = '4%'
+      bar.style.borderRadius = styleType === 'wave' ? '999px' : '2px 2px 0 0'
+      bar.style.transition = `height ${transitionMs}ms linear`
+    }
+    wrap.appendChild(bar)
+    barEls.push(bar)
+  }
+
+  applyModifierStyle(wrap, mods)
+  applyAnimation(wrap, mods, animate)
+  if (registry) registry[node.id] = wrap
+
+  const audioSourceNode = mods.find((n) => n.type === 'audioSource')
+  const deviceId = audioSourceNode && audioSourceNode.data ? audioSourceNode.data.deviceId : null
+  // An Audio Player wired into the Audio Source's own OPTIONAL "Playing"
+  // socket (see AUDIO_SOURCE_SOCKETS in components/nodes/constants.ts) is
+  // one hop away from the Equalizer itself — `mods` only carries what's
+  // wired DIRECTLY into the Equalizer, so this needs its own `incoming()`
+  // lookup off the Audio Source node. Takes priority over any real
+  // device/OBS feed when present — the whole point is a zero-setup
+  // alternative, not a fallback for when the real one is unwired.
+  const playbackDriven = Boolean(audioSourceNode) && incoming(audioSourceNode.id, edges, map).some((n) => n.type === 'audioPlayer')
+  const entry = { deviceId, barEls, styleType, intensity, playbackDriven }
+  equalizerRegistry[node.id] = entry
+  if (playbackDriven) {
+    ensureEqualizerPlaybackTicking()
+  } else if (deviceId && latestAudioLevels[deviceId]) {
+    applyEqualizerLevels(entry, latestAudioLevels[deviceId])
+  }
+
+  return wrap
+}
+
 // Mirrors formatClockDate in components/nodes/utils/constants.ts — kept
 // deliberately tiny (no locale month/weekday names) since this only ever
 // needs to reproduce that file's own fixed CLOCK_FORMAT_IDS preset list.
@@ -390,6 +479,7 @@ function buildContent(node, edges, map, animate, vars, registry, depth = 0, cros
   if (node.type === 'image') return buildImage(node, mods, animate, vars, registry, hasAudioCover(node.id, edges, map), edges, map, depth + 1)
   if (node.type === 'video') return buildVideo(node, mods, animate, registry, edges, map, vars, depth + 1)
   if (node.type === 'progress') return buildProgress(node, edges, map, mods, animate, registry)
+  if (node.type === 'equalizer') return buildEqualizer(node, edges, map, mods, animate, registry)
   if (node.type === 'rouletteWidget') return rouletteWidgetVisible(node.id, edges, map) ? buildRouletteWheel(node, mods, animate, registry) : null
   if (node.type === 'randomWidget') return randomWidgetVisible(node.id, edges, map) ? buildRandomWidget(node, mods, animate, registry) : null
   // Resolves to exactly ONE of its own wired options (see
@@ -425,6 +515,7 @@ function buildBox(node, edges, map, animate, vars, registry, depth = 0) {
             n.type === 'image' ||
             n.type === 'video' ||
             n.type === 'progress' ||
+            n.type === 'equalizer' ||
             n.type === 'box' ||
             n.type === 'group' ||
             n.type === 'randomPick' ||

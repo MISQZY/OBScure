@@ -7,7 +7,7 @@ import { borderBoxStyle, radiusCss, Anim, incoming, orderingClass, orderingGap, 
 import { ContentView } from "./ContentView";
 
 /** Node types an Image's own `children` socket accepts — mirrors IMAGE_SOCKETS' `children` in components/nodes/constants.ts. */
-const CHILD_TYPES = new Set(['text', 'image', 'video', 'progress', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'])
+const CHILD_TYPES = new Set(['text', 'image', 'video', 'progress', 'equalizer', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'])
 
 export function ImageView({
   node,

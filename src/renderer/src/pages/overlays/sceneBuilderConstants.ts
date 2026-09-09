@@ -37,6 +37,7 @@ export const NODE_PALETTE: { type: string; label: string; group: string }[] = [
   { type: 'image', label: 'Image', group: 'Content' },
   { type: 'video', label: 'Video', group: 'Content' },
   { type: 'progress', label: 'Progress Bar', group: 'Content' },
+  { type: 'equalizer', label: 'Equalizer', group: 'Content' },
   { type: 'box', label: 'Shape', group: 'Content' },
   { type: 'group', label: 'Group', group: 'Content' },
   { type: 'randomPick', label: 'Random Pick', group: 'Content' },
@@ -86,6 +87,7 @@ export const NODE_PALETTE: { type: string; label: string; group: string }[] = [
   // comment in components/nodes/constants.ts).
   { type: 'event', label: 'Event', group: 'Live Data' },
   { type: 'audioPlayer', label: 'Audio Player', group: 'Live Data' },
+  { type: 'audioSource', label: 'Audio Source', group: 'Live Data' },
   { type: 'clock', label: 'Clock', group: 'Live Data' },
   // Random/Roulette aren't self-contained nodes — placing one only
   // surfaces the live state of the matching app-level Tool (see

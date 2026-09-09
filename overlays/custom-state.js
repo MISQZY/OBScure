@@ -123,3 +123,23 @@ let latestStreamerBotGlobals = []
 // keeps the phase math exact across every rebuild in between. See
 // applyAutoScrollContent's own use of this.
 const autoScrollState = {}
+
+// Latest audio band levels per capture device id, keyed by deviceId — pushed
+// by the app's own hidden capture window (see main/audioCapture.ts) via the
+// same live-broadcast/late-joiner-snapshot pattern as latestNowPlaying/
+// latestRouletteState above (see the audio-levels.json fetch and the
+// 'audio-levels' WS branch in custom-render.js). Read by updateEqualizerBars.
+let latestAudioLevels = {}
+
+// Per built Equalizer node (keyed by node id): which device's levels it
+// tracks and the bar/wave/dot elements to update directly on every
+// 'audio-levels' tick (see updateEqualizerBars in custom-render.js) — a
+// full render() rebuild at the ~30fps this ticks at would be far too
+// expensive (borderBoxStyle/gradients/etc. recomputed from scratch on every
+// frame), so this lets that live update skip straight to patching just the
+// bar elements' own height/transform instead. Rebuilt fresh by
+// buildEqualizer on every real render() pass (renderStatic/
+// showTriggeredContent/showProcessContent/showAudioContent all reset this to
+// `{}` right before rebuilding #scene), so a stale entry never outlives the
+// DOM element it points at.
+let equalizerRegistry = {}

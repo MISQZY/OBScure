@@ -9,6 +9,12 @@ export interface NowPlayingPayload {
   isPlaying: boolean
 }
 
+/** One capture device's latest frequency-band levels (0-255 each, fixed resolution — see AUDIO_LEVELS_BAND_COUNT in main/audioCapture.ts) — broadcast at the capture window's own frame rate via OverlayServer.pushAudioLevels, consumed directly by overlays/custom-render.js's updateEqualizerBars (an Equalizer node's own `barCount` resamples this down/up as needed, see applyEqualizerLevels). */
+export interface AudioLevelsPayload {
+  deviceId: string
+  bands: number[]
+}
+
 export type AlertType = 'subscription' | 'raid' | 'follow' | 'membership' | 'super-chat'
 
 /** Every type a Twitch/YouTube alert can be — still meaningful without a standalone Alerts overlay: a custom overlay's Event node (see nodes/index.tsx EventNode) reacts to these directly. */
@@ -203,6 +209,8 @@ export interface ActionQueueRuntimeState {
 
 export interface AppEvents {
   'now-playing': NowPlayingPayload
+  /** Broadcast at the capture window's own frame rate for every audio-input device referenced by an audioSource node in any saved scene — see OverlayServer.pushAudioLevels/main/audioCapture.ts. */
+  'audio-levels': AudioLevelsPayload
   alert: AlertPayload
   'random-state': RandomStatePayload
   'roulette-state': RouletteStatePayload
@@ -252,7 +260,7 @@ export interface OverlayUrls extends OverlayAddress {
   customBase: string
 }
 
-export type IntegrationKey = 'spotify' | 'windowsMedia' | 'twitch' | 'youtube' | 'streamerbot'
+export type IntegrationKey = 'spotify' | 'windowsMedia' | 'twitch' | 'youtube' | 'streamerbot' | 'obs'
 export type IntegrationsStatusMap = Record<IntegrationKey, string>
 
 /** Plain (non-secret) config keys editable from the Integrations settings pages. */
@@ -266,6 +274,9 @@ export type SettingKey =
   | 'streamerbot.port'
   | 'streamerbot.endpoint'
   | 'streamerbot.password'
+  | 'obs.host'
+  | 'obs.port'
+  | 'obs.password'
   | 'overlay.host'
   | 'overlay.port'
   | 'customOverlays'

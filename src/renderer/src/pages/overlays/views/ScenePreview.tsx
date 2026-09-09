@@ -124,6 +124,7 @@ export function ScenePreview({
       n.type === 'image' ||
       n.type === 'video' ||
       n.type === 'progress' ||
+      n.type === 'equalizer' ||
       n.type === 'randomPick' ||
       n.type === 'rouletteWidget' ||
       n.type === 'randomWidget'

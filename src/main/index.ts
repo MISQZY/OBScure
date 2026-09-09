@@ -6,6 +6,7 @@ import icon from "../../resources/icon.png?asset";
 import { execFile } from "node:child_process";
 import { eventBus } from "./eventBus";
 import { OverlayServer } from "./overlayServer";
+import { initAudioCapture, syncAudioCaptureDevices, stopAudioCapture } from "./audioCapture";
 import { ConfigStore } from "./configStore";
 import { ProfileManager } from "./profileStore";
 import { OverlayStore } from "./overlayStore";
@@ -19,6 +20,7 @@ import { WindowsMediaIntegration } from "./integrations/windowsMedia";
 import { TwitchIntegration } from "./integrations/twitch";
 import { YoutubeIntegration } from "./integrations/youtube";
 import { StreamerBotIntegration } from "./integrations/streamerbot";
+import { ObsIntegration } from "./integrations/obs";
 import { RandomEngine, RouletteEngine } from "./eventsEngine";
 import { ActionQueueEngine } from "./actionQueueEngine";
 import { EventLog } from "./eventLog";
@@ -177,6 +179,7 @@ const overlayServer = new OverlayServer({
   customImagesDir,
   initialCustomOverlays: overlayStore.listOverlays(),
   initialGlobalVariables: getStoredGlobalVariables(),
+  onCustomOverlaysChanged: (overlays) => syncAudioCaptureDevices(overlays),
 });
 
 
@@ -195,6 +198,13 @@ let integrations = {
     eventBus,
     config,
     credentialsStore,
+  ),
+  obs: new ObsIntegration(
+    "obs",
+    eventBus,
+    config,
+    credentialsStore,
+    (key, bands) => overlayServer.pushAudioLevels(key, bands),
   ),
 };
 
@@ -358,6 +368,7 @@ eventBus.on("integration-status", () => {
     twitch: integrations.twitch.getStatus(),
     youtube: integrations.youtube.getStatus(),
     streamerbot: integrations.streamerbot.getStatus(),
+    obs: integrations.obs.getStatus(),
   });
 });
 
@@ -395,6 +406,13 @@ async function reinitializeForActiveProfile(): Promise<void> {
       eventBus,
       config,
       credentialsStore,
+    ),
+    obs: new ObsIntegration(
+      "obs",
+      eventBus,
+      config,
+      credentialsStore,
+      (key, bands) => overlayServer.pushAudioLevels(key, bands),
     ),
   };
   await Promise.all(
@@ -578,6 +596,7 @@ registerSettingsHandlers({
   mainWindow: () => mainWindow,
   windowsMedia: () => integrations.windowsMedia,
   streamerbot: () => integrations.streamerbot,
+  obs: () => integrations.obs,
   getStoredCanvasConfig,
   canvasConfigSettingKey: CANVAS_CONFIG_SETTING_KEY,
   onMinimizeToTrayChanged: (enabled) => {
@@ -626,6 +645,19 @@ registerIntegrationsHandlers({
 registerEventLogHandlers({ eventLog });
 
 app.whenReady().then(async () => {
+  // Every window this app ever creates loads only its own local content
+  // (the renderer bundle and, via a separate HTTP server, the overlay
+  // pages — see overlayServer.ts) — never a remote/untrusted origin — so
+  // granting every permission request here just restores Electron's own
+  // default-allow behavior for everything EXCEPT media capture, which
+  // Electron denies outright unless a handler explicitly grants it. This is
+  // what lets the Equalizer feature's Audio Source node (enumerateDevices
+  // labels) and the hidden capture window (getUserMedia) both work with no
+  // permission-prompt UI to click through — there wouldn't be anywhere to
+  // show one for the offscreen capture window anyway.
+  session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(true));
+  session.defaultSession.setPermissionCheckHandler(() => true);
+
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const isAppShell =
       details.resourceType === "mainFrame" && details.url.startsWith("file://");
@@ -648,6 +680,13 @@ app.whenReady().then(async () => {
   await Promise.all(
     Object.values(integrations).map((integration) => integration.start()),
   );
+
+  initAudioCapture({
+    preloadPath: join(__dirname, "../preload/index.js"),
+    rendererUrl: process.env.ELECTRON_RENDERER_URL,
+    rendererFile: join(__dirname, "../renderer/index.html"),
+    onLevels: (deviceId, bands) => overlayServer.pushAudioLevels(deviceId, bands),
+  });
 
   createMainWindow();
   initUpdater(() => mainWindow);
@@ -675,6 +714,7 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   tray?.destroy();
   tray = null;
+  stopAudioCapture();
   overlayServer.stop();
   Object.values(integrations).forEach((integration) => integration.stop());
 });

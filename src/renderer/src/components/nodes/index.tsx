@@ -19,6 +19,8 @@ import { FrameNode } from './FrameNode'
 import { ImageNode } from './ImageNode'
 import { VideoNode } from './VideoNode'
 import { ProgressNode } from './ProgressNode'
+import { EqualizerNode } from './EqualizerNode'
+import { AudioSourceNode } from './AudioSourceNode'
 import { ClockNode } from './ClockNode'
 import { VariableNode } from './VariableNode'
 import { BackgroundAnimationNode } from './BackgroundAnimationNode'
@@ -57,6 +59,8 @@ export const nodeTypes = {
   image: ImageNode,
   video: VideoNode,
   progress: ProgressNode,
+  equalizer: EqualizerNode,
+  audioSource: AudioSourceNode,
   clock: ClockNode,
   variable: VariableNode,
   backgroundAnimation: BackgroundAnimationNode,

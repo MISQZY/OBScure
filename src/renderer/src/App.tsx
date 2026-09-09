@@ -28,6 +28,7 @@ import { WindowsMediaPage } from '@/pages/integrations/WindowsMediaPage'
 import { TwitchPage } from '@/pages/integrations/TwitchPage'
 import { YoutubePage } from '@/pages/integrations/YoutubePage'
 import { StreamerBotPage } from '@/pages/integrations/StreamerBotPage'
+import { ObsPage } from '@/pages/integrations/ObsPage'
 import { SceneBuilderPage } from '@/pages/overlays/SceneBuilderPage'
 import { RandomToolPage } from '@/pages/tools/RandomToolPage'
 import { RouletteToolPage } from '@/pages/tools/RouletteToolPage'
@@ -56,6 +57,7 @@ const PAGES: Partial<Record<NavKey, ComponentType>> = {
   'integrations/twitch': TwitchPage,
   'integrations/youtube': YoutubePage,
   'integrations/streamerbot': StreamerBotPage,
+  'integrations/obs': ObsPage,
   settings: SettingsPage
 }
 

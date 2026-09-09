@@ -26,6 +26,83 @@ function ensureRouletteCountdownTicking() {
 }
 
 /**
+ * Applies one device's latest band levels to a single built Equalizer's own
+ * bar elements — nearest-neighbor resamples `bands` (a fixed-resolution
+ * array from the app's own capture window, see main/audioCapture.ts) down
+ * to however many bars this particular node has, so barCount can differ
+ * freely from the capture resolution. `intensity` multiplies the raw 0-255
+ * byte before normalizing to 0-1, clamped so a high Intensity can't push a
+ * bar past its own container. Mirrors the mapping EqualizerView.tsx's own
+ * decorative preview uses for the same three styles.
+ */
+function applyEqualizerLevels(entry, bands) {
+  if (!bands || bands.length === 0) return
+  const n = entry.barEls.length
+  for (let i = 0; i < n; i++) {
+    const idx = Math.min(bands.length - 1, Math.floor((i / n) * bands.length))
+    const raw = bands[idx] / 255
+    const level = Math.max(0, Math.min(1, raw * entry.intensity))
+    const el = entry.barEls[i]
+    if (entry.styleType === 'dot') {
+      el.style.transform = `scale(${0.3 + level * 1.3})`
+    } else {
+      el.style.height = `${4 + level * 96}%`
+    }
+  }
+}
+
+/** Patches every currently-built Equalizer tracking `deviceId` — the live-update entry point called from the 'audio-levels' WS branch below, deliberately bypassing a full render() (see equalizerRegistry's own doc comment in custom-state.js for why). */
+function updateEqualizerBars(deviceId, bands) {
+  for (const entry of Object.values(equalizerRegistry)) {
+    if (entry.deviceId === deviceId) applyEqualizerLevels(entry, bands)
+  }
+}
+
+// setInterval id for the shared "playback-driven" Equalizer ticker (see
+// ensureEqualizerPlaybackTicking below) — self-starting/self-stopping, same
+// lazy-lifecycle convention as tickTextClocks/textClockTickIntervalId in
+// custom-builders.js.
+let equalizerPlaybackTickIntervalId = null
+
+/**
+ * A smooth, entirely synthetic traveling pulse — the zero-setup alternative
+ * to a real device/OBS feed (see AUDIO_SOURCE_SOCKETS' own doc comment in
+ * components/nodes/constants.ts): there is no real audio signal at all
+ * here, just `latestNowPlaying.isPlaying`, so this can't react to the
+ * actual sound the way a real capture/OBS feed does — it only shows
+ * "something is currently playing," reusing the exact same bar/wave/dot
+ * rendering applyEqualizerLevels already provides for a real 0-255 band
+ * array. Flat (near-zero) while paused/nothing playing.
+ */
+function computePlaybackBands(bandCount) {
+  if (!latestNowPlaying.isPlaying) return new Array(bandCount).fill(0)
+  const t = Date.now() / 1000
+  const bands = []
+  for (let i = 0; i < bandCount; i++) {
+    const v = 0.5 + 0.5 * Math.sin(t * 2.4 + i * 0.35)
+    bands.push(Math.round(v * 255))
+  }
+  return bands
+}
+
+function tickEqualizerPlayback() {
+  const entries = Object.values(equalizerRegistry).filter((entry) => entry.playbackDriven)
+  if (entries.length === 0) {
+    clearInterval(equalizerPlaybackTickIntervalId)
+    equalizerPlaybackTickIntervalId = null
+    return
+  }
+  for (const entry of entries) {
+    applyEqualizerLevels(entry, computePlaybackBands(entry.barEls.length))
+  }
+}
+
+function ensureEqualizerPlaybackTicking() {
+  if (equalizerPlaybackTickIntervalId != null) return
+  equalizerPlaybackTickIntervalId = setInterval(tickEqualizerPlayback, 100)
+}
+
+/**
  * Walks from the Scene node: whatever's wired into it (directly, or
  * nested inside a Box) is what's rendered — mirrors ScenePreview in
  * SceneBuilderPage.tsx. A scene saved before Scene existed has no such
@@ -48,6 +125,7 @@ function renderStatic(overlay, animate) {
   sceneEl.style.display = 'flex'
   missingEl.style.display = 'none'
   sceneEl.innerHTML = ''
+  equalizerRegistry = {}
 
   const nodes = overlay.nodes || []
   const edges = overlay.edges || []
@@ -89,6 +167,7 @@ function renderStatic(overlay, animate) {
       n.type === 'image' ||
       n.type === 'video' ||
       n.type === 'progress' ||
+      n.type === 'equalizer' ||
       n.type === 'randomPick' ||
       n.type === 'rouletteWidget' ||
       n.type === 'randomWidget'
@@ -113,6 +192,7 @@ function showTriggeredContent(overlay, vars, durationMs) {
   sceneEl.style.display = 'flex'
   missingEl.style.display = 'none'
   sceneEl.innerHTML = ''
+  equalizerRegistry = {}
 
   const nodes = overlay.nodes || []
   const edges = overlay.edges || []
@@ -133,6 +213,7 @@ function showTriggeredContent(overlay, vars, durationMs) {
       n.type === 'image' ||
       n.type === 'video' ||
       n.type === 'progress' ||
+      n.type === 'equalizer' ||
       n.type === 'randomPick' ||
       n.type === 'rouletteWidget' ||
       n.type === 'randomWidget'
@@ -165,6 +246,7 @@ function showProcessContent(overlay, vars, schedule, totalMs) {
   sceneEl.style.display = 'flex'
   missingEl.style.display = 'none'
   sceneEl.innerHTML = ''
+  equalizerRegistry = {}
 
   const nodes = overlay.nodes || []
   const edges = overlay.edges || []
@@ -191,6 +273,7 @@ function showProcessContent(overlay, vars, schedule, totalMs) {
       n.type === 'image' ||
       n.type === 'video' ||
       n.type === 'progress' ||
+      n.type === 'equalizer' ||
       n.type === 'randomPick' ||
       n.type === 'rouletteWidget' ||
       n.type === 'randomWidget'
@@ -315,6 +398,7 @@ function showAudioContent(overlay, vars, animate) {
   sceneEl.style.display = 'flex'
   missingEl.style.display = 'none'
   sceneEl.innerHTML = ''
+  equalizerRegistry = {}
 
   const nodes = overlay.nodes || []
   const edges = overlay.edges || []
@@ -335,6 +419,7 @@ function showAudioContent(overlay, vars, animate) {
       n.type === 'image' ||
       n.type === 'video' ||
       n.type === 'progress' ||
+      n.type === 'equalizer' ||
       n.type === 'randomPick' ||
       n.type === 'rouletteWidget' ||
       n.type === 'randomWidget'
@@ -610,14 +695,18 @@ if (!key) {
       .catch(() => null),
     fetch('/overlays/config/streamerbot-globals.json')
       .then((res) => res.json())
+      .catch(() => null),
+    fetch('/overlays/config/audio-levels.json')
+      .then((res) => res.json())
       .catch(() => null)
   ])
-    .then(([overlay, nowPlaying, rouletteState, randomState, globalVariables, twitchStats, streamerbotGlobals]) => {
+    .then(([overlay, nowPlaying, rouletteState, randomState, globalVariables, twitchStats, streamerbotGlobals, audioLevels]) => {
       if (nowPlaying) latestNowPlaying = nowPlaying
       if (randomState) latestRandomState = randomState
       if (globalVariables) latestGlobalVariables = globalVariables
       if (twitchStats) latestTwitchStats = twitchStats
       if (streamerbotGlobals) latestStreamerBotGlobals = streamerbotGlobals
+      if (audioLevels) latestAudioLevels = audioLevels
       if (rouletteState) {
         latestRouletteState = rouletteState
         // A page opened/reloaded mid-round (or after one already
@@ -852,6 +941,15 @@ if (!key) {
         // scope=streamerbot Variable node somewhere.
         latestStreamerBotGlobals = payload
         if (hasStreamerBotVariableDeps(latestOverlay)) render(latestOverlay, false)
+      } else if (type === 'audio-levels') {
+        // Pushed at the capture window's own frame rate (see
+        // main/audioCapture.ts) — patches only the matching Equalizer(s)'
+        // own bar elements directly (updateEqualizerBars), deliberately NOT
+        // a render() call: a full rebuild at that rate would recompute
+        // every node's gradients/borders/modifiers from scratch dozens of
+        // times a second for no visual benefit.
+        latestAudioLevels[payload.deviceId] = payload.bands
+        updateEqualizerBars(payload.deviceId, payload.bands)
       }
     }
     ws.onclose = () => setTimeout(connect, 1000)

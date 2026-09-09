@@ -196,6 +196,12 @@
       "endpointLabel": "Endpoint",
       "passwordLabel": "Password",
       "passwordPlaceholder": "Only if authentication is enabled in Streamer.bot"
+    },
+    "obs": {
+      "description": "Connects to OBS's own built-in WebSocket server — reads real-time audio levels to drive an Equalizer node.",
+      "setupNote": "Enable it in OBS under Tools → WebSocket Server Settings, and use the same host/port shown there. A password is only needed if \"Enable Authentication\" is checked in that dialog.",
+      "passwordLabel": "Password",
+      "passwordPlaceholder": "Only if authentication is enabled in OBS"
     }
   },
   "sound": {
@@ -538,12 +544,14 @@
         "scene": "The output — only what's wired in here is rendered.",
         "end": "Exit point — the process finishes and the scene clears here.",
         "clock": "Wire Content into a Text node's own Content socket and use {time} in its template — that Text's own color/font/size/align apply, not anything here.",
-        "progress": "Wire a Variable node into Current/Target for the fill amount, and (optionally) a Text node into Label to caption it with that Text's own styling."
+        "progress": "Wire a Variable node into Current/Target for the fill amount, and (optionally) a Text node into Label to caption it with that Text's own styling.",
+        "equalizer": "A bar/wave/dot audio visualizer. Wire an Audio Source node into its own Source socket to say which capture device drives it in OBS — the editor preview here only animates randomly, since real capture happens outside this window.",
+        "audioSource": "Picks what an Equalizer reacts to: a real microphone/device (captured continuously in the app itself, keeps working even minimized to tray), an OBS audio source, or — wire an Audio Player into its own optional Content socket — a simple pulse-while-playing with no setup at all."
       },
       "outputs": {
         "content": "Makes this node visible — wire it into a container's own Children socket or a top-level Content socket (both in the Content section) to place it as ordinary content, or into an Effects-section effect's own Caption socket, or a Progress Bar's Label, to caption it with this text instead of placing it normally.",
         "target": "Wire into a Process-section step's Target socket to mark this as what that step shows, hides, or updates. This doesn't replace the Content wire — a component still needs that too, or it won't render at all.",
-        "audioContent": "Bundles Artist, Title, and Cover in one wire. Wire it into a Content-section node's own Content socket — which fields apply depends on where it lands.",
+        "audioContent": "Bundles Artist, Title, and Cover in one wire. Wire it into a Content-section node's own Content socket — which fields apply depends on where it lands — or into an Audio Source node's own Content socket to make its Equalizer pulse while playing instead of reading a real device/OBS feed.",
         "audioEvent": "The track-change/now-playing signal. Wire into a Process-section entry point to arm it on track change, and/or into the scene-level Event socket to show or hide the whole scene by playback state — both at once is fine.",
         "rouletteContent": "Feeds this node's own paired display widget and entrant list through their shared Source socket — that's all it's for. The widget's link is permanent, the entrant list's isn't.",
         "rouletteEvent": "The round's phase signal. Wire into a Process-section entry point to arm it the moment a round starts, or into the paired widget's Visibility socket to hide it outside an active round — both at once is fine.",
@@ -552,7 +560,8 @@
         "clockContent": "The {time} placeholder in the picked format. Wire it into a Content-section node's own Content socket to use it in a template — that node's own styling stays untouched.",
         "randomEvent": "The roll's phase signal. Wire into a Process-section entry point to arm it the moment a roll is committed, or into the paired widget's Visibility socket to hide it outside an active roll — both at once is fine.",
         "conditionThen": "Wire into the next step to take when this Condition matches. Same Event socket every other process step uses (Task/Wait/Condition/End).",
-        "conditionElse": "Wire into the next step to take when this Condition does NOT match — including whenever there's no real alert to check at all (an Audio Player/Roulette/Random-armed process, or a missing Field)."
+        "conditionElse": "Wire into the next step to take when this Condition does NOT match — including whenever there's no real alert to check at all (an Audio Player/Roulette/Random-armed process, or a missing Field).",
+        "audioSourceContent": "Wire into an Equalizer node's own Source socket to say which capture device drives its bars/wave/dots."
       }
     }
   }

@@ -130,7 +130,7 @@ export function nextProcessNode(nodeId: string, edges: Edge[], map: NodeMap, var
 }
 
 
-export const CONTENT_TYPES = new Set(['text', 'image', 'video', 'progress', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'])
+export const CONTENT_TYPES = new Set(['text', 'image', 'video', 'progress', 'equalizer', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'])
 
 /** Box, Group, Random Pick, Image, and Video — the node types that can nest one another (directly or through a mix of the five) via a shared `children` socket (see BOX_SOCKETS'/RANDOM_PICK_SOCKETS'/IMAGE_SOCKETS'/VIDEO_SOCKETS' own doc comments in components/nodes/constants.ts), and so are the only ones isValidConnection's cycle guard needs to walk. */
 export const CONTAINER_TYPES = new Set(['box', 'group', 'randomPick', 'image', 'video'])
@@ -142,7 +142,7 @@ export const CONTENT_TYPES_WITH_SCENE = new Set([...CONTENT_TYPES, 'scene'])
 export const STYLE_TYPES = new Set(['position', 'size', 'transform', 'opacity', 'shadow', 'animation', 'hide', 'overflow', 'ordering', 'spacing'])
 
 /** Event/Sound/Timer/Background FX/Random/Roulette/Audio Player/Variable — see NodeCategory's 'data' bucket. */
-export const DATA_TYPES = new Set(['event', 'sound', 'timer', 'backgroundAnimation', 'randomSource', 'rouletteSource', 'audioPlayer', 'variable', 'clock'])
+export const DATA_TYPES = new Set(['event', 'sound', 'timer', 'backgroundAnimation', 'randomSource', 'rouletteSource', 'audioPlayer', 'audioSource', 'variable', 'clock'])
 
 /**
  * Picks ONE of a Random Pick node's connected `children`-socket options

@@ -126,7 +126,7 @@ export const RANDOM_WIDGET_SOCKETS: InputSocket[] = [
 // hold this same set: they render their media as a backdrop, same as Box's
 // background, with these children stacked on top via the same Ordering-driven
 // layout — see ImageView/VideoView's own doc comments).
-const CONTAINER_CHILD_TYPES = ['text', 'image', 'video', 'progress', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget']
+const CONTAINER_CHILD_TYPES = ['text', 'image', 'video', 'progress', 'equalizer', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget']
 
 // Same "Content" concept as TEXT_SOCKETS' own socket above, but for Image:
 // wiring Audio Player's Content output in shows the live now-playing album
@@ -180,6 +180,45 @@ export const PROGRESS_SOCKETS: InputSocket[] = [
   { id: 'target', label: 'Target', accepts: ['variable'], kind: 'data' },
   ...MODIFIER_SOCKETS
 ]
+
+/**
+ * An Equalizer's own single input — Source (accepts ONLY 'audioSource',
+ * single-value: exactly one capture device feeds one Equalizer's bars) plus
+ * the same Transform/Style modifiers every other leaf content node takes.
+ * Real audio capture happens in the Electron app itself, not inside this
+ * OBS-loaded page (see AudioSourceNode's own doc comment for why) — the
+ * wired Audio Source node only carries WHICH device's levels this bar/wave/
+ * dot visual should track, resolved at render time in overlays/
+ * custom-builders.js's buildEqualizer via `mods.find(n => n.type ===
+ * 'audioSource')`, same "unambiguous by type" convention Progress's own
+ * Label socket uses for its wired Text.
+ */
+export const EQUALIZER_SOCKETS: InputSocket[] = [
+  { id: 'source', label: 'Audio Source', accepts: ['audioSource'], kind: 'data' },
+  ...MODIFIER_SOCKETS
+]
+
+/**
+ * An Audio Source's own single OPTIONAL input — same `content` id/shape as
+ * TEXT_SOCKETS'/IMAGE_SOCKETS' own Content sockets (see TEXT_SOCKETS' own
+ * doc comment for why `kind: 'content'` despite only ever accepting a
+ * 'data'-category node), so it's already covered by AUDIO_PLAYER_OUTPUTS'
+ * existing Content output `feeds` list with no changes needed there. Wiring
+ * Audio Player's Content output in here makes the Equalizer this Audio
+ * Source feeds pulse with playback (isPlaying true/false) instead of a real
+ * device/OBS feed — see buildEqualizer's own `playbackDriven` check in
+ * overlays/custom-builders.js for how this is resolved (a second
+ * `incoming()` lookup off the Audio Source node itself, since this wire
+ * lands one hop away from the Equalizer, and doesn't care which socket id
+ * it landed on). Once wired, AudioSourceNode.tsx's own Device field goes
+ * read-only and shows "Content" — same "the wire already decided, an
+ * editable-but-ignored field would just be confusing" precedent as
+ * ImageNode's own URL field for the identical Content wire. Left unwired
+ * (the common case), nothing changes — the node's own sourceKind picker
+ * (device/OBS) still decides everything, same as before this socket
+ * existed.
+ */
+export const AUDIO_SOURCE_SOCKETS: InputSocket[] = [{ id: 'content', label: 'Content', accepts: ['audioPlayer'], kind: 'content' }]
 /**
  * Shared by Box AND Group (see GroupNode's own doc comment for how the two
  * differ) — accepts 'box'/'group' too, either one nesting either one (see
@@ -214,7 +253,7 @@ export const RANDOM_PICK_SOCKETS: InputSocket[] = [
 ]
 
 export const SCENE_SOCKETS: InputSocket[] = [
-  { id: 'content', label: 'Content', accepts: ['box', 'group', 'text', 'image', 'video', 'progress', 'randomPick', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true },
+  { id: 'content', label: 'Content', accepts: ['box', 'group', 'text', 'image', 'video', 'progress', 'equalizer', 'randomPick', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true },
   // kind 'data', not 'style' — Background FX is category 'data' (see its own
   // doc comment below), so this socket's dot/wire should match ITS color,
   // not the per-component style modifiers (Position/Animation/...) it has
@@ -276,6 +315,8 @@ export const NODE_SOCKETS: Record<string, InputSocket[]> = {
   image: IMAGE_SOCKETS,
   video: VIDEO_SOCKETS,
   progress: PROGRESS_SOCKETS,
+  equalizer: EQUALIZER_SOCKETS,
+  audioSource: AUDIO_SOURCE_SOCKETS,
   box: BOX_SOCKETS,
   group: BOX_SOCKETS,
   scene: SCENE_SOCKETS,
@@ -349,7 +390,24 @@ export const TEXT_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUTPUT]
 export const IMAGE_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUTPUT]
 export const VIDEO_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUTPUT]
 export const PROGRESS_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUTPUT]
+export const EQUALIZER_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUTPUT]
 export const BOX_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUTPUT]
+
+/**
+ * An Audio Source's single role: the live level feed for whichever
+ * Equalizer's own `source` socket it's wired into (see EQUALIZER_SOCKETS
+ * above) — `kind: 'data'` (not 'content') since this is a state/level
+ * signal, not a value feeding a template the way Audio Player's own Content
+ * output does. Real capture (getUserMedia/AnalyserNode) happens once, in the
+ * Electron app's own hidden capture window (see main/audioCapture.ts) —
+ * never inside this OBS-loaded page, which only ever renders band levels
+ * it's handed over the same WebSocket broadcast Now Playing/global
+ * variables already use (see OverlayServer.pushAudioLevels). This node just
+ * carries WHICH device's levels that is.
+ */
+export const AUDIO_SOURCE_OUTPUTS: OutputSocket[] = [
+  { id: 'content', label: 'Level', kind: 'data', feeds: ['source'], helpKey: 'audioSourceContent' }
+]
 
 /**
  * Clock's single role: the `{time}` placeholder for whichever Text socket
@@ -553,6 +611,8 @@ export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
   image: IMAGE_OUTPUTS,
   video: VIDEO_OUTPUTS,
   progress: PROGRESS_OUTPUTS,
+  equalizer: EQUALIZER_OUTPUTS,
+  audioSource: AUDIO_SOURCE_OUTPUTS,
   clock: CLOCK_OUTPUTS,
   box: BOX_OUTPUTS,
   group: BOX_OUTPUTS,
@@ -617,6 +677,8 @@ export const NODE_CATEGORY: Record<string, NodeCategory> = {
   image: 'content',
   video: 'content',
   progress: 'content',
+  equalizer: 'content',
+  audioSource: 'data',
   clock: 'data',
   variable: 'data',
   box: 'content',
@@ -699,6 +761,24 @@ export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
   // current/target/label all come from wired nodes now (see PROGRESS_SOCKETS'
   // own doc comment) — nothing left here but the bar's own look.
   progress: { orientation: 'horizontal', barColor: '#8b5cf6', trackColor: '#3f3f46', thickness: 28, borderRadius: 14 },
+  // Audio Source resolves the Equalizer's `source` socket — see
+  // EQUALIZER_SOCKETS' own doc comment. deviceId/deviceLabel are both set
+  // together the moment a device is picked (AudioSourceNode.tsx) — label is
+  // kept only as a display fallback (see main/audioCapture.ts for why
+  // deviceId alone isn't reliably stable across processes).
+  // sourceKind 'device' (default): deviceId/deviceLabel are a real local
+  // capture device (see AudioSourceNode.tsx). sourceKind 'obs': deviceId is
+  // instead `obs:<inputName>` — a synthesized-from-loudness feed read from
+  // OBS's own audio mixer (see main/integrations/obs), obsInputName kept
+  // separately as the plain name for re-matching against a fresh OBS input
+  // list. Either way `deviceId` is the one field the render pipeline
+  // (buildEqualizer/applyEqualizerLevels) actually reads — it never needs to
+  // know which kind produced it.
+  audioSource: { sourceKind: 'device', deviceId: '', deviceLabel: '', obsInputName: '' },
+  // barCount/style/color/speed/intensity are this node's own look; width/
+  // height/borderRadius are the same self-sizing convention Progress's own
+  // thickness/borderRadius use (a wired Size node still overrides them).
+  equalizer: { barCount: 24, style: 'bar', color: '#8b5cf6', speed: 1, intensity: 1, width: 240, height: 80, borderRadius: 8 },
   // Reads the system clock directly — no data wired in. format is free
   // text (see isValidClockFormat/formatClockDate in components/nodes/utils/
   // constants.ts). No styling fields anymore — wire its Content output into

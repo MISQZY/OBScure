@@ -5,6 +5,7 @@ import type { ConfigStore } from "../configStore";
 import type { CredentialsStore } from "../credentialsStore";
 import type { WindowsMediaIntegration } from "../integrations/windowsMedia";
 import type { StreamerBotIntegration } from "../integrations/streamerbot";
+import type { ObsIntegration } from "../integrations/obs";
 import type { SettingKey } from "../../shared/types";
 import {
   normalizeCanvasConfig,
@@ -17,6 +18,7 @@ interface SettingsHandlersDeps {
   mainWindow: () => BrowserWindow | null;
   windowsMedia: () => WindowsMediaIntegration;
   streamerbot: () => StreamerBotIntegration;
+  obs: () => ObsIntegration;
   getStoredCanvasConfig: () => CanvasConfig;
   canvasConfigSettingKey: string;
   /** Called right after "app.minimizeToTray" is written — lets the tray icon be torn down immediately when the setting is turned off, instead of lingering until quit. */
@@ -30,6 +32,7 @@ const CREDENTIAL_SETTING_KEYS: ReadonlySet<SettingKey> = new Set([
   "youtube.clientId",
   "youtube.clientSecret",
   "streamerbot.password",
+  "obs.password",
 ]);
 
 /** Every key SettingKey (shared/types.ts) actually allows — mirrored here so settings:set can reject unknown keys from the renderer at runtime, since the SettingKey type itself is erased by then. */
@@ -43,6 +46,9 @@ const VALID_SETTING_KEYS: ReadonlySet<string> = new Set([
   "streamerbot.port",
   "streamerbot.endpoint",
   "streamerbot.password",
+  "obs.host",
+  "obs.port",
+  "obs.password",
   "overlay.host",
   "overlay.port",
   "customOverlays",
@@ -59,6 +65,13 @@ const STREAMERBOT_RECONNECT_KEYS: ReadonlySet<SettingKey> = new Set([
   "streamerbot.password",
 ]);
 
+/** Same reasoning as STREAMERBOT_RECONNECT_KEYS above, for OBS's own host/port/password. */
+const OBS_RECONNECT_KEYS: ReadonlySet<SettingKey> = new Set([
+  "obs.host",
+  "obs.port",
+  "obs.password",
+]);
+
 export function registerSettingsHandlers(deps: SettingsHandlersDeps): void {
   const {
     config,
@@ -66,6 +79,7 @@ export function registerSettingsHandlers(deps: SettingsHandlersDeps): void {
     mainWindow,
     windowsMedia,
     streamerbot,
+    obs,
     getStoredCanvasConfig,
     canvasConfigSettingKey,
     onMinimizeToTrayChanged,
@@ -117,6 +131,10 @@ export function registerSettingsHandlers(deps: SettingsHandlersDeps): void {
     if (STREAMERBOT_RECONNECT_KEYS.has(key)) {
       streamerbot().stop();
       void streamerbot().start();
+    }
+    if (OBS_RECONNECT_KEYS.has(key)) {
+      obs().stop();
+      void obs().start();
     }
     if (key === "app.minimizeToTray") {
       onMinimizeToTrayChanged(Boolean(value));

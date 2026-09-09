@@ -215,7 +215,7 @@ function buildProcessSchedule(nodes, edges, vars) {
 // CONTENT_TYPES in pages/overlays/sceneUtils/graph.ts) rather than
 // reusing one of the several near-identical inline filters already in
 // this file, since none of THOSE are shared constants either.
-const RANDOM_PICK_VARIANT_TYPES = new Set(['text', 'image', 'video', 'progress', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'])
+const RANDOM_PICK_VARIANT_TYPES = new Set(['text', 'image', 'video', 'progress', 'equalizer', 'box', 'group', 'randomPick', 'rouletteWidget', 'randomWidget'])
 
 // Nesting can go as deep as the graph wants (see BOX_SOCKETS' own doc
 // comment in components/nodes/index.tsx) — this cap is only a safety
