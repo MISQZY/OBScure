@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type ComponentType } from 'react'
+import { Fragment, lazy, Suspense, useEffect, useState, type ComponentType } from 'react'
 import { CustomOverlaysProvider } from '@/providers/CustomOverlaysProvider'
 import { GlobalVariablesProvider } from '@/providers/GlobalVariablesProvider'
 import { CommandsProvider } from '@/providers/CommandsProvider'
@@ -23,21 +23,34 @@ import {
   TooltipProvider
 } from '@/components/ui'
 import { DashboardPage } from '@/pages/DashboardPage'
-import { SpotifyPage } from '@/pages/integrations/SpotifyPage'
-import { WindowsMediaPage } from '@/pages/integrations/WindowsMediaPage'
-import { TwitchPage } from '@/pages/integrations/TwitchPage'
-import { YoutubePage } from '@/pages/integrations/YoutubePage'
-import { StreamerBotPage } from '@/pages/integrations/StreamerBotPage'
-import { ObsPage } from '@/pages/integrations/ObsPage'
-import { SceneBuilderPage } from '@/pages/overlays/SceneBuilderPage'
-import { RandomToolPage } from '@/pages/tools/RandomToolPage'
-import { RouletteToolPage } from '@/pages/tools/RouletteToolPage'
-import { CommandsPage } from '@/pages/actions/CommandsPage'
-import { ActionsPage } from '@/pages/actions/ActionsPage'
-import { QueuesPage } from '@/pages/actions/QueuesPage'
-import { VariablesPage } from '@/pages/data/VariablesPage'
-import { EventLogPage } from '@/pages/data/EventLogPage'
-import { SettingsPage } from '@/pages/SettingsPage'
+
+// Lazy-loaded: each becomes its own chunk, fetched/parsed only the first
+// time the user actually navigates there, instead of every page (plus the
+// @xyflow/react scene editor + dagre pulled in by SceneBuilderPage) being
+// parsed and resident in the main window's heap from app start.
+const SpotifyPage = lazy(() => import('@/pages/integrations/SpotifyPage').then((m) => ({ default: m.SpotifyPage })))
+const WindowsMediaPage = lazy(() =>
+  import('@/pages/integrations/WindowsMediaPage').then((m) => ({ default: m.WindowsMediaPage }))
+)
+const TwitchPage = lazy(() => import('@/pages/integrations/TwitchPage').then((m) => ({ default: m.TwitchPage })))
+const YoutubePage = lazy(() => import('@/pages/integrations/YoutubePage').then((m) => ({ default: m.YoutubePage })))
+const StreamerBotPage = lazy(() =>
+  import('@/pages/integrations/StreamerBotPage').then((m) => ({ default: m.StreamerBotPage }))
+)
+const ObsPage = lazy(() => import('@/pages/integrations/ObsPage').then((m) => ({ default: m.ObsPage })))
+const SceneBuilderPage = lazy(() =>
+  import('@/pages/overlays/SceneBuilderPage').then((m) => ({ default: m.SceneBuilderPage }))
+)
+const RandomToolPage = lazy(() => import('@/pages/tools/RandomToolPage').then((m) => ({ default: m.RandomToolPage })))
+const RouletteToolPage = lazy(() =>
+  import('@/pages/tools/RouletteToolPage').then((m) => ({ default: m.RouletteToolPage }))
+)
+const CommandsPage = lazy(() => import('@/pages/actions/CommandsPage').then((m) => ({ default: m.CommandsPage })))
+const ActionsPage = lazy(() => import('@/pages/actions/ActionsPage').then((m) => ({ default: m.ActionsPage })))
+const QueuesPage = lazy(() => import('@/pages/actions/QueuesPage').then((m) => ({ default: m.QueuesPage })))
+const VariablesPage = lazy(() => import('@/pages/data/VariablesPage').then((m) => ({ default: m.VariablesPage })))
+const EventLogPage = lazy(() => import('@/pages/data/EventLogPage').then((m) => ({ default: m.EventLogPage })))
+const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })))
 import { getDefaultBreadcrumbs, getNavBreadcrumbs, type NavKey } from '@/lib/nav'
 import { I18nProvider, useI18n } from '@/providers/I18nProvider'
 import { ThemeProvider } from '@/providers/ThemeProvider'
@@ -113,7 +126,9 @@ function AppShell() {
           </header>
           {active.startsWith('overlays/custom/') ? (
             <main className="relative flex-1 overflow-hidden">
-              <SceneBuilderPage customOverlayId={active.split('/').pop()!} onNavigate={setActive} />
+              <Suspense fallback={null}>
+                <SceneBuilderPage customOverlayId={active.split('/').pop()!} onNavigate={setActive} />
+              </Suspense>
             </main>
           ) : (
             <ScrollArea className="relative flex-1">
@@ -121,7 +136,7 @@ function AppShell() {
                 {active === 'dashboard' ? (
                   <DashboardPage />
                 ) : (
-                  Page && <Page />
+                  <Suspense fallback={null}>{Page && <Page />}</Suspense>
                 )}
               </main>
             </ScrollArea>
