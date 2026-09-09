@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain } from "electron";
 import type { CustomOverlay } from "../shared/types";
+import { logError } from "./logger";
 
 export interface AudioCaptureOptions {
   preloadPath: string;
@@ -37,8 +38,23 @@ export function initAudioCapture(options: AudioCaptureOptions): void {
     },
   });
 
-  captureWindow.webContents.once("did-finish-load", () => {
+  // Not .once(): this also has to re-fire after the render-process-gone
+  // reload below re-mounts AudioCaptureRoute from scratch, which otherwise
+  // would never re-learn which devices to open and silently never resume
+  // capturing until the whole app restarts.
+  captureWindow.webContents.on("did-finish-load", () => {
     captureWindow?.webContents.send("audioCapture:setDevices", lastDeviceIds);
+  });
+
+  // Same reasoning as createMainWindow's own "render-process-gone" handler
+  // (main/index.ts) — a crashed renderer (GPU context loss, OOM, ...)
+  // otherwise leaves this permanently-alive window silently dead for the
+  // rest of the process, quietly breaking every Equalizer node's Audio
+  // Source until the user restarts the whole app.
+  captureWindow.webContents.on("render-process-gone", (_event, details) => {
+    logError("main", `audio capture renderer process gone (${details.reason}, exitCode=${details.exitCode})`);
+    if (details.reason === "clean-exit") return;
+    setTimeout(() => captureWindow?.webContents.reload(), 300);
   });
 
   const hash = "/audio-capture";

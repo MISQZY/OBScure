@@ -72,6 +72,15 @@ process.on("unhandledRejection", (reason) => {
   logError("main", "unhandled promise rejection", reason);
 });
 
+// Diagnostic only — Chromium already restarts a crashed GPU process on its
+// own (falling back to software rendering after enough repeated crashes).
+// Logged so a renderer crash reported elsewhere (see "render-process-gone"
+// handlers below) can be correlated with a GPU crash that preceded it.
+app.on("child-process-gone", (_event, details) => {
+  if (details.type !== "GPU") return;
+  logWarn("main", `GPU process gone (${details.reason}, exitCode=${details.exitCode})`);
+});
+
 if (!app.requestSingleInstanceLock()) {
   process.exit(0);
 }
@@ -559,6 +568,17 @@ function createMainWindow(): void {
 
   mainWindow.on("closed", () => {
     mainWindow = null;
+  });
+
+  // A renderer crash (GPU context loss, OOM, ...) leaves the BrowserWindow
+  // itself alive but showing nothing forever unless something reloads it —
+  // Electron doesn't do this on its own. "clean-exit" only happens on a
+  // deliberate destroy() (see the app quitting/"minimize" handler above),
+  // never something to recover from.
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    logError("main", `main window renderer process gone (${details.reason}, exitCode=${details.exitCode})`);
+    if (details.reason === "clean-exit") return;
+    setTimeout(() => mainWindow?.reload(), 300);
   });
 
   const rendererUrl = process.env.ELECTRON_RENDERER_URL;
