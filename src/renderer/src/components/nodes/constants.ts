@@ -1,10 +1,12 @@
-import { ALERT_TYPES_BY_PLATFORM } from '@shared/types'
 /**
  * The node graph has two independent kinds of edges (data/composition vs.
  * sequence-flow) and groups input sockets by role, Blender-modifier-stack
  * style — see docs/events-system.md's "Node Graph Data Model" section for
- * the full picture before changing InputSocket/NODE_SOCKETS/NODE_OUTPUTS
- * below.
+ * the full picture before changing InputSocket/OutputSocket below, or the
+ * per-type socket arrays further down (NODE_SOCKETS/NODE_OUTPUTS themselves
+ * are no longer hand-written here — see NodeDefinition/NODE_DEFINITIONS in
+ * index.tsx, which derives both from these arrays plus each type's
+ * component/category/defaults in one place).
  */
 
 /**
@@ -12,7 +14,7 @@ import { ALERT_TYPES_BY_PLATFORM } from '@shared/types'
  * overrides a specific ROLE (Transform, Style, ...) plugs into the socket
  * for that role, instead of every wire piling onto one shared dot. `accepts`
  * is enforced by isValidConnection in SceneBuilderPage.tsx (shared from
- * NODE_SOCKETS below so BaseNode's rendering and connection validation never
+ * NODE_SOCKETS so BaseNode's rendering and connection validation never
  * drift) — a role socket typically accepts SEVERAL node types (e.g.
  * Transform accepts Position, Size, AND Transform), any combination of which
  * can be wired in at once. `multi` (default false): a single-value socket
@@ -27,13 +29,15 @@ import { ALERT_TYPES_BY_PLATFORM } from '@shared/types'
 /** Shared by InputSocket/OutputSocket's own `kind` — 'process' only ever appears on an OUTPUT socket (Condition's Then/Else, see CONDITION_OUTPUTS below); no INPUT socket needs it since the sequence-flow target ("event-in") is rendered by BaseNode's own `sequenceIn` row, not through NODE_SOCKETS. */
 export type SocketKind = 'content' | 'style' | 'data' | 'process'
 
-export type InputSocket = {
-  id: string
-  label: string
-  accepts: string[]
-  /** Dot color only — reuses the CATEGORY_STYLES palette so a socket's color hints at what kind of node it accepts. */
-  kind: SocketKind
-  multi?: boolean
+/** Dot color only (`kind`) — reuses the CATEGORY_STYLES palette so a socket's color hints at what kind of node it accepts. `multi` defaults to false (a single-value socket) — see this class's own file-header doc comment above for what that governs. */
+export class InputSocket {
+  constructor(
+    public id: string,
+    public label: string,
+    public accepts: string[],
+    public kind: SocketKind,
+    public multi = false
+  ) {}
 }
 
 /**
@@ -51,8 +55,8 @@ export type InputSocket = {
  * Style list, so a Task can't override either mid-process.
  */
 export const MODIFIER_SOCKETS: InputSocket[] = [
-  { id: 'transform', label: 'Transform', accepts: ['position', 'size', 'transform'], kind: 'style', multi: true },
-  { id: 'style', label: 'Style', accepts: ['opacity', 'shadow', 'animation', 'hide', 'overflow', 'spacing'], kind: 'style', multi: true }
+  new InputSocket('transform', 'Transform', ['position', 'size', 'transform'], 'style', true),
+  new InputSocket('style', 'Style', ['opacity', 'shadow', 'animation', 'hide', 'overflow', 'spacing'], 'style', true)
 ]
 
 // Lets an Audio Player's Content output (see AUDIO_PLAYER_OUTPUTS below) be
@@ -71,7 +75,7 @@ export const MODIFIER_SOCKETS: InputSocket[] = [
 // as Box's 'children'/Scene's own 'content' socket, so its dot reads green
 // like theirs instead of the data-source violet/sky-blue tint.
 export const TEXT_SOCKETS: InputSocket[] = [
-  { id: 'content', label: 'Content', accepts: ['audioPlayer', 'rouletteEntrants', 'randomSource', 'clock'], kind: 'content', multi: true },
+  new InputSocket('content', 'Content', ['audioPlayer', 'rouletteEntrants', 'randomSource', 'clock'], 'content', true),
   ...MODIFIER_SOCKETS
 ]
 // The mandatory Roulette Widget's own two inputs — Source (accepts ONLY
@@ -83,8 +87,8 @@ export const TEXT_SOCKETS: InputSocket[] = [
 // renders, despite only ever accepting a 'data'-category node); kind 'data'
 // for Visibility (a trigger/state signal, not a value).
 export const ROULETTE_WIDGET_SOCKETS: InputSocket[] = [
-  { id: 'source', label: 'Source', accepts: ['rouletteSource'], kind: 'content' },
-  { id: 'visible', label: 'Visibility', accepts: ['rouletteSource'], kind: 'data' },
+  new InputSocket('source', 'Source', ['rouletteSource'], 'content'),
+  new InputSocket('visible', 'Visibility', ['rouletteSource'], 'data'),
   ...MODIFIER_SOCKETS
 ]
 // A Roulette Entrants list's own single input — same `source` id/shape as
@@ -97,7 +101,7 @@ export const ROULETTE_WIDGET_SOCKETS: InputSocket[] = [
 // mandatory pairing — deleting it just deletes it (see addNode's own doc
 // comment in hooks/useSceneGraph.ts for how its creation differs from the
 // Widget's).
-export const ROULETTE_ENTRANTS_SOCKETS: InputSocket[] = [{ id: 'source', label: 'Source', accepts: ['rouletteSource'], kind: 'content' }]
+export const ROULETTE_ENTRANTS_SOCKETS: InputSocket[] = [new InputSocket('source', 'Source', ['rouletteSource'], 'content')]
 // Same pairing shape as ROULETTE_WIDGET_SOCKETS above: a Random Widget's own
 // Source is locked to the ONE Random node it was auto-paired with (see
 // addNode's own doc comment in hooks/useSceneGraph.ts), Visibility is the
@@ -109,8 +113,8 @@ export const ROULETTE_ENTRANTS_SOCKETS: InputSocket[] = [{ id: 'source', label: 
 // TEXT_SOCKETS above / randomContentValues in overlays/sceneUtils.tsx), so
 // there's nothing here for a separate node to own.
 export const RANDOM_WIDGET_SOCKETS: InputSocket[] = [
-  { id: 'source', label: 'Source', accepts: ['randomSource'], kind: 'content' },
-  { id: 'visible', label: 'Visibility', accepts: ['randomSource'], kind: 'data' },
+  new InputSocket('source', 'Source', ['randomSource'], 'content'),
+  new InputSocket('visible', 'Visibility', ['randomSource'], 'data'),
   ...MODIFIER_SOCKETS,
   // Same Ordering socket Box/Scene have (see BOX_SOCKETS above) — controls
   // how the rolled numbers lay out relative to EACH OTHER (row/column, gap)
@@ -118,7 +122,7 @@ export const RANDOM_WIDGET_SOCKETS: InputSocket[] = [
   // once there's more than one to arrange, same as it would for any other
   // multi-item layout — see RandomWidgetView in overlays/views/index.tsx /
   // buildRandomWidget in overlays/custom.html.
-  { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' }
+  new InputSocket('ordering', 'Layout', ['ordering'], 'style')
 ]
 // Node types allowed into a container's `children` socket — shared by
 // BOX_SOCKETS, RANDOM_PICK_SOCKETS, and IMAGE_SOCKETS/VIDEO_SOCKETS' own
@@ -143,15 +147,15 @@ const CONTAINER_CHILD_TYPES = ['text', 'image', 'video', 'progress', 'equalizer'
 // placeable INSIDE some other container. `ordering` controls that layout the
 // same way it does for Box.
 export const IMAGE_SOCKETS: InputSocket[] = [
-  { id: 'imageContent', label: 'Content', accepts: ['audioPlayer'], kind: 'content' },
-  { id: 'children', label: 'Children', accepts: CONTAINER_CHILD_TYPES, kind: 'content', multi: true },
+  new InputSocket('imageContent', 'Content', ['audioPlayer'], 'content'),
+  new InputSocket('children', 'Children', CONTAINER_CHILD_TYPES, 'content', true),
   ...MODIFIER_SOCKETS,
-  { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' }
+  new InputSocket('ordering', 'Layout', ['ordering'], 'style')
 ]
 export const VIDEO_SOCKETS: InputSocket[] = [
-  { id: 'children', label: 'Children', accepts: CONTAINER_CHILD_TYPES, kind: 'content', multi: true },
+  new InputSocket('children', 'Children', CONTAINER_CHILD_TYPES, 'content', true),
   ...MODIFIER_SOCKETS,
-  { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' }
+  new InputSocket('ordering', 'Layout', ['ordering'], 'style')
 ]
 /**
  * A Progress Bar's own sockets: Label (optional — wire a Text node in to
@@ -175,9 +179,9 @@ export const VIDEO_SOCKETS: InputSocket[] = [
  * other leaf content node takes.
  */
 export const PROGRESS_SOCKETS: InputSocket[] = [
-  { id: 'caption', label: 'Label', accepts: ['text'], kind: 'content' },
-  { id: 'current', label: 'Current', accepts: ['variable'], kind: 'data' },
-  { id: 'target', label: 'Target', accepts: ['variable'], kind: 'data' },
+  new InputSocket('caption', 'Label', ['text'], 'content'),
+  new InputSocket('current', 'Current', ['variable'], 'data'),
+  new InputSocket('target', 'Target', ['variable'], 'data'),
   ...MODIFIER_SOCKETS
 ]
 
@@ -194,7 +198,7 @@ export const PROGRESS_SOCKETS: InputSocket[] = [
  * Label socket uses for its wired Text.
  */
 export const EQUALIZER_SOCKETS: InputSocket[] = [
-  { id: 'source', label: 'Audio Source', accepts: ['audioSource'], kind: 'data' },
+  new InputSocket('source', 'Audio Source', ['audioSource'], 'data'),
   ...MODIFIER_SOCKETS
 ]
 
@@ -218,7 +222,7 @@ export const EQUALIZER_SOCKETS: InputSocket[] = [
  * (device/OBS) still decides everything, same as before this socket
  * existed.
  */
-export const AUDIO_SOURCE_SOCKETS: InputSocket[] = [{ id: 'content', label: 'Content', accepts: ['audioPlayer'], kind: 'content' }]
+export const AUDIO_SOURCE_SOCKETS: InputSocket[] = [new InputSocket('content', 'Content', ['audioPlayer'], 'content')]
 /**
  * Shared by Box AND Group (see GroupNode's own doc comment for how the two
  * differ) — accepts 'box'/'group' too, either one nesting either one (see
@@ -231,9 +235,9 @@ export const AUDIO_SOURCE_SOCKETS: InputSocket[] = [{ id: 'content', label: 'Con
  * nested, same as at the top level.
  */
 export const BOX_SOCKETS: InputSocket[] = [
-  { id: 'children', label: 'Children', accepts: CONTAINER_CHILD_TYPES, kind: 'content', multi: true },
+  new InputSocket('children', 'Children', CONTAINER_CHILD_TYPES, 'content', true),
   ...MODIFIER_SOCKETS,
-  { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' }
+  new InputSocket('ordering', 'Layout', ['ordering'], 'style')
 ]
 
 /**
@@ -248,19 +252,17 @@ export const BOX_SOCKETS: InputSocket[] = [
  * pickRandomVariant (pages/overlays/sceneUtils/graph.ts) — see
  * RandomPickNode/RandomPickView's own doc comments for the rest.
  */
-export const RANDOM_PICK_SOCKETS: InputSocket[] = [
-  { id: 'children', label: 'Options', accepts: CONTAINER_CHILD_TYPES, kind: 'content', multi: true }
-]
+export const RANDOM_PICK_SOCKETS: InputSocket[] = [new InputSocket('children', 'Options', CONTAINER_CHILD_TYPES, 'content', true)]
 
 export const SCENE_SOCKETS: InputSocket[] = [
-  { id: 'content', label: 'Content', accepts: ['box', 'group', 'text', 'image', 'video', 'progress', 'equalizer', 'randomPick', 'rouletteWidget', 'randomWidget'], kind: 'content', multi: true },
+  new InputSocket('content', 'Content', ['box', 'group', 'text', 'image', 'video', 'progress', 'equalizer', 'randomPick', 'rouletteWidget', 'randomWidget'], 'content', true),
   // kind 'data', not 'style' — Background FX is category 'data' (see its own
   // doc comment below), so this socket's dot/wire should match ITS color,
   // not the per-component style modifiers (Position/Animation/...) it has
   // nothing to do with.
-  { id: 'backgroundFx', label: 'Background FX', accepts: ['backgroundAnimation'], kind: 'data' },
-  { id: 'sound', label: 'Sound', accepts: ['sound'], kind: 'data' },
-  { id: 'ordering', label: 'Layout', accepts: ['ordering'], kind: 'style' },
+  new InputSocket('backgroundFx', 'Background FX', ['backgroundAnimation'], 'data'),
+  new InputSocket('sound', 'Sound', ['sound'], 'data'),
+  new InputSocket('ordering', 'Layout', ['ordering'], 'style'),
   // Accepts 'audioPlayer' too, via its own Event output (see
   // AUDIO_PLAYER_OUTPUTS below) — same convention as Start's own Event
   // socket. Wiring Audio Player in here marks the scene as continuously
@@ -276,58 +278,38 @@ export const SCENE_SOCKETS: InputSocket[] = [
   // scene-wide entry here — its own Widget shows unconditionally by default
   // (see NODE_SOCKETS.rouletteWidget's own `visible` socket) rather than
   // hiding the whole scene until a round starts.
-  { id: 'event', label: 'Event', accepts: ['event', 'audioPlayer'], kind: 'data' },
-  { id: 'timer', label: 'Timer', accepts: ['timer'], kind: 'data' }
+  new InputSocket('event', 'Event', ['event', 'audioPlayer'], 'data'),
+  new InputSocket('timer', 'Timer', ['timer'], 'data')
 ]
 
-export const BACKGROUND_FX_SOCKETS: InputSocket[] = [{ id: 'caption', label: 'Caption', accepts: ['text'], kind: 'content' }]
+export const BACKGROUND_FX_SOCKETS: InputSocket[] = [new InputSocket('caption', 'Caption', ['text'], 'content')]
 
 export const START_SOCKETS: InputSocket[] = [
   // Accepts 'audioPlayer' too, via its own Event output (see
   // AUDIO_PLAYER_OUTPUTS below) — an alternative to an Event node for
   // arming a process: fires on a track change instead of matching a real
   // alert's type. See processTrigger's audioArmed in overlays/custom.html.
-  { id: 'event', label: 'Event', accepts: ['event', 'audioPlayer', 'rouletteSource', 'randomSource'], kind: 'data' },
-  { id: 'sound', label: 'Sound', accepts: ['sound'], kind: 'data' },
-  { id: 'backgroundFx', label: 'Background FX', accepts: ['backgroundAnimation'], kind: 'data' }
+  new InputSocket('event', 'Event', ['event', 'audioPlayer', 'rouletteSource', 'randomSource'], 'data'),
+  new InputSocket('sound', 'Sound', ['sound'], 'data'),
+  new InputSocket('backgroundFx', 'Background FX', ['backgroundAnimation'], 'data')
 ]
 
 export const TASK_SOCKETS: InputSocket[] = [
-  { id: 'target', label: 'Target', accepts: ['text', 'image', 'box', 'group', 'video', 'progress', 'rouletteWidget'], kind: 'content' },
+  new InputSocket('target', 'Target', ['text', 'image', 'box', 'group', 'video', 'progress', 'rouletteWidget'], 'content'),
   // Same Transform/Style grouping as MODIFIER_SOCKETS, minus Hide (a Task's
   // visibility is already its own show/hide Action field, not a separate
   // modifier) — these are what THIS step changes, layered on top of the
   // target's own base Transform/Style at the moment the step fires. See
   // computeTaskState's own doc comment in SceneBuilderPage.tsx.
-  { id: 'transform', label: 'Transform', accepts: ['position', 'size', 'transform'], kind: 'style', multi: true },
-  { id: 'style', label: 'Style', accepts: ['opacity', 'shadow', 'animation'], kind: 'style', multi: true },
+  new InputSocket('transform', 'Transform', ['position', 'size', 'transform'], 'style', true),
+  new InputSocket('style', 'Style', ['opacity', 'shadow', 'animation'], 'style', true),
   // A Task's own one-shot cue — plays once when THIS step fires (e.g. a
   // cash-register sound only when the donation amount appears), distinct
   // from Start's Sound (fires once at the process's very beginning). See
   // buildProcessSchedule/showProcessContent's own doc comments for how a
   // step's sound gets collected and played.
-  { id: 'sound', label: 'Sound', accepts: ['sound'], kind: 'data' }
+  new InputSocket('sound', 'Sound', ['sound'], 'data')
 ]
-
-/** Every node type's input sockets, keyed by node `type` — the single source of truth shared between BaseNode's rendering and isValidConnection in SceneBuilderPage.tsx. Node types absent here have no sockets of their own (pure sources — Position/Animation/Event/... — or Wait/End, which only take the process `sequenceIn` row). */
-export const NODE_SOCKETS: Record<string, InputSocket[]> = {
-  text: TEXT_SOCKETS,
-  image: IMAGE_SOCKETS,
-  video: VIDEO_SOCKETS,
-  progress: PROGRESS_SOCKETS,
-  equalizer: EQUALIZER_SOCKETS,
-  audioSource: AUDIO_SOURCE_SOCKETS,
-  box: BOX_SOCKETS,
-  group: BOX_SOCKETS,
-  scene: SCENE_SOCKETS,
-  backgroundAnimation: BACKGROUND_FX_SOCKETS,
-  start: START_SOCKETS,
-  task: TASK_SOCKETS,
-  rouletteWidget: ROULETTE_WIDGET_SOCKETS,
-  rouletteEntrants: ROULETTE_ENTRANTS_SOCKETS,
-  randomWidget: RANDOM_WIDGET_SOCKETS,
-  randomPick: RANDOM_PICK_SOCKETS
-}
 
 /**
  * One labeled OUTPUT socket — the output-side mirror of InputSocket, for the
@@ -337,7 +319,8 @@ export const NODE_SOCKETS: Record<string, InputSocket[]> = {
  * left the same unlabeled dot). Most node types have exactly one role for
  * their output (a Position modifier is always "a position", regardless of
  * which target it lands on) and keep the plain single "output" handle —
- * see BaseNode's `outputSockets` prop, only set for the types below.
+ * see BaseNode's `outputSockets` prop, only set for the types with an
+ * entry in NODE_OUTPUTS (index.tsx).
  * `feeds`: which target INPUT socket ids this output is meant to connect
  * to, enforced by isValidConnection in SceneBuilderPage.tsx exactly like
  * InputSocket.accepts is on the input side. `helpKey`: an optional key into
@@ -348,12 +331,14 @@ export const NODE_SOCKETS: Record<string, InputSocket[]> = {
  * header help can stay a short one-liner about the node as a whole instead
  * of cramming every output's behavior into one popover.
  */
-export type OutputSocket = {
-  id: string
-  label: string
-  kind: SocketKind
-  feeds: string[]
-  helpKey?: string
+export class OutputSocket {
+  constructor(
+    public id: string,
+    public label: string,
+    public kind: SocketKind,
+    public feeds: string[],
+    public helpKey?: string
+  ) {}
 }
 
 /**
@@ -371,20 +356,8 @@ export type OutputSocket = {
  * sceneUtils/legacyMigrations.ts for the old 'structural'/'caption'
  * sourceHandle remap this required.
  */
-export const CONTENT_OUTPUT: OutputSocket = {
-  id: 'content',
-  label: 'Content',
-  kind: 'content',
-  feeds: ['children', 'content', 'caption'],
-  helpKey: 'content'
-}
-export const TARGET_OUTPUT: OutputSocket = {
-  id: 'target',
-  label: 'As Target',
-  kind: 'content',
-  feeds: ['target'],
-  helpKey: 'target'
-}
+export const CONTENT_OUTPUT: OutputSocket = new OutputSocket('content', 'Content', 'content', ['children', 'content', 'caption'], 'content')
+export const TARGET_OUTPUT: OutputSocket = new OutputSocket('target', 'As Target', 'content', ['target'], 'target')
 
 export const TEXT_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUTPUT]
 export const IMAGE_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUTPUT]
@@ -405,9 +378,7 @@ export const BOX_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUTPUT]
  * variables already use (see OverlayServer.pushAudioLevels). This node just
  * carries WHICH device's levels that is.
  */
-export const AUDIO_SOURCE_OUTPUTS: OutputSocket[] = [
-  { id: 'content', label: 'Level', kind: 'data', feeds: ['source'], helpKey: 'audioSourceContent' }
-]
+export const AUDIO_SOURCE_OUTPUTS: OutputSocket[] = [new OutputSocket('content', 'Level', 'data', ['source'], 'audioSourceContent')]
 
 /**
  * Clock's single role: the `{time}` placeholder for whichever Text socket
@@ -420,7 +391,7 @@ export const AUDIO_SOURCE_OUTPUTS: OutputSocket[] = [
  * Text/Image/Box's outputs — Clock has no visual presence of its own
  * anymore to place in Scene/a Box/a Task, only this one value to supply.
  */
-export const CLOCK_OUTPUTS: OutputSocket[] = [{ id: 'content', label: 'Content', kind: 'content', feeds: ['content'], helpKey: 'clockContent' }]
+export const CLOCK_OUTPUTS: OutputSocket[] = [new OutputSocket('content', 'Content', 'content', ['content'], 'clockContent')]
 
 /**
  * Audio Player's two roles for its single Now Playing feed, collapsed from
@@ -453,21 +424,9 @@ export const AUDIO_PLAYER_OUTPUTS: OutputSocket[] = [
   // TEXT_SOCKETS/IMAGE_SOCKETS' own comments, and displayEdges' own doc
   // comment in SceneBuilderPage.tsx for how this colors the wire green
   // despite the node's own 'data' category.
-  {
-    id: 'content',
-    label: 'Content',
-    kind: 'content',
-    feeds: ['content', 'imageContent'],
-    helpKey: 'audioContent'
-  },
+  new OutputSocket('content', 'Content', 'content', ['content', 'imageContent'], 'audioContent'),
   // kind 'data': a trigger/state signal, not a value feeding a template.
-  {
-    id: 'event',
-    label: 'Event',
-    kind: 'data',
-    feeds: ['event'],
-    helpKey: 'audioEvent'
-  }
+  new OutputSocket('event', 'Event', 'data', ['event'], 'audioEvent')
 ]
 
 /**
@@ -494,20 +453,8 @@ export const AUDIO_PLAYER_OUTPUTS: OutputSocket[] = [
  * independent sockets on independent nodes, same as Audio Player's own two.
  */
 export const ROULETTE_OUTPUTS: OutputSocket[] = [
-  {
-    id: 'content',
-    label: 'Content',
-    kind: 'content',
-    feeds: ['source'],
-    helpKey: 'rouletteContent'
-  },
-  {
-    id: 'event',
-    label: 'Event',
-    kind: 'data',
-    feeds: ['event', 'visible'],
-    helpKey: 'rouletteEvent'
-  }
+  new OutputSocket('content', 'Content', 'content', ['source'], 'rouletteContent'),
+  new OutputSocket('event', 'Event', 'data', ['event', 'visible'], 'rouletteEvent')
 ]
 
 /**
@@ -536,15 +483,7 @@ export const ROULETTE_WIDGET_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_O
  * sortByChance/separator, see NODE_DEFAULTS.rouletteEntrants), not how it
  * LOOKS once shown.
  */
-export const ROULETTE_ENTRANTS_OUTPUTS: OutputSocket[] = [
-  {
-    id: 'content',
-    label: 'Content',
-    kind: 'content',
-    feeds: ['content'],
-    helpKey: 'rouletteEntrantsContent'
-  }
-]
+export const ROULETTE_ENTRANTS_OUTPUTS: OutputSocket[] = [new OutputSocket('content', 'Content', 'content', ['content'], 'rouletteEntrantsContent')]
 
 /**
  * Random's two roles for its single commit/reveal feed — same "one wire,
@@ -565,20 +504,8 @@ export const ROULETTE_ENTRANTS_OUTPUTS: OutputSocket[] = [
  * showing it unconditionally.
  */
 export const RANDOM_OUTPUTS: OutputSocket[] = [
-  {
-    id: 'content',
-    label: 'Content',
-    kind: 'content',
-    feeds: ['source', 'content'],
-    helpKey: 'randomContent'
-  },
-  {
-    id: 'event',
-    label: 'Event',
-    kind: 'data',
-    feeds: ['event', 'visible'],
-    helpKey: 'randomEvent'
-  }
+  new OutputSocket('content', 'Content', 'content', ['source', 'content'], 'randomContent'),
+  new OutputSocket('event', 'Event', 'data', ['event', 'visible'], 'randomEvent')
 ]
 
 /** A Random Widget's own single Content/Target role — same reuse of CONTENT_OUTPUT/TARGET_OUTPUT as ROULETTE_WIDGET_OUTPUTS above; nothing Random-specific about the output side. */
@@ -601,29 +528,9 @@ export const RANDOM_WIDGET_OUTPUTS: OutputSocket[] = [CONTENT_OUTPUT, TARGET_OUT
  * Audio Player/Roulette/Random instead) always falls to Else, never throws.
  */
 export const CONDITION_OUTPUTS: OutputSocket[] = [
-  { id: 'then', label: 'Then', kind: 'process', feeds: ['event-in'], helpKey: 'conditionThen' },
-  { id: 'else', label: 'Else', kind: 'process', feeds: ['event-in'], helpKey: 'conditionElse' }
+  new OutputSocket('then', 'Then', 'process', ['event-in'], 'conditionThen'),
+  new OutputSocket('else', 'Else', 'process', ['event-in'], 'conditionElse')
 ]
-
-/** Every node type's OUTPUT sockets, keyed by node `type` — analogous to NODE_SOCKETS. Node types absent here (the large majority) render the single generic "output" handle unchanged. */
-export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
-  text: TEXT_OUTPUTS,
-  image: IMAGE_OUTPUTS,
-  video: VIDEO_OUTPUTS,
-  progress: PROGRESS_OUTPUTS,
-  equalizer: EQUALIZER_OUTPUTS,
-  audioSource: AUDIO_SOURCE_OUTPUTS,
-  clock: CLOCK_OUTPUTS,
-  box: BOX_OUTPUTS,
-  group: BOX_OUTPUTS,
-  audioPlayer: AUDIO_PLAYER_OUTPUTS,
-  rouletteSource: ROULETTE_OUTPUTS,
-  rouletteWidget: ROULETTE_WIDGET_OUTPUTS,
-  rouletteEntrants: ROULETTE_ENTRANTS_OUTPUTS,
-  randomSource: RANDOM_OUTPUTS,
-  randomWidget: RANDOM_WIDGET_OUTPUTS,
-  condition: CONDITION_OUTPUTS
-}
 
 /**
  * What kind of thing a node is, purely for visual grouping (header tint +
@@ -649,6 +556,9 @@ export const NODE_OUTPUTS: Record<string, OutputSocket[]> = {
  *    matching app-level Tool, see RandomToolPage/RouletteToolPage; min/max/
  *    count/command/entryMode/etc. live on that Tool's own settings, not on
  *    the node).
+ *
+ * Assigned per type in NODE_DEFINITIONS (index.tsx), not hand-listed here —
+ * see that file's own doc comment.
  */
 export type NodeCategory = 'process' | 'content' | 'style' | 'data' | 'utils'
 
@@ -662,166 +572,6 @@ export const CATEGORY_STYLES: Record<NodeCategory, { header: string; border: str
 }
 
 export const PROCESS_TYPES = new Set(['start', 'task', 'wait', 'condition', 'end'])
-
-/**
- * Every node type's category, keyed by node `type` — the same source of
- * truth each node component's own `category` prop uses, exported so the
- * Add Node palette (SceneBuilderPage.tsx) can tint its group headers and
- * buttons to match the exact colors a node gets once it's actually placed
- * on the canvas, instead of the palette looking uniform while the graph
- * itself is color-coded.
- */
-export const NODE_CATEGORY: Record<string, NodeCategory> = {
-  scene: 'content',
-  text: 'content',
-  image: 'content',
-  video: 'content',
-  progress: 'content',
-  equalizer: 'content',
-  audioSource: 'data',
-  clock: 'data',
-  variable: 'data',
-  box: 'content',
-  group: 'content',
-  randomPick: 'content',
-  frame: 'utils',
-  start: 'process',
-  task: 'process',
-  wait: 'process',
-  condition: 'process',
-  end: 'process',
-  position: 'style',
-  size: 'style',
-  transform: 'style',
-  opacity: 'style',
-  shadow: 'style',
-  animation: 'style',
-  ordering: 'style',
-  hide: 'style',
-  overflow: 'style',
-  spacing: 'style',
-  event: 'data',
-  randomSource: 'data',
-  randomWidget: 'content',
-  rouletteSource: 'data',
-  rouletteWidget: 'content',
-  rouletteEntrants: 'data',
-  audioPlayer: 'data',
-  sound: 'data',
-  timer: 'data',
-  backgroundAnimation: 'data'
-}
-
-/**
- * Every node type's default `data`, keyed by node `type` — applied by addNode
- * (SceneBuilderPage.tsx) the moment a node is placed, so a fresh node's data
- * already holds concrete values instead of an empty object that only *looks*
- * populated because each field below falls back to the same default at
- * render time. That per-field fallback stays in place regardless (it's what
- * keeps a scene saved before some field existed — e.g. Text's `bold` —
- * rendering unchanged), this just makes a brand-new node's data match what
- * it visibly shows from the start rather than lagging until the first edit.
- * Node types absent here have no fields of their own (Scene, Start, End,
- * Size, ...) — Size's width/height default to `null` ("auto") anyway, the
- * same as never having been set.
- */
-export const NODE_DEFAULTS: Record<string, Record<string, unknown>> = {
-  transform: { scaleX: 1, scaleY: 1, rotation: 0 },
-  position: { mode: 'absolute', anchor: 'top-left', x: 0, y: 0 },
-  opacity: { value: 100 },
-  shadow: { color: '#000000', opacity: 60, blur: 6, offsetX: 0, offsetY: 2 },
-  text: {
-    text: '',
-    color: '#ffffff',
-    fontSize: 32,
-    letterSpacing: 0,
-    align: 'left',
-    verticalAlign: 'top',
-    bold: true,
-    italic: false,
-    outlineEnabled: false,
-    outlineWidth: 2,
-    outlineColor: '#000000',
-    glowEnabled: false,
-    glowType: 'outer',
-    glowColor: '#ffffff',
-    glowOpacity: 80,
-    glowBlur: 12
-  },
-  timer: { delay: 1000 },
-  animation: { type: 'fade', duration: 500, subType: 'auto' },
-  // No padding of its own anymore — wire a Spacing node into its own Style
-  // socket for that (see MODIFIER_SOCKETS' own doc comment); a Box/Group
-  // saved before this change keeps whatever paddingX/paddingY it already had
-  // as a fallback (see BoxView/buildBox) until a Spacing node replaces it.
-  box: { background: '#18181b', shape: 'rectangle', borderRadius: 10, borderEnabled: false, borderWidth: 2, borderColor: '#ffffff' },
-  frame: { collapsed: false, label: 'Layout Frame' },
-  image: { borderRadius: 8, borderEnabled: false, borderWidth: 2, borderColor: '#ffffff' },
-  video: { muted: true, loop: true, borderRadius: 8, borderEnabled: false, borderWidth: 2, borderColor: '#ffffff' },
-  // current/target/label all come from wired nodes now (see PROGRESS_SOCKETS'
-  // own doc comment) — nothing left here but the bar's own look.
-  progress: { orientation: 'horizontal', barColor: '#8b5cf6', trackColor: '#3f3f46', thickness: 28, borderRadius: 14 },
-  // Audio Source resolves the Equalizer's `source` socket — see
-  // EQUALIZER_SOCKETS' own doc comment. deviceId/deviceLabel are both set
-  // together the moment a device is picked (AudioSourceNode.tsx) — label is
-  // kept only as a display fallback (see main/audioCapture.ts for why
-  // deviceId alone isn't reliably stable across processes).
-  // sourceKind 'device' (default): deviceId/deviceLabel are a real local
-  // capture device (see AudioSourceNode.tsx). sourceKind 'obs': deviceId is
-  // instead `obs:<inputName>` — a synthesized-from-loudness feed read from
-  // OBS's own audio mixer (see main/integrations/obs), obsInputName kept
-  // separately as the plain name for re-matching against a fresh OBS input
-  // list. Either way `deviceId` is the one field the render pipeline
-  // (buildEqualizer/applyEqualizerLevels) actually reads — it never needs to
-  // know which kind produced it.
-  audioSource: { sourceKind: 'device', deviceId: '', deviceLabel: '', obsInputName: '' },
-  // barCount/style/color/speed/intensity are this node's own look; width/
-  // height/borderRadius are the same self-sizing convention Progress's own
-  // thickness/borderRadius use (a wired Size node still overrides them).
-  equalizer: { barCount: 24, style: 'bar', color: '#8b5cf6', speed: 1, intensity: 1, width: 240, height: 80, borderRadius: 8 },
-  // Reads the system clock directly — no data wired in. format is free
-  // text (see isValidClockFormat/formatClockDate in components/nodes/utils/
-  // constants.ts). No styling fields anymore — wire its Content output into
-  // a Text node and style THAT (see CLOCK_OUTPUTS' own doc comment).
-  clock: { format: 'HH:mm:ss' },
-  // scope 'local' (default): name/value both live here, this node's own
-  // placeholder token. scope 'global': name/value instead come from
-  // whichever GlobalVariable `globalId` points at (registered on the
-  // "Данные → Переменные" page). scope 'integration': value instead comes
-  // live from whichever connected integration `integration` names — a
-  // platform's numeric stat (whichever field `platformStat` picks) or a
-  // Streamer.bot global variable (`streamerbotName`) — see VariableNode's
-  // own doc comment.
-  variable: { scope: 'local', name: '', type: 'float', value: 0, globalId: null, integration: 'twitch', platformStat: 'followers', streamerbotName: '' },
-  backgroundAnimation: { type: 'none', color: '#18181b', speed: 1, repeat: false },
-  sound: { soundId: 'none', volume: 1 },
-  event: { kind: 'alert', platform: 'twitch', alertType: ALERT_TYPES_BY_PLATFORM.twitch[0] },
-  ordering: { layout: 'vertical', direction: 'direct', gap: 8 },
-  hide: { hidden: true },
-  overflow: { overflowX: 'hidden', overflowY: 'hidden', autoScroll: false, scrollDirection: 'up', scrollSpeed: 40 },
-  spacing: { paddingX: 0, paddingY: 0, marginX: 0, marginY: 0 },
-  task: { action: 'show' },
-  wait: { delay: 1000 },
-  // A sensible starting example (raid size over 10) rather than an empty
-  // comparison — see evaluateCondition in pages/overlays/sceneUtils/graph.ts
-  // for exactly how field/operator/value resolve against a live alert's
-  // vars, and NUMERIC_CONDITION_OPERATORS/STRING_CONDITION_OPERATORS in
-  // components/nodes/utils/constants.ts for which operators ConditionNode
-  // offers per field.
-  condition: { field: 'amount', operator: 'gt', value: '10' },
-  // customChance off: every connected Option has an equal shot — see
-  // pickRandomVariant. `weights` keyed by the connected node's OWN id
-  // (unset/invalid entries default to weight 1, same as an unset Roulette
-  // entrant's own weight) rather than by anything positional, so reordering
-  // or adding another wire never scrambles an already-tuned weight.
-  randomPick: { customChance: false, weights: {} },
-  // rowTemplate tokens: {name}/{chance}/{weight} — see rouletteEntrantRows'
-  // own doc comment in overlays/sceneUtils.tsx. layout 'list' = one entrant
-  // per line, 'inline' joins them with `separator` instead. No color/
-  // fontSize/etc. here — those are whichever Text node this feeds into's
-  // own fields (see ROULETTE_ENTRANTS_OUTPUTS' own doc comment above).
-  rouletteEntrants: { layout: 'list', rowTemplate: '{name}', sortByChance: false, separator: ', ' }
-}
 
 export const SOCKET_DOT: Record<SocketKind, string> = {
   content: '!bg-emerald-500',

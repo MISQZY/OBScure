@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { Panel } from '@xyflow/react'
 import { ChevronRight, PanelLeft } from 'lucide-react'
-import { CATEGORY_STYLES, NODE_CATEGORY } from '@/components/nodes'
+import { CATEGORY_STYLES, NODE_CATEGORY, NODE_PALETTE, PALETTE_GROUPS } from '@/components/nodes'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/providers/I18nProvider'
 import { ScrollArea } from '@/components/ui'
-import { NODE_PALETTE, PALETTE_GROUPS } from '../sceneBuilderConstants'
 
 /**
  * The floating top-left panel listing every placeable node type, grouped and
