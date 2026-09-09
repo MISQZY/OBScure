@@ -51,8 +51,17 @@ export function initLogger(): void {
   }
 }
 
-function errorDetail(error: unknown): string {
-  if (error instanceof Error) return ` — ${error.message}${error.stack ? `\n${error.stack}` : ""}`;
+/**
+ * `includeStack` is false for logWarn: a WARN here always means "an
+ * external, expected-to-sometimes-fail condition" (Streamer.bot/OBS not
+ * running, a poll that failed once, ...) — the stack trace only ever points
+ * into Node/library internals (e.g. `TCPConnectWrap.afterConnect` for a
+ * plain ECONNREFUSED), never into app code, so it's pure noise repeated on
+ * every retry. logError's `true` keeps it: an ERROR is an actual bug, where
+ * the stack is what makes it debuggable at all.
+ */
+function errorDetail(error: unknown, includeStack: boolean): string {
+  if (error instanceof Error) return ` — ${error.message}${includeStack && error.stack ? `\n${error.stack}` : ""}`;
   if (error === undefined) return "";
   return ` — ${String(error)}`;
 }
@@ -77,9 +86,9 @@ export function logInfo(system: string, message: string): void {
 }
 
 export function logWarn(system: string, message: string, error?: unknown): void {
-  write("WARN", system, message + errorDetail(error));
+  write("WARN", system, message + errorDetail(error, false));
 }
 
 export function logError(system: string, message: string, error?: unknown): void {
-  write("ERROR", system, message + errorDetail(error));
+  write("ERROR", system, message + errorDetail(error, true));
 }
