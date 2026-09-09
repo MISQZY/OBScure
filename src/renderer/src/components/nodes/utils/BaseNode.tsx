@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Handle, Position, useReactFlow } from '@xyflow/react'
-import { Trash2, ChevronDown, ChevronUp, Copy, Pencil } from 'lucide-react'
+import { Trash2, ChevronDown, ChevronUp, Copy, Pencil, TriangleAlert } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -478,6 +478,16 @@ export function Field({ label, children }: { label: string; children: React.Reac
     <div className="flex justify-between items-center text-xs gap-2">
       <label className="shrink-0">{label}</label>
       {children}
+    </div>
+  )
+}
+
+/** Short orange notice for a node's own "nothing to show yet" states (no connected integration, an empty registry, etc.) — the one styled warning treatment every node should reach for instead of a bare `<p className="text-amber-...">`, so they all read consistently at a glance. */
+export function Callout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-1.5 w-40 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-1 text-[11px] leading-snug text-amber-600 dark:text-amber-400">
+      <TriangleAlert className="size-3 mt-0.5 shrink-0" />
+      <span>{children}</span>
     </div>
   )
 }

@@ -4,7 +4,7 @@ import { ALERT_PLATFORMS, ALERT_TYPES_BY_PLATFORM, type AlertType } from '@share
 import { useIntegrationsStatus } from '@/hooks/use-integration-status'
 import { useCommands } from '@/providers/CommandsProvider'
 
-import { BaseNode, Field, NodeSelect, EVENT_KINDS, ALERT_PLATFORM_LABELS, inferAlertPlatform } from './utils'
+import { BaseNode, Field, NodeSelect, Callout, EVENT_KINDS, ALERT_PLATFORM_LABELS, inferAlertPlatform } from './utils'
 
 const NONE_COMMAND = '__none__'
 
@@ -43,12 +43,10 @@ export function EventNode({ id, data }: NodeProps) {
               renderOption={(opt) => (opt === NONE_COMMAND ? 'Select...' : (commands.find((c) => c.id === opt)?.name ?? opt))}
             />
           </Field>
-          {commands.length === 0 && (
-            <p className="text-[11px] text-amber-500 leading-snug w-40">No commands registered yet — add one on the Команды page.</p>
-          )}
+          {commands.length === 0 && <Callout>No commands registered yet — add one on the Команды page.</Callout>}
         </>
       ) : !platform ? (
-        <p className="text-[11px] text-amber-500 leading-snug w-40">No connected Twitch/YouTube integration — connect one to pick an alert type.</p>
+        <Callout>No connected integration — connect one to pick an alert type.</Callout>
       ) : (
         <>
           <Field label="Type">
