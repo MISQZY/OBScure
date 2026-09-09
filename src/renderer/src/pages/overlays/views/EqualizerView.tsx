@@ -57,8 +57,12 @@ export function EqualizerView({
       data-animation={anim?.type}
       style={
         {
-          width: (d.width as number) ?? 240,
-          height: (d.height as number) ?? 80,
+          // No own Width/Height field (see EqualizerNode's own doc comment)
+          // — 240x80 here is only the fallback; `...style` (a wired Size
+          // node's width/height, from modifierStyle) overrides it since it
+          // spreads AFTER these, same convention as ImageView's own 96x96.
+          width: 240,
+          height: 80,
           alignItems: styleType === 'bar' ? 'flex-end' : 'center',
           ...style,
           borderRadius: radiusCss(node.data, 8),

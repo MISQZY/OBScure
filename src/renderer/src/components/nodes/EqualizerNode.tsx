@@ -20,6 +20,12 @@ const EQUALIZER_STYLE_BUTTONS: readonly { id: 'bar' | 'wave' | 'dot'; Icon: Luci
  * purely this visual's own look. The in-editor preview (EqualizerView.tsx)
  * is a decorative approximation for exactly that reason — see its own doc
  * comment.
+ *
+ * No Width/Height fields of its own — same self-sizing-via-modifier
+ * convention as Image/Video/Progress: it renders at a fixed fallback size
+ * (see EqualizerView.tsx/buildEqualizer's own `240`/`80`) until a Size node
+ * is wired into its Transform socket (see EQUALIZER_SOCKETS' own
+ * `...MODIFIER_SOCKETS` spread), which overrides both.
  */
 export function EqualizerNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow()
@@ -82,12 +88,6 @@ export function EqualizerNode({ id, data }: NodeProps) {
           savedValue={saved.intensity as number}
           className={numberInputClass}
         />
-      </Field>
-      <Field label="Width">
-        <NumberInput value={data.width as number} onChange={(v) => updateNodeData(id, { width: v })} min={16} fallback={240} savedValue={saved.width as number} className={numberInputClass} />
-      </Field>
-      <Field label="Height">
-        <NumberInput value={data.height as number} onChange={(v) => updateNodeData(id, { height: v })} min={16} fallback={80} savedValue={saved.height as number} className={numberInputClass} />
       </Field>
       <RadiusField id={id} data={data} saved={saved} fallback={8} />
     </BaseNode>

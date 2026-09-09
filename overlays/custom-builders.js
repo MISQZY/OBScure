@@ -352,8 +352,11 @@ function buildEqualizer(node, edges, map, mods, animate, registry) {
   const wrap = document.createElement('div')
   wrap.className = 'equalizer-node'
   wrap.style.position = 'relative'
-  wrap.style.width = `${d.width ?? 240}px`
-  wrap.style.height = `${d.height ?? 80}px`
+  // No own Width/Height field (see EqualizerNode.tsx's own doc comment) —
+  // applyModifierStyle below overrides these when a Size node is wired,
+  // same convention as buildImage's own hardcoded 96px/96px.
+  wrap.style.width = '240px'
+  wrap.style.height = '80px'
   wrap.style.borderRadius = radiusCss(d, 8)
   wrap.style.overflow = 'hidden'
   wrap.style.display = 'flex'
