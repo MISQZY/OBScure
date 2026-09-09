@@ -568,6 +568,15 @@ function createMainWindow(): void {
 
   mainWindow.on("closed", () => {
     mainWindow = null;
+    // Not just window-all-closed below: the hidden, permanently-alive audio
+    // capture window (see main/audioCapture.ts) means BrowserWindow.getAllWindows()
+    // never actually reaches zero just because the user closed this one, so
+    // that event no longer fires on its own — this window closing is what
+    // "the user closed the app" actually means. minimizeToTrayEnabled() is
+    // still checked here since this same "closed" event also fires from the
+    // "minimize" handler above's own mainWindow.close() call, which must NOT
+    // quit — that's the whole point of minimize-to-tray.
+    if (!minimizeToTrayEnabled() && process.platform !== "darwin") app.quit();
   });
 
   // A renderer crash (GPU context loss, OOM, ...) leaves the BrowserWindow
