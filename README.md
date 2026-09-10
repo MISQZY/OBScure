@@ -1,55 +1,43 @@
 <div align="center">
-  <img src=".github/assets/icon.png?text=OBScure+Logo" alt="OBScure Logo" width="200" />
-  
+  <img src=".github/assets/icon.png" alt="OBScure" width="120" />
   <h1>OBScure</h1>
-  <p>A powerful and user-friendly control panel for streamers: interactive overlays, widgets, and integrations for OBS Studio.</p>
+  <p>A desktop control panel for streamers — interactive overlays, widgets, and OBS Studio integrations.</p>
 </div>
+
+<p align="center">
+  <a href="https://obscure.misqzy.net"><b>obscure.misqzy.net</b></a>
+  ·
+  <a href="https://github.com/MISQZY/OBScureWeb">Docs & template gallery</a>
+</p>
 
 ---
 
-**OBScure** is a desktop application designed specifically for streamers. It allows you to easily create, customize, and manage interactive overlays, viewer mini-games, and widgets right during your broadcast. No more complex setups or dozens of open tabs: Twitch, YouTube, Spotify, and custom visual effects are now united in one convenient and stylish interface.
+For what OBScure does, how to install it, and how to use it, see the site above — this README only covers working on the app itself.
 
-## Key Features
+## Local development
 
-### Visual Overlay Editor
-Create complex logic chains, reactions, and animations without writing a single line of code. The built-in node editor allows you to configure events using a highly visual "Trigger -> Condition -> Action" approach.
+```bash
+npm install
+npm run dev
+```
 
-![Визуальный редактор нод](.github/assets/visual-node-editor.png)
+`electron-vite dev` launches the app with hot reload for the renderer.
 
-### Viewer Interactivity
-Engage your audience with built-in mini-games and tools:
-- **Roulette** — a mini-game for viewers in chat.
-- **Random** — a quick selection or dice roll tool for your stream.
+Other scripts:
 
-![Визуальный редактор нод](.github/assets/mini-games-control-panel.png)
+```bash
+npm run typecheck
+npm run lint
+npm run build          # electron-vite build
+npm run dist:installer # Windows NSIS installer
+npm run dist:portable  # Windows portable build
+```
 
-### Platform Integrations
-OBScure brings all your essential services into a single window:
-- **Twitch**: Read chat, follower alerts, channel statistics, and Channel Points rewards processing.
-- **YouTube**: Live chat, new subscriber alerts, and Super Chats.
-- **Music (Spotify & Windows Media)**: "Now Playing" widget displaying the track name and album art. Supports both Spotify and direct capture from any local media players and browsers (Windows only).
+## License
 
-![Визуальный редактор нод](.github/assets/integrations.png)
+MIT — see [LICENSE](LICENSE).
 
-### Security & Autonomy
-- **Local Storage**: All authorization tokens (OAuth) are securely encrypted and stored exclusively on your local machine.
-- **Single Source for OBS**: The application acts as a local server. You just need to add a single Browser Source in OBS, and OBScure manages all the content on the fly.
+## Related
 
-## Installation & Quick Start
-
-1. Download the latest version of OBScure from the [Releases](../../releases) section on GitHub.
-2. Run the installer and follow the standard instructions.
-3. Open the app and go to settings to link your desired accounts (Twitch, YouTube, Spotify).
-4. Create your first overlay in the visual editor.
-5. Copy the local link from OBScure and add it to your OBS Studio scene as a **Browser Source**.
-
-![Визуальный редактор нод](.github/assets/obs-preview.png)
-
-## Support & Feedback
-
-If you have any questions, found a bug, or have a cool idea for a new feature — feel free to open an Issue in this repository!
-
----
-<div align="center">
-  <i>Made with ❤️ for the streaming community.</i>
-</div>
+- [OBScureWeb](https://github.com/MISQZY/OBScureWeb) — docs, template gallery, and the site itself
+- [obscure.misqzy.net](https://obscure.misqzy.net) — the live site
